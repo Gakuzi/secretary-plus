@@ -1,4 +1,5 @@
 import { SettingsIcon, CodeIcon } from './icons/Icons.js';
+import { analyzeErrorWithGemini } from '../services/geminiService.js';
 
 const SERVICE_DEFINITIONS = {
     calendar: {
@@ -40,6 +41,22 @@ const SERVICE_DEFINITIONS = {
         ]
     },
 };
+
+// A simple markdown to HTML converter, duplicated for use in this component.
+function markdownToHTML(text) {
+    if (!text) return '';
+    return text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')     // Italic
+        .replace(/`([^`]+)`/g, '<code class="bg-gray-700 text-sm rounded px-1 py-0.5">$1</code>') // Inline code
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">$1</a>') // Link
+        .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-4 mb-2">$1</h3>') // h3
+        .replace(/^## (.*$)/gim, '<h2 class="text-xl font-bold mt-4 mb-2">$1</h2>') // h2
+        .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-4 mb-2">$1</h1>') // h1
+        .replace(/^- (.*$)/gim, '<li class="ml-4 list-disc">$1</li>') // li
+        .replace(/\n/g, '<br>'); // Newlines - careful with this one
+}
+
 
 function createServiceMappingUI(serviceMap, isSupabaseEnabled) {
     return Object.entries(SERVICE_DEFINITIONS).map(([key, def]) => `
@@ -305,8 +322,71 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
         onSave(newSettings);
     });
 
+    // --- AI Error Analysis Modal ---
+    function showErrorAnalysisModal(title, contentPromise) {
+        const analysisModal = document.createElement('div');
+        analysisModal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50';
+        analysisModal.style.zIndex = '60'; // Ensure it's above the settings modal
+
+        analysisModal.innerHTML = `
+            <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col m-4">
+                <header class="flex justify-between items-center p-4 border-b border-gray-700">
+                    <h3 class="text-xl font-bold">${title}</h3>
+                    <button class="close-analysis-modal p-2 rounded-full hover:bg-gray-700">&times;</button>
+                </header>
+                <main class="p-6 overflow-y-auto" id="analysis-content">
+                    <div class="flex items-center justify-center h-48">
+                        <div class="loading-dots">
+                            <div class="dot"></div> <div class="dot"></div> <div class="dot"></div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        `;
+        document.body.appendChild(analysisModal);
+
+        const close = () => document.body.removeChild(analysisModal);
+        analysisModal.addEventListener('click', e => {
+            if (e.target === analysisModal || e.target.closest('.close-analysis-modal')) {
+                close();
+            }
+        });
+
+        contentPromise
+            .then(content => {
+                const contentArea = analysisModal.querySelector('#analysis-content');
+                contentArea.innerHTML = `<div class="prose prose-invert max-w-none">${markdownToHTML(content)}</div>`;
+            })
+            .catch(err => {
+                 const contentArea = analysisModal.querySelector('#analysis-content');
+                 contentArea.innerHTML = `<p class="text-red-400">Не удалось проанализировать ошибку: ${err.message}</p>`;
+            });
+    }
+
+
     modalOverlay.addEventListener('click', (e) => {
         if (e.target === modalOverlay) onClose();
+
+        // Event Delegation for AI error analysis
+        const analysisButton = e.target.closest('[data-action="analyze-error"]');
+        if (analysisButton) {
+            const errorMessage = analysisButton.dataset.errorMessage;
+            const errorContext = analysisButton.dataset.errorContext;
+            const apiKey = currentSettings.geminiApiKey;
+
+            if (!apiKey) {
+                alert("Ошибка: Ключ Gemini API не указан в настройках. Анализ невозможен.");
+                return;
+            }
+            
+            const analysisPromise = analyzeErrorWithGemini({
+                errorMessage,
+                context: errorContext,
+                apiKey
+            });
+
+            showErrorAnalysisModal(`Анализ ошибки: ${errorContext}`, analysisPromise);
+        }
     });
 
     // Main tab switching logic
@@ -394,23 +474,18 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
 
             if (typeof status === 'object' && status !== null && status.error) {
                 const shortError = status.error.slice(0, 30) + (status.error.length > 30 ? '...' : '');
-                const fullError = status.error;
-                const errorId = `sync-error-details-${key}`;
+                const fullErrorEscaped = status.error.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
                 
                 statusHtml = `
-                    <div class="flex flex-col items-end">
-                        <button 
-                            class="font-mono text-xs text-red-400 hover:underline cursor-pointer text-right"
-                            data-action="toggle-error-details"
-                            data-target="${errorId}"
-                            title="Показать/скрыть детали"
-                        >
-                            Ошибка: ${shortError}
-                        </button>
-                        <div id="${errorId}" class="hidden mt-2 w-full p-2 bg-gray-900 border border-gray-700 rounded-md">
-                            <pre class="text-xs text-gray-300 whitespace-pre-wrap break-all">${fullError}</pre>
-                        </div>
-                    </div>
+                    <button 
+                        class="font-mono text-xs text-red-400 hover:underline cursor-pointer text-right"
+                        data-action="analyze-error"
+                        data-error-message='${fullErrorEscaped}'
+                        data-error-context='Синхронизация: ${label}'
+                        title="Проанализировать ошибку с помощью ИИ"
+                    >
+                        Ошибка: ${shortError}
+                    </button>
                 `;
             } else {
                 statusHtml = `<span class="font-mono text-xs text-green-400">${timeAgo(status)}</span>`;
@@ -439,18 +514,6 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             window.open('https://aistudio.google.com/app/apps/drive/1-YFIo56NWOtYuQYpZUWiPcMY323lJPuK?showAssistant=true&showPreview=true', '_blank');
         });
     }
-
-    // Event Delegation for toggling error details
-    modalOverlay.addEventListener('click', (e) => {
-        const toggleButton = e.target.closest('[data-action="toggle-error-details"]');
-        if (toggleButton) {
-            const targetId = toggleButton.dataset.target;
-            const detailsElement = modalOverlay.querySelector(`#${targetId}`);
-            if (detailsElement) {
-                detailsElement.classList.toggle('hidden');
-            }
-        }
-    });
 
     return modalOverlay;
 }

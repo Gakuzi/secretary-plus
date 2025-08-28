@@ -434,40 +434,52 @@ export class GoogleServiceProvider {
         
         const batchResponse = await batch;
         
-        return Object.values(batchResponse.result).map(res => {
-            const payload = res.result;
-            const headers = payload.payload.headers;
-            const getHeader = (name) => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
-
-            const attachments = [];
-            const parts = payload.payload.parts || [];
-            const findAttachments = (parts) => {
-                 for (const part of parts) {
-                    if (part.filename && part.body && part.body.attachmentId) {
-                        attachments.push({
-                            filename: part.filename,
-                            mimeType: part.mimeType,
-                            size: part.body.size,
-                        });
-                    }
-                    if (part.parts) {
-                        findAttachments(part.parts);
-                    }
+        const emails = [];
+        Object.values(batchResponse.result).forEach(res => {
+            try {
+                const payload = res.result;
+                if (!payload || !payload.id || !payload.payload || !payload.payload.headers) {
+                    console.warn('Skipping a malformed email response from batch.', res);
+                    return; // Skip this one
                 }
-            };
-            findAttachments(parts);
 
-            return {
-                id: payload.id,
-                snippet: payload.snippet,
-                subject: getHeader('Subject'),
-                from: getHeader('From'),
-                date: getHeader('Date'),
-                body: getEmailBody(payload.payload), // Extract and decode body
-                attachments: attachments,
-                gmailLink: `https://mail.google.com/mail/u/0/#inbox/${payload.id}`
-            };
+                const headers = payload.payload.headers;
+                const getHeader = (name) => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
+
+                const attachments = [];
+                const parts = payload.payload.parts || [];
+                const findAttachments = (parts) => {
+                     for (const part of parts) {
+                        if (part.filename && part.body && part.body.attachmentId) {
+                            attachments.push({
+                                filename: part.filename,
+                                mimeType: part.mimeType,
+                                size: part.body.size,
+                            });
+                        }
+                        if (part.parts) {
+                            findAttachments(part.parts);
+                        }
+                    }
+                };
+                findAttachments(parts);
+
+                emails.push({
+                    id: payload.id,
+                    snippet: payload.snippet,
+                    subject: getHeader('Subject'),
+                    from: getHeader('From'),
+                    date: getHeader('Date'),
+                    body: getEmailBody(payload.payload), // Extract and decode body
+                    attachments: attachments,
+                    gmailLink: `https://mail.google.com/mail/u/0/#inbox/${payload.id}`
+                });
+            } catch (e) {
+                console.error(`Error processing an individual email (ID: ${res?.result?.id}) during sync. Skipping it.`, e);
+            }
         });
+        
+        return emails;
     }
 
     async sendEmail(details) {

@@ -730,3 +730,39 @@ export const callGemini = async ({
         };
     }
 };
+
+
+export const analyzeErrorWithGemini = async ({ errorMessage, context, apiKey }) => {
+    if (!apiKey) {
+        throw new Error("Ключ Gemini API не предоставлен.");
+    }
+    const ai = new GoogleGenAI({ apiKey });
+
+    const systemInstruction = `Ты — элитный инженер технической поддержки для веб-приложения "Секретарь+". Пользователь столкнулся с ошибкой.
+Твоя задача:
+1.  **Проанализируй** техническое сообщение об ошибке.
+2.  **Объясни** простыми, понятными словами, что означает эта ошибка, как будто объясняешь не-техническому пользователю.
+3.  **Предложи** конкретное, пошаговое решение проблемы. Если решение требует действий в другом сервисе (например, Supabase или Google Cloud), дай четкие инструкции со ссылками, если это возможно.
+4.  Ответ должен быть в формате **Markdown**. Используй заголовки (#, ##), списки и выделение для лучшей читаемости.`;
+
+    const prompt = `Проанализируй следующую ошибку.
+Контекст: ${context}
+Сообщение об ошибке:
+\`\`\`
+${errorMessage}
+\`\`\``;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            config: {
+                systemInstruction: systemInstruction,
+            },
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Error calling Gemini for error analysis:", error);
+        return `### Ошибка при анализе\nНе удалось связаться с Gemini для анализа ошибки. Пожалуйста, проверьте свой API ключ и подключение к интернету.\n\n**Исходная ошибка:**\n\`\`\`\n${errorMessage}\n\`\`\``;
+    }
+};
