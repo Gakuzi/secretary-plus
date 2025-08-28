@@ -92,7 +92,8 @@ function timeAgo(dateString) {
 }
 
 
-export function createSettingsModal(currentSettings, authState, onSave, onClose, onLogin, onLogout, syncStatus, isSyncing, onForceSync) {
+export function createSettingsModal(currentSettings, authState, handlers) {
+    const { onSave, onClose, onLogin, onLogout, isSyncing, onForceSync, syncStatus, onProxyAdd, onProxyUpdate, onProxyDelete, onProxyTest } = handlers;
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
     
@@ -107,6 +108,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                 <aside class="w-52 border-r border-gray-700 p-4">
                     <nav class="flex flex-col space-y-2">
                         <a href="#connections" class="settings-tab-button active text-left" data-tab="connections">Аккаунт</a>
+                        <a href="#proxies" class="settings-tab-button" data-tab="proxies">Прокси</a>
                         <a href="#general" class="settings-tab-button" data-tab="general">Общие</a>
                         <a href="#service-map" class="settings-tab-button" data-tab="service-map">Назначение сервисов</a>
                         <a href="#api-keys" class="settings-tab-button" data-tab="api-keys">API Ключи</a>
@@ -154,7 +156,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h4 class="font-semibold text-gray-200">Использовать Supabase (Рекомендуется)</h4>
-                                    <p class="text-sm text-gray-400">Включает синхронизацию данных и быстрый поиск.</p>
+                                    <p class="text-sm text-gray-400">Включает синхронизацию данных, быстрый поиск и управление прокси.</p>
                                 </div>
                                 <label class="toggle-switch">
                                     <input type="checkbox" id="supabase-enabled-toggle" ${currentSettings.isSupabaseEnabled ? 'checked' : ''}>
@@ -185,27 +187,23 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                 <p class="text-xs text-gray-400 mt-1"><a href="./setup-guide.html#google-cloud-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как получить Client ID?</a></p>
                             </div>
                         </div>
+                    </div>
 
-                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                            <h3 class="text-lg font-semibold text-gray-200">Прокси-сервер Gemini (Опционально)</h3>
-                            <div class="flex items-center justify-between">
+                    <!-- Proxies Tab -->
+                    <div id="tab-proxies" class="settings-tab-content hidden space-y-6">
+                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                            <div class="flex items-center justify-between mb-4">
                                 <div>
-                                    <h4 class="font-semibold text-gray-200">Активировать Прокси</h4>
-                                    <p class="text-sm text-gray-400">Включить перенаправление запросов к Gemini.</p>
+                                    <h3 class="text-lg font-semibold text-gray-200">Управление прокси-серверами</h3>
+                                    <p class="text-sm text-gray-400">Добавьте свои прокси для обхода ограничений. Будет использован самый приоритетный рабочий сервер.</p>
                                 </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="proxy-enabled-toggle" ${currentSettings.isProxyEnabled ? 'checked' : ''}>
-                                    <span class="toggle-slider"></span>
-                                </label>
+                                <button id="add-proxy-button" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md text-sm font-semibold whitespace-nowrap">Добавить прокси</button>
                             </div>
-                            <div id="proxy-url-block">
-                                <div class="space-y-2 mt-4">
-                                    <label for="gemini-proxy-url" class="block text-sm font-medium text-gray-300">URL прокси-сервера</label>
-                                    <input type="text" id="gemini-proxy-url" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="https://my-proxy.example.com" value="${currentSettings.geminiProxyUrl || ''}">
-                                </div>
-                                <p class="text-xs text-gray-400 mt-2">Используйте, если доступ к API Gemini ограничен. <a href="./setup-guide.html#proxy-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как настроить прокси?</a></p>
+                            <div id="proxy-list-container" class="space-y-2">
+                                <!-- Proxy list will be rendered here -->
                             </div>
                         </div>
+                         <div id="proxy-editor-container"></div>
                     </div>
 
                     <!-- General Tab -->
@@ -311,8 +309,9 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             isSupabaseEnabled: modalOverlay.querySelector('#supabase-enabled-toggle')?.checked ?? true,
             supabaseUrl: modalOverlay.querySelector('#supabase-url')?.value.trim() ?? '',
             supabaseAnonKey: modalOverlay.querySelector('#supabase-anon-key')?.value.trim() ?? '',
-            isProxyEnabled: modalOverlay.querySelector('#proxy-enabled-toggle')?.checked ?? false,
-            geminiProxyUrl: modalOverlay.querySelector('#gemini-proxy-url')?.value.trim() ?? '',
+            // Deprecate the old single proxy URL settings. They are now managed in the 'proxies' table.
+            isProxyEnabled: currentSettings.isProxyEnabled, 
+            geminiProxyUrl: currentSettings.geminiProxyUrl,
             timezone: modalOverlay.querySelector('#timezone-select')?.value ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
             enableEmailPolling: modalOverlay.querySelector('#email-polling-toggle')?.checked ?? true,
             enableAutoSync: modalOverlay.querySelector('#auto-sync-enabled-toggle')?.checked ?? true,
@@ -427,26 +426,19 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
         timezoneSelect.disabled = true;
     }
     
-    // Logic for Proxy toggle
-    const proxyToggle = modalOverlay.querySelector('#proxy-enabled-toggle');
-    const proxyUrlBlock = modalOverlay.querySelector('#proxy-url-block');
-    proxyUrlBlock.style.display = currentSettings.isProxyEnabled ? 'block' : 'none';
-    proxyToggle.addEventListener('change', (e) => {
-        proxyUrlBlock.style.display = e.target.checked ? 'block' : 'none';
-    });
     
     // Logic for Supabase toggle
     const supabaseToggle = modalOverlay.querySelector('#supabase-enabled-toggle');
     const supabaseCredentialsBlock = modalOverlay.querySelector('#supabase-credentials-block');
     const directGoogleBlock = modalOverlay.querySelector('#direct-google-settings-block');
     const syncTabButton = modalOverlay.querySelector('a[href="#sync"]');
+    const proxyTabButton = modalOverlay.querySelector('a[href="#proxies"]');
     
     const updateConnectionUI = (isSupabase) => {
         directGoogleBlock.style.display = isSupabase ? 'none' : 'block';
         supabaseCredentialsBlock.style.display = isSupabase ? 'block' : 'none';
-        if (syncTabButton) {
-            syncTabButton.style.display = isSupabase ? 'block' : 'none';
-        }
+        if (syncTabButton) syncTabButton.style.display = isSupabase ? 'block' : 'none';
+        if (proxyTabButton) proxyTabButton.style.display = isSupabase ? 'block' : 'none';
     };
     updateConnectionUI(currentSettings.isSupabaseEnabled);
     supabaseToggle.addEventListener('change', (e) => {
@@ -457,13 +449,10 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
 
     // Auth action buttons
     const loginButton = modalOverlay.querySelector('#modal-login-button');
-    if (loginButton) {
-        loginButton.addEventListener('click', onLogin);
-    }
+    if (loginButton) loginButton.addEventListener('click', onLogin);
+    
     const logoutButton = modalOverlay.querySelector('#modal-logout-button');
-    if (logoutButton) {
-        logoutButton.addEventListener('click', onLogout);
-    }
+    if (logoutButton) logoutButton.addEventListener('click', onLogout);
 
 
     // Sync Tab Logic
@@ -509,6 +498,139 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     if (forceSyncButton) {
         forceSyncButton.disabled = !authState.isGoogleConnected || isSyncing;
         forceSyncButton.addEventListener('click', onForceSync);
+    }
+
+    // --- Proxy Tab Logic ---
+    const proxyListContainer = modalOverlay.querySelector('#proxy-list-container');
+    const proxyEditorContainer = modalOverlay.querySelector('#proxy-editor-container');
+    const addProxyButton = modalOverlay.querySelector('#add-proxy-button');
+
+    function renderProxyList() {
+        if (!authState.proxies || authState.proxies.length === 0) {
+            proxyListContainer.innerHTML = `<p class="text-center text-gray-400 text-sm py-4">Вы еще не добавили ни одного прокси-сервера.</p>`;
+            return;
+        }
+
+        proxyListContainer.innerHTML = authState.proxies.map(proxy => {
+            let statusIndicator = '';
+            switch (proxy.last_status) {
+                case 'ok':
+                    statusIndicator = `<div class="w-3 h-3 bg-green-500 rounded-full" title="Работает"></div>`;
+                    break;
+                case 'error':
+                     statusIndicator = `<div class="w-3 h-3 bg-red-500 rounded-full" title="Ошибка"></div>`;
+                    break;
+                case 'testing':
+                    statusIndicator = `<div class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse" title="Тестируется..."></div>`;
+                    break;
+                default:
+                    statusIndicator = `<div class="w-3 h-3 bg-gray-500 rounded-full" title="Не проверен"></div>`;
+            }
+
+            return `
+                <div class="bg-gray-900/50 p-3 rounded-lg flex items-center gap-3">
+                    ${statusIndicator}
+                    <div class="flex-1 min-w-0">
+                        <p class="font-semibold truncate" title="${proxy.alias || proxy.url}">${proxy.alias || proxy.url}</p>
+                        <p class="text-xs text-gray-400">
+                            Приоритет: ${proxy.priority} | 
+                            Скорость: ${proxy.last_speed_ms ? `${proxy.last_speed_ms} мс` : 'N/A'} | 
+                            Локация: ${proxy.geolocation || 'Не указана'}
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-1 flex-shrink-0">
+                         <button data-action="test-proxy" data-id="${proxy.id}" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 rounded-md">Тест</button>
+                         <button data-action="edit-proxy" data-id="${proxy.id}" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded-md">Изм.</button>
+                         <button data-action="delete-proxy" data-id="${proxy.id}" class="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 rounded-md">Удл.</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function showProxyEditor(proxy = null) {
+        const isEditing = proxy !== null;
+        proxyEditorContainer.innerHTML = `
+            <div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" style="z-index: 60;">
+                <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md m-4 p-6 space-y-4">
+                    <h4 class="text-xl font-bold">${isEditing ? 'Редактировать прокси' : 'Добавить прокси'}</h4>
+                    <div>
+                        <label class="text-sm font-medium text-gray-300">URL *</label>
+                        <input id="proxy-url-input" type="text" class="mt-1 w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2" value="${proxy?.url || ''}" placeholder="https://my-proxy.workers.dev">
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-gray-300">Псевдоним</label>
+                        <input id="proxy-alias-input" type="text" class="mt-1 w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2" value="${proxy?.alias || ''}" placeholder="Cloudflare US">
+                    </div>
+                     <div>
+                        <label class="text-sm font-medium text-gray-300">Приоритет (меньше = выше)</label>
+                        <input id="proxy-priority-input" type="number" class="mt-1 w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2" value="${proxy?.priority || 0}">
+                    </div>
+                     <div>
+                        <label class="text-sm font-medium text-gray-300">Геолокация (для справки)</label>
+                        <input id="proxy-geo-input" type="text" class="mt-1 w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2" value="${proxy?.geolocation || ''}" placeholder="США, Калифорния">
+                    </div>
+                     <div class="flex items-center justify-between">
+                        <label class="text-sm font-medium text-gray-300">Активен</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="proxy-active-toggle" ${proxy?.is_active ?? true ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="flex justify-end gap-3 pt-4">
+                        <button id="cancel-proxy-edit" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md">Отмена</button>
+                        <button id="save-proxy-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md">${isEditing ? 'Сохранить' : 'Добавить'}</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const closeEditor = () => proxyEditorContainer.innerHTML = '';
+        
+        proxyEditorContainer.querySelector('#cancel-proxy-edit').addEventListener('click', closeEditor);
+        proxyEditorContainer.querySelector('#save-proxy-button').addEventListener('click', () => {
+            const urlInput = proxyEditorContainer.querySelector('#proxy-url-input');
+            const url = urlInput.value.trim();
+            if (!url) {
+                urlInput.focus();
+                return;
+            }
+            const data = {
+                url,
+                alias: proxyEditorContainer.querySelector('#proxy-alias-input').value.trim(),
+                priority: parseInt(proxyEditorContainer.querySelector('#proxy-priority-input').value, 10) || 0,
+                geolocation: proxyEditorContainer.querySelector('#proxy-geo-input').value.trim(),
+                is_active: proxyEditorContainer.querySelector('#proxy-active-toggle').checked,
+            };
+
+            if (isEditing) {
+                onProxyUpdate(proxy.id, data);
+            } else {
+                onProxyAdd(data);
+            }
+            closeEditor();
+        });
+    }
+
+    if (authState.isSupabaseReady) {
+        addProxyButton.addEventListener('click', () => showProxyEditor());
+        proxyListContainer.addEventListener('click', (e) => {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
+            const id = button.dataset.id;
+            const proxy = authState.proxies.find(p => p.id === id);
+            if (!proxy) return;
+
+            switch (button.dataset.action) {
+                case 'test-proxy': onProxyTest(proxy); break;
+                case 'edit-proxy': showProxyEditor(proxy); break;
+                case 'delete-proxy': onProxyDelete(id); break;
+            }
+        });
+        renderProxyList();
+    } else {
+        const proxyTab = modalOverlay.querySelector('#tab-proxies');
+        proxyTab.innerHTML = `<p class="text-center text-gray-400">Управление прокси доступно только при подключении через Supabase.</p>`;
     }
     
     // Fetch and render "About" tab content

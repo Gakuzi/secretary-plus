@@ -54,6 +54,7 @@ if (!window.isSecretaryPlusAppInitialized) {
         syncStatus: getSyncStatus(),
         isSyncing: false,
         proxyStatus: 'unknown', // 'unknown', 'testing', 'ok', 'error'
+        proxies: [], // User-defined proxy servers
     };
 
     // --- SERVICE INSTANCES ---
@@ -243,6 +244,7 @@ if (!window.isSecretaryPlusAppInitialized) {
                 console.error(`Failed to sync ${task.name}:`, error);
                 state.syncStatus[task.name] = { error: error.message };
             }
+            // Save status after each task to ensure progress is saved even if one fails
             saveSyncStatus(state.syncStatus);
             // Re-render modal to update status line by line
             if (document.getElementById('settings-content')) {
@@ -341,6 +343,7 @@ if (!window.isSecretaryPlusAppInitialized) {
                 state.userProfile = await googleProvider.getUserProfile();
                 state.isGoogleConnected = true;
                 state.actionStats = await supabaseService.getActionStats(); // Load stats on login
+                state.proxies = await supabaseService.getProxies(); // Load proxies on login
                 startAutoSync();
 
             } catch (error) {
@@ -354,6 +357,7 @@ if (!window.isSecretaryPlusAppInitialized) {
             state.isGoogleConnected = false;
             state.userProfile = null;
             state.actionStats = {}; // Clear stats on logout
+            state.proxies = []; // Clear proxies on logout
             googleProvider.setAuthToken(null);
             stopAutoSync();
             // On logout, revert to whatever is in local storage.
@@ -537,6 +541,24 @@ if (!window.isSecretaryPlusAppInitialized) {
     async function processBotResponse(prompt, image = null, isSystemInitiated = false) {
         state.isLoading = true;
         showLoadingIndicator();
+        
+        const findBestProxy = () => {
+            if (!state.settings.isSupabaseEnabled || state.proxies.length === 0) {
+                return state.settings.isProxyEnabled ? state.settings.geminiProxyUrl : null;
+            }
+            const sorted = [...state.proxies]
+                .filter(p => p.is_active)
+                .sort((a, b) => a.priority - b.priority);
+            
+            const ok = sorted.find(p => p.last_status === 'ok');
+            if (ok) return ok.url;
+            
+            const untested = sorted.find(p => p.last_status === 'untested');
+            if (untested) return untested.url;
+            
+            // Return highest priority one as a last resort, even if it has an error
+            return sorted.length > 0 ? sorted[0].url : null;
+        };
 
         try {
             // If the message is system-initiated, it doesn't get added to history beforehand.
@@ -553,7 +575,7 @@ if (!window.isSecretaryPlusAppInitialized) {
                 image,
                 apiKey: state.settings.geminiApiKey,
                 isProxyEnabled: state.settings.isProxyEnabled,
-                proxyUrl: state.settings.geminiProxyUrl
+                proxyUrl: findBestProxy(), // Use the new priority logic
             });
 
             if (response.functionCallName) {
@@ -840,14 +862,22 @@ ${payload.body}`;
                 isSupabaseReady: state.isSupabaseReady,
                 isGoogleConnected: state.isGoogleConnected,
                 userProfile: state.userProfile,
+                proxies: state.proxies, // Pass proxies to the modal
             },
-            handleSaveSettings, 
-            hideSettings,
-            handleLogin, 
-            handleLogout,
-            state.syncStatus,
-            state.isSyncing,
-            handleForceSync
+            {
+                onSave: handleSaveSettings, 
+                onClose: hideSettings,
+                onLogin: handleLogin, 
+                onLogout: handleLogout,
+                onForceSync: handleForceSync,
+                isSyncing: state.isSyncing,
+                syncStatus: state.syncStatus,
+                // Pass proxy handlers
+                onProxyAdd: handleProxyAdd,
+                onProxyUpdate: handleProxyUpdate,
+                onProxyDelete: handleProxyDelete,
+                onProxyTest: handleProxyTest,
+            }
         );
         settingsModalContainer.innerHTML = '';
         settingsModalContainer.appendChild(modal);
@@ -858,6 +888,69 @@ ${payload.body}`;
         settingsModalContainer.classList.add('hidden');
         settingsModalContainer.innerHTML = '';
     }
+    
+    // --- Proxy Management Handlers ---
+    async function handleProxyAdd(proxyData) {
+        if (!supabaseService) return;
+        try {
+            const newProxy = await supabaseService.addProxy(proxyData);
+            state.proxies.push(newProxy);
+            showSettings(); // Re-render modal with new proxy
+        } catch (error) {
+            showSystemError(`Не удалось добавить прокси: ${error.message}`);
+        }
+    }
+    
+    async function handleProxyUpdate(id, updateData) {
+        if (!supabaseService) return;
+        try {
+            const updatedProxy = await supabaseService.updateProxy(id, updateData);
+            const index = state.proxies.findIndex(p => p.id === id);
+            if (index !== -1) {
+                state.proxies[index] = updatedProxy;
+            }
+            showSettings(); // Re-render modal
+        } catch (error) {
+            showSystemError(`Не удалось обновить прокси: ${error.message}`);
+        }
+    }
+
+    async function handleProxyDelete(id) {
+        if (!supabaseService) return;
+        if (!confirm('Вы уверены, что хотите удалить этот прокси-сервер?')) return;
+        try {
+            await supabaseService.deleteProxy(id);
+            state.proxies = state.proxies.filter(p => p.id !== id);
+            showSettings(); // Re-render modal
+        } catch (error) {
+            showSystemError(`Не удалось удалить прокси: ${error.message}`);
+        }
+    }
+    
+    async function handleProxyTest(proxy) {
+        if (!supabaseService) return;
+
+        // Optimistically update UI
+        const index = state.proxies.findIndex(p => p.id === proxy.id);
+        if (index !== -1) {
+            state.proxies[index].last_status = 'testing';
+            state.proxies[index].last_checked_at = new Date().toISOString();
+        }
+        showSettings();
+
+        const startTime = performance.now();
+        const result = await testProxyConnection({ proxyUrl: proxy.url, apiKey: state.settings.geminiApiKey });
+        const endTime = performance.now();
+
+        const updateData = {
+            last_status: result.status,
+            last_speed_ms: result.status === 'ok' ? Math.round(endTime - startTime) : null,
+            last_checked_at: new Date().toISOString(),
+        };
+
+        await handleProxyUpdate(proxy.id, updateData); // This will save and re-render
+    }
+
 
     function showHelpModal() {
         const handleAnalyzeError = (errorMessage) => {

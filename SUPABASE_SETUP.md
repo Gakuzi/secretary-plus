@@ -20,7 +20,7 @@
 ```sql
 -- =================================================================
 --  Скрипт настройки базы данных "Секретарь+"
---  Версия: 1.6.0
+--  Версия: 1.8.0
 --  Этот скрипт является идемпотентным. Его можно безопасно 
 --  запускать несколько раз для создания или обновления схемы.
 -- =================================================================
@@ -185,8 +185,31 @@ CREATE TABLE IF NOT EXISTS public.user_settings (
   settings JSONB NOT NULL
 );
 
+-- 10. Таблица прокси-серверов (proxies)
+CREATE TABLE IF NOT EXISTS public.proxies (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    alias TEXT,
+    url TEXT NOT NULL,
+    priority INT DEFAULT 0 NOT NULL,
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    last_status TEXT DEFAULT 'untested' NOT NULL, -- 'untested', 'ok', 'error'
+    last_checked_at TIMESTAMPTZ,
+    last_speed_ms INT,
+    geolocation TEXT
+);
+DO $$ BEGIN
+  IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint 
+      WHERE conname = 'proxies_user_id_url_key' AND conrelid = 'public.proxies'::regclass
+  ) THEN
+      ALTER TABLE public.proxies ADD UNIQUE(user_id, url);
+  END IF;
+END $$;
 
--- 10. Включение Row Level Security (RLS) для всех таблиц
+
+-- 11. Включение Row Level Security (RLS) для всех таблиц
 ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
@@ -196,9 +219,10 @@ ALTER TABLE public.chat_memory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.emails ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.action_stats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.proxies ENABLE ROW LEVEL SECURITY;
 
 
--- 11. Создание политик безопасности (удаляем старые, если они есть, чтобы избежать ошибок)
+-- 12. Создание политик безопасности (удаляем старые, если они есть, чтобы избежать ошибок)
 DROP POLICY IF EXISTS "Allow users to manage their own contacts" ON public.contacts;
 CREATE POLICY "Allow users to manage their own contacts" ON public.contacts FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
@@ -226,8 +250,11 @@ CREATE POLICY "Allow users to manage their own stats" ON public.action_stats FOR
 DROP POLICY IF EXISTS "Users can manage their own settings" ON public.user_settings;
 CREATE POLICY "Users can manage their own settings" ON public.user_settings FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Allow users to manage their own proxies" ON public.proxies;
+CREATE POLICY "Allow users to manage their own proxies" ON public.proxies FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
--- 12. RPC-функции
+
+-- 13. RPC-функции
 CREATE OR REPLACE FUNCTION increment_stat(fn_name TEXT)
 RETURNS void
 LANGUAGE plpgsql

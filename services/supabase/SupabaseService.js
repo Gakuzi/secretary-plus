@@ -412,4 +412,52 @@ export class SupabaseService {
             throw error;
         }
     }
+    
+    // --- Proxy Management ---
+    async getProxies() {
+        const { data, error } = await this.client
+            .from('proxies')
+            .select('*')
+            .order('priority', { ascending: true })
+            .order('created_at', { ascending: true });
+
+        if (error) throw error;
+        return data || [];
+    }
+
+    async addProxy(proxyData) {
+        const { data: { user } } = await this.client.auth.getUser();
+        if (!user) throw new Error("User not authenticated.");
+        
+        const { data, error } = await this.client
+            .from('proxies')
+            .insert({ ...proxyData, user_id: user.id })
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    }
+    
+    async updateProxy(id, updateData) {
+        const { data, error } = await this.client
+            .from('proxies')
+            .update(updateData)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    }
+
+    async deleteProxy(id) {
+        const { error } = await this.client
+            .from('proxies')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+        return { success: true };
+    }
 }
