@@ -384,6 +384,7 @@ export const callGemini = async ({
     isGoogleConnected,
     image,
     apiKey,
+    isProxyEnabled,
     proxyUrl
 }) => {
     if (!apiKey) {
@@ -395,7 +396,7 @@ export const callGemini = async ({
     }
     
     const clientOptions = { apiKey };
-    if (proxyUrl) {
+    if (proxyUrl && isProxyEnabled) {
         clientOptions.apiEndpoint = proxyUrl;
     }
     const ai = new GoogleGenAI(clientOptions);
@@ -790,13 +791,42 @@ export const callGemini = async ({
     }
 };
 
+export const testProxyConnection = async ({ proxyUrl, apiKey }) => {
+    if (!proxyUrl || !apiKey) {
+        return { status: 'error', message: 'Для теста необходимы URL прокси и API ключ.' };
+    }
+    // Используем легковесный эндпоинт для проверки работоспособности
+    const testEndpoint = `${proxyUrl}/v1beta/models?key=${apiKey}`;
+    try {
+        const response = await fetch(testEndpoint, { method: 'GET' });
 
-export const analyzeSyncErrorWithGemini = async ({ errorMessage, context, apiKey, proxyUrl }) => {
+        if (response.ok) {
+            const data = await response.json();
+            if (data.models && Array.isArray(data.models)) {
+                 return { status: 'ok', message: 'Соединение успешно.' };
+            } else {
+                 return { status: 'error', message: 'Прокси ответил, но формат данных некорректен.' };
+            }
+        } else {
+             return { status: 'error', message: `Прокси ответил со статусом: ${response.status} ${response.statusText}` };
+        }
+    } catch (error) {
+        console.error('Ошибка при тесте прокси:', error);
+        let message = 'Сетевая ошибка. Возможные причины: проблема с CORS, неверный URL или прокси-сервер недоступен.';
+        if (error instanceof TypeError) {
+             message = `Сетевой запрос не удался. Проверьте правильность URL и доступность сервера. Политика CORS может блокировать запрос.`;
+        }
+        return { status: 'error', message: message };
+    }
+};
+
+
+export const analyzeSyncErrorWithGemini = async ({ errorMessage, context, apiKey, isProxyEnabled, proxyUrl }) => {
     if (!apiKey) {
         throw new Error("Ключ Gemini API не предоставлен.");
     }
     const clientOptions = { apiKey };
-    if (proxyUrl) {
+    if (proxyUrl && isProxyEnabled) {
         clientOptions.apiEndpoint = proxyUrl;
     }
     const ai = new GoogleGenAI(clientOptions);
@@ -830,12 +860,12 @@ ${errorMessage}
     }
 };
 
-export const analyzeGenericErrorWithGemini = async ({ errorMessage, appStructure, apiKey, proxyUrl }) => {
+export const analyzeGenericErrorWithGemini = async ({ errorMessage, appStructure, apiKey, isProxyEnabled, proxyUrl }) => {
     if (!apiKey) {
         throw new Error("Ключ Gemini API не предоставлен.");
     }
     const clientOptions = { apiKey };
-    if (proxyUrl) {
+    if (proxyUrl && isProxyEnabled) {
         clientOptions.apiEndpoint = proxyUrl;
     }
     const ai = new GoogleGenAI(clientOptions);

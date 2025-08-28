@@ -1,7 +1,7 @@
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
-import { callGemini, analyzeGenericErrorWithGemini } from './services/geminiService.js';
+import { callGemini, analyzeGenericErrorWithGemini, testProxyConnection } from './services/geminiService.js';
 import { getSettings, saveSettings, getSyncStatus, saveSyncStatus } from './utils/storage.js';
 import { createSettingsModal } from './components/SettingsModal.js';
 import { createStatsModal } from './components/StatsModal.js';
@@ -52,6 +52,7 @@ if (!window.isSecretaryPlusAppInitialized) {
         lastSeenEmailId: null, // For proactive email check
         syncStatus: getSyncStatus(),
         isSyncing: false,
+        proxyStatus: 'unknown', // 'unknown', 'testing', 'ok', 'error'
     };
 
     // --- SERVICE INSTANCES ---
@@ -60,6 +61,7 @@ if (!window.isSecretaryPlusAppInitialized) {
     let supabaseService = null;
     let emailCheckInterval = null;
     let syncInterval = null; // Interval timer for auto-sync
+    let proxyCheckTimeout = null;
 
 
     const serviceProviders = {
@@ -100,11 +102,33 @@ if (!window.isSecretaryPlusAppInitialized) {
             const connectionIcon = state.settings.isSupabaseEnabled
                 ? `<div class="w-6 h-6 text-green-400" title="Подключено через Supabase">${SupabaseIcon}</div>`
                 : `<div class="w-6 h-6" title="Подключено напрямую к Google">${GoogleIcon}</div>`;
+            
+            let proxyIndicatorHtml = '';
+            if (state.settings.isProxyEnabled && state.settings.geminiProxyUrl) {
+                let indicatorClass = 'bg-gray-400';
+                let indicatorTitle = 'Статус прокси неизвестен.';
+                switch (state.proxyStatus) {
+                    case 'ok':
+                        indicatorClass = 'bg-green-500';
+                        indicatorTitle = 'Прокси-сервер активен и работает корректно.';
+                        break;
+                    case 'testing':
+                        indicatorClass = 'bg-yellow-400 animate-pulse';
+                        indicatorTitle = 'Идет проверка прокси-сервера...';
+                        break;
+                    case 'error':
+                        indicatorClass = 'bg-red-500';
+                        indicatorTitle = 'Ошибка подключения к прокси. Проверьте URL и статус сервера в настройках.';
+                        break;
+                }
+                proxyIndicatorHtml = `<div class="w-3 h-3 rounded-full ${indicatorClass}" title="${indicatorTitle}"></div>`;
+            }
 
             const profileElement = document.createElement('div');
             profileElement.className = 'flex items-center space-x-2';
             profileElement.innerHTML = `
                 ${connectionIcon}
+                ${proxyIndicatorHtml}
                 <img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full">
                 <span class="text-sm font-medium hidden sm:block">${state.userProfile.name}</span>
                 <button id="logout-button" class="px-3 py-1 text-sm bg-red-600 hover:bg-red-700 rounded-md transition-colors">Выйти</button>
@@ -154,6 +178,41 @@ if (!window.isSecretaryPlusAppInitialized) {
         renderMainContent();
     }
     
+    // --- PROXY STATUS CHECK ---
+    async function checkProxyStatus(force = false) {
+        if (proxyCheckTimeout) clearTimeout(proxyCheckTimeout);
+
+        if (!state.settings.isProxyEnabled || !state.settings.geminiProxyUrl) {
+            state.proxyStatus = 'unknown';
+            renderAuth();
+            return;
+        }
+
+        if (state.proxyStatus === 'ok' && !force) {
+            return;
+        }
+        
+        state.proxyStatus = 'testing';
+        renderAuth();
+
+        proxyCheckTimeout = setTimeout(async () => {
+            try {
+                const result = await testProxyConnection({
+                    proxyUrl: state.settings.geminiProxyUrl,
+                    apiKey: state.settings.geminiApiKey,
+                });
+                state.proxyStatus = result.status;
+                 if (result.status === 'error') {
+                    console.error("Proxy Check Error:", result.message);
+                }
+            } catch (e) {
+                console.error("Fatal error during proxy check:", e);
+                state.proxyStatus = 'error';
+            }
+            renderAuth();
+        }, 500); // 500ms debounce
+    }
+
     // --- AUTO-SYNC LOGIC ---
     const SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -435,6 +494,11 @@ if (!window.isSecretaryPlusAppInitialized) {
         } else if (!newSettings.enableAutoSync && oldSettings.enableAutoSync) {
             stopAutoSync();
         }
+        
+        // Re-check proxy status if settings changed
+        if (newSettings.geminiProxyUrl !== oldSettings.geminiProxyUrl || newSettings.isProxyEnabled !== oldSettings.isProxyEnabled || newSettings.geminiApiKey !== oldSettings.geminiApiKey) {
+            checkProxyStatus(true);
+        }
     }
     
     function handleNewChat() {
@@ -467,6 +531,7 @@ if (!window.isSecretaryPlusAppInitialized) {
                 isGoogleConnected: state.isGoogleConnected,
                 image,
                 apiKey: state.settings.geminiApiKey,
+                isProxyEnabled: state.settings.isProxyEnabled,
                 proxyUrl: state.settings.geminiProxyUrl
             });
 
@@ -781,6 +846,7 @@ ${payload.body}`;
                 errorMessage,
                 appStructure: APP_STRUCTURE_CONTEXT,
                 apiKey: state.settings.geminiApiKey,
+                isProxyEnabled: state.settings.isProxyEnabled,
                 proxyUrl: state.settings.geminiProxyUrl
             });
         };
@@ -870,6 +936,7 @@ ${payload.body}`;
         
         render(); // Render UI first to ensure error display area exists
         await initializeAppServices(); // Then initialize services which might produce errors
+        checkProxyStatus(); // Check proxy status on load
     }
 
     document.addEventListener('DOMContentLoaded', init);
