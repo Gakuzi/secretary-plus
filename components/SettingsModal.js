@@ -161,6 +161,19 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
+                            <div id="supabase-credentials-block" style="display: ${currentSettings.isSupabaseEnabled ? 'block' : 'none'};">
+                                <div class="space-y-4 mt-4 border-t border-gray-700 pt-4">
+                                     <div class="space-y-2">
+                                        <label for="supabase-url" class="block text-sm font-medium text-gray-300">Supabase Project URL</label>
+                                        <input type="text" id="supabase-url" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="https://xyz.supabase.co" value="${currentSettings.supabaseUrl || ''}">
+                                    </div>
+                                     <div class="space-y-2">
+                                        <label for="supabase-anon-key" class="block text-sm font-medium text-gray-300">Supabase Anon Key</label>
+                                        <input type="password" id="supabase-anon-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.supabaseAnonKey || ''}">
+                                    </div>
+                                    <p class="text-xs text-gray-400 mt-1"><a href="./setup-guide.html#supabase-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как получить эти ключи?</a></p>
+                                </div>
+                            </div>
                         </div>
 
                         <div id="direct-google-settings-block" class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4" style="display: none;">
@@ -296,6 +309,8 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             geminiApiKey: modalOverlay.querySelector('#gemini-api-key')?.value.trim() ?? '',
             googleClientId: modalOverlay.querySelector('#google-client-id')?.value.trim() ?? '',
             isSupabaseEnabled: modalOverlay.querySelector('#supabase-enabled-toggle')?.checked ?? true,
+            supabaseUrl: modalOverlay.querySelector('#supabase-url')?.value.trim() ?? '',
+            supabaseAnonKey: modalOverlay.querySelector('#supabase-anon-key')?.value.trim() ?? '',
             isProxyEnabled: modalOverlay.querySelector('#proxy-enabled-toggle')?.checked ?? false,
             geminiProxyUrl: modalOverlay.querySelector('#gemini-proxy-url')?.value.trim() ?? '',
             timezone: modalOverlay.querySelector('#timezone-select')?.value ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -422,11 +437,13 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     
     // Logic for Supabase toggle
     const supabaseToggle = modalOverlay.querySelector('#supabase-enabled-toggle');
+    const supabaseCredentialsBlock = modalOverlay.querySelector('#supabase-credentials-block');
     const directGoogleBlock = modalOverlay.querySelector('#direct-google-settings-block');
     const syncTabButton = modalOverlay.querySelector('a[href="#sync"]');
     
     const updateConnectionUI = (isSupabase) => {
         directGoogleBlock.style.display = isSupabase ? 'none' : 'block';
+        supabaseCredentialsBlock.style.display = isSupabase ? 'block' : 'none';
         if (syncTabButton) {
             syncTabButton.style.display = isSupabase ? 'block' : 'none';
         }

@@ -397,7 +397,8 @@ export const callGemini = async ({
     
     const clientOptions = { apiKey };
     if (proxyUrl && isProxyEnabled) {
-        clientOptions.apiEndpoint = proxyUrl;
+        // The SDK constructor expects the endpoint without the protocol.
+        clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
     }
     const ai = new GoogleGenAI(clientOptions);
     
@@ -827,7 +828,8 @@ export const analyzeSyncErrorWithGemini = async ({ errorMessage, context, apiKey
     }
     const clientOptions = { apiKey };
     if (proxyUrl && isProxyEnabled) {
-        clientOptions.apiEndpoint = proxyUrl;
+        // The SDK constructor expects the endpoint without the protocol.
+        clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
     }
     const ai = new GoogleGenAI(clientOptions);
 
@@ -866,7 +868,8 @@ export const analyzeGenericErrorWithGemini = async ({ errorMessage, appStructure
     }
     const clientOptions = { apiKey };
     if (proxyUrl && isProxyEnabled) {
-        clientOptions.apiEndpoint = proxyUrl;
+        // The SDK constructor expects the endpoint without the protocol.
+        clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
     }
     const ai = new GoogleGenAI(clientOptions);
 

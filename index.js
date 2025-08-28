@@ -11,7 +11,6 @@ import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadin
 import { createCameraView } from './components/CameraView.js';
 import { SettingsIcon, ChartBarIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './constants.js';
 
 // Add a guard to prevent the script from running multiple times
 // if it's loaded by both the HTML and the TSX entry point.
@@ -28,14 +27,14 @@ if (!window.isSecretaryPlusAppInitialized) {
     const APP_STRUCTURE_CONTEXT = `
     - index.html: Главный HTML-файл.
     - index.js: Основная логика приложения, управление состоянием, обработчики событий.
-    - constants.js: Хранит встроенные учетные данные для подключения к Supabase.
+    - utils/storage.js: Хранит настройки пользователя, включая ключи API и Supabase.
     - services/geminiService.js: Обрабатывает все вызовы к Gemini API для чата и анализа.
     - services/google/GoogleServiceProvider.js: Управляет всеми взаимодействиями с Google API (Календарь, Диск, Gmail и т.д.).
     - services/supabase/SupabaseService.js: Управляет всеми взаимодействиями с базой данных Supabase (аутентификация, синхронизация данных, запросы).
     - components/Chat.js: Рендерит интерфейс чата и панель ввода.
     - components/Message.js: Рендерит отдельные сообщения в чате.
     - components/ResultCard.js: Рендерит интерактивные карточки в сообщениях чата.
-    - components/SettingsModal.js: Рендерит UI настроек.
+    - components/SettingsModal.js: Рендерит UI настроек, где пользователь вводит все ключи.
     - components/HelpModal.js: Рендерит UI 'Центра помощи' с ИИ-анализом ошибок.
     - setup-guide.html: Содержит SQL-скрипт для настройки базы данных Supabase. Ошибка типа 'column does not exist' часто означает, что пользователю нужно повторно запустить скрипт из этого файла.
     `;
@@ -280,14 +279,15 @@ if (!window.isSecretaryPlusAppInitialized) {
     // --- AUTHENTICATION & INITIALIZATION ---
 
     async function initializeSupabase() {
-        if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('YOUR_SUPABASE_URL')) {
-            console.warn("Supabase credentials are not configured in constants.js. Skipping Supabase initialization.");
+        const { supabaseUrl, supabaseAnonKey } = state.settings;
+        if (!supabaseUrl || !supabaseAnonKey) {
+            console.warn("Supabase credentials are not configured in settings. Skipping Supabase initialization.");
             state.isSupabaseReady = false;
-            return; // Don't throw, just exit gracefully
+            return;
         }
         
         try {
-            supabaseService = new SupabaseService(SUPABASE_URL, SUPABASE_ANON_KEY);
+            supabaseService = new SupabaseService(supabaseUrl, supabaseAnonKey);
             serviceProviders.supabase = supabaseService;
 
             supabaseService.onAuthStateChange(async (event, session) => {
@@ -302,7 +302,7 @@ if (!window.isSecretaryPlusAppInitialized) {
 
         } catch (error) {
             console.error("Supabase initialization failed:", error);
-            showSystemError(`Не удалось подключиться к Supabase. Функции синхронизации будут недоступны.`);
+            showSystemError(`Не удалось подключиться к Supabase. Проверьте URL и ключ в настройках. Функции синхронизации будут недоступны.`);
             state.isSupabaseReady = false;
             supabaseService = null;
             serviceProviders.supabase = null;
@@ -463,6 +463,16 @@ if (!window.isSecretaryPlusAppInitialized) {
         hideSettings(); // Close modal immediately for better UX
 
         try {
+            // Re-check if we need to initialize Supabase
+            // This handles the case where user adds Supabase credentials and saves.
+            if (newSettings.isSupabaseEnabled && !oldSettings.isSupabaseEnabled) {
+                // If Supabase mode was just enabled, we need to re-initialize it. A reload is simplest.
+                const app = document.getElementById('app');
+                app.innerHTML = `<div class="flex items-center justify-center h-full text-lg">Переключение режима подключения, перезагрузка...</div>`;
+                setTimeout(() => window.location.reload(), 1500);
+                return; // Prevent further execution
+            }
+
             // If logged into Supabase, save to the database as well
             if (state.supabaseUser && supabaseService) {
                 await supabaseService.saveUserSettings(newSettings);
@@ -486,9 +496,8 @@ if (!window.isSecretaryPlusAppInitialized) {
                 checkProxyStatus(true);
             }
             
-            // If Supabase mode was toggled, reload the app to re-initialize correctly
+            // If Supabase mode was toggled off, reload the app to re-initialize correctly
             if (newSettings.isSupabaseEnabled !== oldSettings.isSupabaseEnabled) {
-                // Show a message before reloading
                 const app = document.getElementById('app');
                 app.innerHTML = `<div class="flex items-center justify-center h-full text-lg">Переключение режима подключения, перезагрузка...</div>`;
                 setTimeout(() => window.location.reload(), 1500);

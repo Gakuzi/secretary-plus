@@ -5,6 +5,8 @@ const defaultSettings = {
     geminiApiKey: '',
     googleClientId: '', // For direct Google auth fallback
     isSupabaseEnabled: true, // Master switch for Supabase
+    supabaseUrl: '',
+    supabaseAnonKey: '',
     isProxyEnabled: false, // For enabling/disabling proxy usage
     geminiProxyUrl: '', // URL for Gemini API proxy
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -41,6 +43,8 @@ export function saveSettings(settings) {
             geminiApiKey: settings.geminiApiKey,
             googleClientId: settings.googleClientId,
             isSupabaseEnabled: settings.isSupabaseEnabled,
+            supabaseUrl: settings.supabaseUrl,
+            supabaseAnonKey: settings.supabaseAnonKey,
             isProxyEnabled: settings.isProxyEnabled,
             geminiProxyUrl: settings.geminiProxyUrl,
             timezone: settings.timezone,
