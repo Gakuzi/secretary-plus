@@ -1,8 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MessageSender } from "../types.js";
 import { GEMINI_MODEL } from "../constants.js";
-import { CalendarIcon, UserIcon, FileIcon, DocIcon, SheetIcon } from "../components/icons/Icons.jsx";
-import React from "react";
 
 const tools = {
   functionDeclarations: [
@@ -110,13 +108,9 @@ const systemInstruction = `Ты — «Секретарь+», проактивн�
 7.  **Дружелюбный тон:** Общайся вежливо и профессионально.
 8.  **Мультимодальность:** Если пользователь прислал изображение, проанализируй его и используй в ответе. Если к изображению есть текстовый запрос, отвечай на него с учетом картинки.`;
 
-let ai = null;
-if (process.env.API_KEY) {
-  ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-} else {
-  console.error("API_KEY environment variable not set.");
-}
 
+// Initialize the AI client once. It will use the environment variable for the API key.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const callGemini = async (
     prompt,
@@ -125,14 +119,6 @@ export const callGemini = async (
     isUnsupportedDomain,
     image
 ) => {
-    if (!ai) {
-        return {
-            id: Date.now().toString(),
-            sender: MessageSender.SYSTEM,
-            text: "Ошибка конфигурации: Ключ API для Gemini не найден.",
-        };
-    }
-    
     // Convert message history to Gemini's format
     const contents = history.map(msg => {
         const role = msg.sender === MessageSender.USER ? 'user' : 'model';
@@ -164,122 +150,94 @@ export const callGemini = async (
                 tools: toolsConfig ? [toolsConfig] : undefined,
             },
         });
-
-        const functionCall = response.candidates?.[0]?.content?.parts?.[0]?.functionCall;
+        
+        const firstCandidate = response.candidates?.[0];
+        const functionCall = firstCandidate?.content?.parts?.[0]?.functionCall;
 
         if (functionCall && serviceProvider) {
             const { name, args } = functionCall;
+            let resultMessage = {
+                id: Date.now().toString(),
+                sender: MessageSender.ASSISTANT,
+                text: '',
+                card: null,
+            };
 
             switch (name) {
                 case 'create_calendar_event': {
                     const result = await serviceProvider.createEvent(args);
-                    const cardData = {
+                    resultMessage.text = `Событие "${result.summary}" успешно создано!`;
+                    resultMessage.card = {
                         type: 'event',
-                        icon: React.createElement(CalendarIcon),
+                        icon: 'CalendarIcon',
                         title: result.summary,
                         details: {
-                            'Время': new Date(result.start.dateTime).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }),
-                            'Участники': result.attendees?.map((a) => a.email) || ['Нет'],
-                            'Видеовстреча': result.hangoutLink ? 'Да' : 'Нет',
+                            'Время': new Date(result.start.dateTime).toLocaleString('ru-RU'),
+                            'Участники': result.attendees?.map(a => a.email).join(', ') || 'Нет',
+                            'Видеовстреча': result.hangoutLink ? `<a href="${result.hangoutLink}" target="_blank" class="text-blue-400 hover:underline">Присоединиться</a>` : 'Нет',
                         },
-                        actions: [{ label: 'Открыть', url: result.htmlLink }],
+                        actions: [{ label: 'Открыть в Календаре', url: result.htmlLink }],
                     };
-                    return {
-                        id: Date.now().toString(),
-                        sender: MessageSender.ASSISTANT,
-                        text: "Событие успешно создано в вашем календаре.",
-                        card: cardData,
-                    };
+                    break;
                 }
-                case 'find_contacts': {
+                 case 'find_contacts': {
                     const results = await serviceProvider.findContacts(args.query);
-                    if (!results || results.length === 0) {
-                        return { id: Date.now().toString(), sender: MessageSender.ASSISTANT, text: `Я не смог найти контакты по запросу "${args.query}".` };
+                    if (results.length > 0) {
+                        const contactsText = results.map(r => `- **${r.person.names?.[0]?.displayName}**: ${r.person.emailAddresses?.[0]?.value || 'Нет email'}`).join('\n');
+                        resultMessage.text = `Я нашел несколько контактов по вашему запросу:\n${contactsText}\n\nПожалуйста, уточните, кого вы имели в виду.`;
+                    } else {
+                        resultMessage.text = `К сожалению, я не нашел контактов по запросу "${args.query}".`;
                     }
-                    const cardData = {
-                        type: 'contact-selection',
-                        icon: React.createElement(UserIcon),
-                        title: `Найденные контакты для "${args.query}"`,
-                        selectionOptions: results.map((r) => ({
-                            id: r.person.resourceName,
-                            label: r.person.names?.[0]?.displayName || 'Без имени',
-                            description: r.person.emailAddresses?.[0]?.value || r.person.phoneNumbers?.[0]?.value || 'Нет данных',
-                            data: r.person,
-                        })),
-                    };
-                    return {
-                        id: Date.now().toString(),
-                        sender: MessageSender.ASSISTANT,
-                        text: "Пожалуйста, выберите подходящий контакт из списка:",
-                        card: cardData,
-                        originalPrompt: prompt,
-                    };
+                    break;
                 }
                 case 'find_documents': {
                     const results = await serviceProvider.findDocuments(args.query);
-                     if (!results || results.length === 0) {
-                        return { id: Date.now().toString(), sender: MessageSender.ASSISTANT, text: `Я не смог найти документы по запросу "${args.query}".` };
+                    if (results.length > 0) {
+                        const docsText = results.map(doc => `- [${doc.name}](${doc.webViewLink})`).join('\n');
+                        resultMessage.text = `Вот документы, которые я нашел:\n${docsText}\n\nКакой из них прикрепить?`;
+                    } else {
+                        resultMessage.text = `Не удалось найти документы по запросу "${args.query}". Хотите создать новый?`;
                     }
-                    const cardData = {
-                        type: 'document-selection',
-                        icon: React.createElement(FileIcon),
-                        title: `Найденные документы для "${args.query}"`,
-                        selectionOptions: results.map(file => ({
-                            id: file.id,
-                            label: file.name,
-                            description: file.mimeType,
-                            data: file,
-                        })),
-                    };
-                     return {
-                        id: Date.now().toString(),
-                        sender: MessageSender.ASSISTANT,
-                        text: "Пожалуйста, выберите подходящий документ:",
-                        card: cardData,
-                        originalPrompt: prompt,
-                    };
+                    break;
                 }
                  case 'create_google_doc':
                  case 'create_google_sheet': {
-                    const result = name === 'create_google_doc'
-                        ? await serviceProvider.createGoogleDoc(args.title)
-                        : await serviceProvider.createGoogleSheet(args.title);
-
-                    const cardData = {
+                    const isSheet = name === 'create_google_sheet';
+                    const result = isSheet 
+                        ? await serviceProvider.createGoogleSheet(args.title)
+                        : await serviceProvider.createGoogleDoc(args.title);
+                    
+                    resultMessage.text = `${isSheet ? 'Таблица' : 'Документ'} "${result.name}" успешно создан.`;
+                    resultMessage.card = {
                         type: 'document',
-                        icon: name === 'create_google_doc' ? React.createElement(DocIcon) : React.createElement(SheetIcon),
+                        icon: 'FileIcon',
                         title: result.name,
-                        actions: [{ label: 'Открыть', url: result.webViewLink }],
+                        details: {
+                            'Тип': result.mimeType.includes('spreadsheet') ? 'Google Таблица' : 'Google Документ',
+                        },
+                        actions: [{ label: 'Открыть документ', url: result.webViewLink }],
                     };
-
-                    return {
-                        id: Date.now().toString(),
-                        sender: MessageSender.ASSISTANT,
-                        text: `Я создал документ «${result.name}». Что-нибудь еще?`,
-                        card: cardData,
-                    };
-                }
+                    break;
+                 }
                 default:
-                    return {
-                        id: Date.now().toString(),
-                        sender: MessageSender.SYSTEM,
-                        text: `Неизвестный инструмент: ${name}`,
-                    };
+                    resultMessage.text = `Неизвестный вызов функции: ${name}`;
             }
-        } else {
-            // Simple text response
-            return {
-                id: Date.now().toString(),
-                sender: MessageSender.ASSISTANT,
-                text: response.text,
-            };
+            return resultMessage;
         }
+
+        // Standard text response
+        return {
+            id: Date.now().toString(),
+            sender: MessageSender.ASSISTANT,
+            text: response.text,
+        };
+
     } catch (error) {
-        console.error("Ошибка при вызове Gemini API:", error);
+        console.error("Gemini API call failed:", error);
         return {
             id: Date.now().toString(),
             sender: MessageSender.SYSTEM,
-            text: `Произошла ошибка при обращении к Gemini. ${error instanceof Error ? error.message : ''}`,
+            text: `Произошла ошибка при обращении к Gemini API: ${error.message}`,
         };
     }
 };

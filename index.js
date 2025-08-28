@@ -1,0 +1,241 @@
+import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
+import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
+import { OutlookServiceProvider } from './services/outlook/OutlookServiceProvider.js';
+import { callGemini } from './services/geminiService.js';
+import { getSettings, saveSettings } from './utils/storage.js';
+import { createSettingsModal } from './components/SettingsModal.js';
+import { createWelcomeScreen } from './components/Welcome.js';
+import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator } from './components/Chat.js';
+import { createCameraView } from './components/CameraView.js';
+import { SettingsIcon } from './components/icons/Icons.js';
+import { MessageSender } from './types.js';
+
+// --- STATE MANAGEMENT ---
+let state = {
+    settings: {
+        googleClientId: '',
+        activeProviderId: 'google',
+    },
+    messages: [],
+    isAuthenticated: false,
+    userProfile: null,
+    isLoading: false,
+};
+
+let activeProvider = null;
+const serviceProviders = {
+    google: new GoogleServiceProvider(),
+    apple: new AppleServiceProvider(),
+    outlook: new OutlookServiceProvider(),
+};
+
+// --- DOM ELEMENTS ---
+const authContainer = document.getElementById('auth-container');
+const mainContent = document.getElementById('main-content');
+const settingsButton = document.getElementById('settings-button');
+const settingsModalContainer = document.getElementById('settings-modal-container');
+const cameraViewContainer = document.getElementById('camera-view-container');
+
+
+// --- RENDER FUNCTIONS ---
+function renderAuth() {
+    authContainer.innerHTML = '';
+    if (state.isAuthenticated && state.userProfile) {
+        const profileElement = document.createElement('div');
+        profileElement.className = 'flex items-center space-x-2';
+        profileElement.innerHTML = `
+            <img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full">
+            <span class="text-sm font-medium hidden sm:block">${state.userProfile.name}</span>
+            <button id="logout-button" class="px-3 py-1 text-sm bg-red-600 hover:bg-red-700 rounded-md transition-colors">Выйти</button>
+        `;
+        authContainer.appendChild(profileElement);
+        document.getElementById('logout-button').addEventListener('click', handleLogout);
+    } else {
+        const loginButton = document.createElement('button');
+        loginButton.id = 'login-button';
+        loginButton.className = 'px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors';
+        loginButton.textContent = 'Войти';
+        authContainer.appendChild(loginButton);
+        document.getElementById('login-button').addEventListener('click', handleLogin);
+    }
+}
+
+function renderMainContent() {
+    mainContent.innerHTML = '';
+    // Всегда создаем основной интерфейс чата (контейнер и поле ввода)
+    const chatContainer = createChatInterface(handleSendMessage);
+    mainContent.appendChild(chatContainer);
+    
+    // После создания интерфейса чата, находим кнопку камеры и вешаем обработчик
+    document.getElementById('camera-button').addEventListener('click', showCameraView);
+
+
+    // Определяем, что показывать в области сообщений: приветствие или историю
+    const chatLog = document.getElementById('chat-log');
+    if (state.messages.length === 0) {
+        chatLog.appendChild(createWelcomeScreen());
+    } else {
+        state.messages.forEach(msg => addMessageToChat(msg));
+    }
+}
+
+
+function render() {
+    renderAuth();
+    renderMainContent();
+}
+
+
+// --- EVENT HANDLERS & LOGIC ---
+
+async function handleSendMessage(prompt, image = null) {
+    if (state.isLoading || (!prompt && !image)) return;
+    
+    // Если это первое сообщение, очистим приветственный экран
+    if (state.messages.length === 0) {
+        const chatLog = document.getElementById('chat-log');
+        if (chatLog) chatLog.innerHTML = '';
+    }
+
+    state.isLoading = true;
+    const userMessage = { sender: MessageSender.USER, text: prompt, image, id: Date.now() };
+    state.messages.push(userMessage);
+    addMessageToChat(userMessage);
+    showLoadingIndicator();
+
+    try {
+        const isUnsupportedDomain = window.location.hostname !== 'localhost' && !window.location.hostname.endsWith('github.io');
+        const response = await callGemini(
+            prompt,
+            state.messages.slice(0, -1),
+            activeProvider,
+            isUnsupportedDomain,
+            image
+        );
+        state.messages.push(response);
+        addMessageToChat(response);
+    } catch (error) {
+        console.error("Error calling Gemini:", error);
+        const errorMessage = { sender: MessageSender.SYSTEM, text: `Произошла ошибка: ${error.message}` };
+        state.messages.push(errorMessage);
+        addMessageToChat(errorMessage);
+    } finally {
+        state.isLoading = false;
+        hideLoadingIndicator();
+    }
+}
+
+function showSettings() {
+    const modal = createSettingsModal(state.settings, serviceProviders, handleSaveSettings, hideSettings);
+    settingsModalContainer.innerHTML = '';
+    settingsModalContainer.appendChild(modal);
+    settingsModalContainer.classList.remove('hidden');
+}
+
+function hideSettings() {
+    settingsModalContainer.classList.add('hidden');
+    settingsModalContainer.innerHTML = '';
+}
+
+function showCameraView() {
+    const cameraView = createCameraView(
+        (image) => { // onCapture
+            handleSendMessage(null, image);
+            hideCameraView();
+        },
+        () => { // onClose
+            hideCameraView();
+        }
+    );
+    cameraViewContainer.innerHTML = '';
+    cameraViewContainer.appendChild(cameraView);
+    cameraViewContainer.classList.remove('hidden');
+}
+
+function hideCameraView() {
+    cameraViewContainer.classList.add('hidden');
+    cameraViewContainer.innerHTML = ''; // Clean up to stop stream etc.
+}
+
+
+function handleSaveSettings(newSettings) {
+    state.settings = newSettings;
+    saveSettings(newSettings);
+    hideSettings();
+    // Re-initialize provider if client ID changed
+    setupActiveProvider();
+    checkAuth();
+}
+
+async function handleLogin() {
+    if (!activeProvider) {
+        alert('Сервис авторизации не настроен.');
+        return;
+    }
+    if (!state.settings.googleClientId && state.settings.activeProviderId === 'google') {
+        alert('Google Client ID не указан в настройках.');
+        return;
+    }
+    try {
+        await activeProvider.authenticate();
+        await checkAuth();
+    } catch (error) {
+        console.error("Authentication failed", error);
+        alert(`Ошибка авторизации: ${error.message || 'попробуйте еще раз.'}`);
+    }
+}
+
+async function handleLogout() {
+    if (activeProvider) {
+        await activeProvider.disconnect();
+    }
+    state.isAuthenticated = false;
+    state.userProfile = null;
+    renderAuth();
+}
+
+async function checkAuth() {
+    if (activeProvider) {
+        try {
+            const isAuthenticated = await activeProvider.isAuthenticated();
+            state.isAuthenticated = isAuthenticated;
+            if (isAuthenticated) {
+                state.userProfile = await activeProvider.getUserProfile();
+            } else {
+                state.userProfile = null;
+            }
+        } catch (error) {
+            console.warn(`Не удалось проверить статус авторизации: ${error.message}`);
+            state.isAuthenticated = false;
+            state.userProfile = null;
+        }
+    } else {
+        state.isAuthenticated = false;
+        state.userProfile = null;
+    }
+    renderAuth();
+}
+
+function setupActiveProvider() {
+    const providerId = state.settings.activeProviderId;
+    if (providerId === 'google') {
+        serviceProviders.google.clientId = state.settings.googleClientId;
+        activeProvider = serviceProviders.google;
+    } else {
+        activeProvider = serviceProviders[providerId] || null;
+    }
+}
+
+
+// --- INITIALIZATION ---
+function init() {
+    settingsButton.innerHTML = SettingsIcon;
+    settingsButton.addEventListener('click', showSettings);
+
+    state.settings = getSettings();
+    setupActiveProvider();
+    checkAuth();
+    render();
+}
+
+document.addEventListener('DOMContentLoaded', init);

@@ -9,31 +9,49 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-      body { font-family: 'Inter', sans-serif; }
-    </style>
-    <!-- Babel for JSX compilation -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- React -->
-    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <link rel="stylesheet" href="style.css">
     <!-- Google API -->
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://aistudiocdn.com/react@^19.1.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.16.0",
-    "react/": "https://aistudiocdn.com/react@^19.1.1/"
-  }
-}
-</script>
+    <!-- ES Module Import Map -->
+    <script type="importmap">
+    {
+      "imports": {
+        "@google/genai": "https://esm.sh/@google/genai"
+      }
+    }
+    </script>
 </head>
-<body class="bg-gray-900">
-    <div id="root"></div>
+<body class="bg-gray-900 text-gray-100 font-sans">
+    <div id="app" class="flex flex-col h-screen">
+      <!-- App Header -->
+      <header class="grid grid-cols-3 items-center p-4 bg-gray-800 border-b border-gray-700 shadow-md">
+        <div id="auth-container" class="flex justify-start">
+          <!-- Auth button / user profile will be rendered here -->
+        </div>
+        <div class="flex justify-center">
+            <h1 class="text-xl font-bold text-center">Секретарь+</h1>
+        </div>
+        <div class="flex justify-end">
+            <button id="settings-button" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Открыть настройки">
+              <!-- Settings Icon SVG will be injected here -->
+            </button>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <main id="main-content" class="flex-1 overflow-hidden">
+        <!-- Welcome screen or chat will be rendered here -->
+      </main>
+      
+      <!-- Camera View (hidden by default) -->
+      <div id="camera-view-container" class="hidden"></div>
+
+      <!-- Settings Modal (hidden by default) -->
+      <div id="settings-modal-container" class="hidden"></div>
+    </div>
+
     <!-- Main app script -->
-    <script type="text/babel" data-type="module" src="./index.jsx"></script>
+    <script type="module" src="./index.js"></script>
 </body>
 </html>

@@ -1,0 +1,62 @@
+:root {
+  --background-dark: #111827;
+  --background-light: #1f2937;
+  --text-primary: #f9fafb;
+  --text-secondary: #d1d5db;
+  --accent-blue: #3b82f6;
+  --accent-purple: #8b5cf6;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--background-dark);
+  color: var(--text-primary);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--background-light);
+}
+::-webkit-scrollbar-thumb {
+  background-color: #4b5563;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #6b7280;
+}
+
+/* Loading animation for assistant messages */
+.blinking-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 1.2em;
+  background-color: var(--text-secondary);
+  animation: blink 1s step-end infinite;
+  margin-left: 4px;
+  border-radius: 1px;
+}
+
+@keyframes blink {
+  from, to { background-color: transparent; }
+  50% { background-color: var(--text-secondary); }
+}
+
+/* Fade-in animation for messages */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.message-item {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Drag and drop overlay */
+.drag-over {
+  border-style: dashed;
+  border-color: var(--accent-blue);
+  background-color: rgba(59, 130, 246, 0.1);
+}

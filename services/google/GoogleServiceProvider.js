@@ -15,9 +15,12 @@ export class GoogleServiceProvider {
         }
         
         this.initPromise = new Promise((resolve, reject) => {
-            this.gapi.load('client', async () => {
+            if (!this.clientId) {
+                return reject(new Error("Google Client ID не был предоставлен. Пожалуйста, укажите его в настройках."));
+            }
+
+            this.gapi.load('client', () => {
                 try {
-                    await this.gapi.client.init({});
                     this.tokenClient = this.google.accounts.oauth2.initTokenClient({
                         client_id: this.clientId,
                         scope: GOOGLE_SCOPES,
@@ -25,7 +28,7 @@ export class GoogleServiceProvider {
                     });
                     resolve();
                 } catch(error) {
-                    console.error("Error initializing GAPI client", error);
+                    console.error("Error initializing Google token client", error);
                     reject(error);
                 }
             });
