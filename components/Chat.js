@@ -4,7 +4,7 @@ import { SpeechRecognizer } from '../utils/speech.js';
 
 // Module-level variables
 let chatLog, chatInput, sendButton, voiceRecordButton, cameraButton, attachButton, fileInput;
-let onSendMessageCallback, onSystemErrorCallback;
+let onSendMessageCallback, onSystemErrorCallback, onNewChatCallback;
 let speechRecognizer;
 
 // UI state for the new voice input
@@ -187,7 +187,7 @@ function lockRecording() {
     document.getElementById('recording-indicator-panel').classList.add('hidden');
     document.body.classList.remove('recording-active');
 
-    document.getElementById('left-input-actions').classList.add('hidden');
+    document.getElementById('internal-left-actions').classList.add('hidden');
     document.getElementById('cancel-recording-button').classList.remove('hidden');
     document.getElementById('input-bar').classList.add('recording-locked');
     document.getElementById('locked-recording-indicator').classList.remove('hidden');
@@ -216,7 +216,7 @@ function stopRecording(isCancel) {
     document.body.classList.remove('recording-active');
     document.getElementById('recording-indicator-panel').classList.add('hidden');
     
-    document.getElementById('left-input-actions').classList.remove('hidden');
+    document.getElementById('internal-left-actions').classList.remove('hidden');
     document.getElementById('cancel-recording-button').classList.add('hidden');
     document.getElementById('input-bar').classList.remove('recording-locked');
     document.getElementById('locked-recording-indicator').classList.add('hidden');
@@ -241,9 +241,10 @@ function updateTimer() {
 
 
 // --- CHAT INTERFACE CREATION ---
-export function createChatInterface(onSendMessage, showCameraView, onSystemError) {
+export function createChatInterface(onSendMessage, showCameraView, onSystemError, onNewChat) {
     onSendMessageCallback = onSendMessage;
     onSystemErrorCallback = onSystemError;
+    onNewChatCallback = onNewChat;
 
     const chatWrapper = document.createElement('div');
     chatWrapper.className = 'flex flex-col h-full bg-gray-900';
@@ -269,46 +270,55 @@ export function createChatInterface(onSendMessage, showCameraView, onSystemError
             </div>
         </div>
 
-        <div id="input-bar-wrapper" class="p-2 sm:p-4 border-t border-gray-700">
+        <div id="input-bar-container" class="p-2 sm:p-4 border-t border-gray-700">
             <!-- Contextual Actions Frame -->
             <div id="contextual-actions-frame" style="display: none;">
                 <div id="action-bar-container" class="flex items-center justify-center flex-wrap gap-2">
                     <!-- Buttons will be rendered here by renderContextualActions -->
                 </div>
             </div>
-            <div id="input-bar" class="flex items-end w-full gap-2 bg-gray-800 rounded-2xl p-2 border border-gray-700">
-                <div id="left-input-actions" class="flex items-center self-end flex-shrink-0">
-                     <button id="camera-button" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Сделать фото">
+            <div class="flex items-end w-full gap-2">
+                 <div id="bottom-left-actions" class="flex items-center self-end flex-shrink-0">
+                     <button id="new-chat-button-bottom" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Начать новый чат">
+                        ${Icons.NewChatIcon}
+                    </button>
+                    <button id="camera-button" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Сделать фото">
                         ${Icons.CameraIcon}
                     </button>
                     <button id="attach-button" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Прикрепить файл">
                         ${Icons.AttachmentIcon}
                     </button>
                 </div>
-                
-                <!-- This button is visually hidden but used to trigger file selection -->
-                <input type="file" id="file-input" class="hidden" accept="image/*,application/pdf">
 
-                <!-- Cancel button for locked recording -->
-                <button id="cancel-recording-button" class="hidden self-end flex-shrink-0 p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Отменить запись">
-                    ${Icons.TrashIcon}
-                </button>
+                <div id="input-bar" class="flex items-end w-full flex-1 gap-2 bg-gray-800 rounded-2xl p-2 border border-gray-700">
+                    <div id="internal-left-actions" class="flex items-center self-end flex-shrink-0">
+                        <!-- This container is for elements inside the input bar that might appear during special states, like recording lock -->
+                    </div>
+                    
+                    <!-- This button is visually hidden but used to trigger file selection -->
+                    <input type="file" id="file-input" class="hidden" accept="image/*,application/pdf">
 
-                <!-- Flashing indicator for locked recording -->
-                <div id="locked-recording-indicator" class="hidden items-center gap-2 self-end flex-shrink-0 text-red-500">
-                    <span class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
-                    <span class="font-mono font-semibold recording-timer">0:00</span>
-                </div>
-
-                <textarea id="chat-input" class="w-full self-end bg-transparent border-none focus:outline-none p-2 resize-none" placeholder="Сообщение..." rows="1"></textarea>
-                
-                <div class="flex items-center self-end flex-shrink-0">
-                    <button id="send-button" class="hidden items-center justify-center w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 transition-colors" aria-label="Отправить">
-                        ${Icons.SendIcon}
+                    <!-- Cancel button for locked recording -->
+                    <button id="cancel-recording-button" class="hidden self-end flex-shrink-0 p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Отменить запись">
+                        ${Icons.TrashIcon}
                     </button>
-                    <button id="voice-record-button" class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors" aria-label="Записать голосовое сообщение">
-                        ${Icons.MicrophoneIcon}
-                    </button>
+
+                    <!-- Flashing indicator for locked recording -->
+                    <div id="locked-recording-indicator" class="hidden items-center gap-2 self-end flex-shrink-0 text-red-500">
+                        <span class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+                        <span class="font-mono font-semibold recording-timer">0:00</span>
+                    </div>
+
+                    <textarea id="chat-input" class="w-full self-end bg-transparent border-none focus:outline-none p-2 resize-none" placeholder="Сообщение..." rows="1"></textarea>
+                    
+                    <div class="flex items-center self-end flex-shrink-0">
+                        <button id="send-button" class="hidden items-center justify-center w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 transition-colors" aria-label="Отправить">
+                            ${Icons.SendIcon}
+                        </button>
+                        <button id="voice-record-button" class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors" aria-label="Записать голосовое сообщение">
+                            ${Icons.MicrophoneIcon}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -322,6 +332,7 @@ export function createChatInterface(onSendMessage, showCameraView, onSystemError
     attachButton = chatWrapper.querySelector('#attach-button');
     fileInput = chatWrapper.querySelector('#file-input');
     const cancelRecordingButton = chatWrapper.querySelector('#cancel-recording-button');
+    const newChatButtonBottom = chatWrapper.querySelector('#new-chat-button-bottom');
 
     // --- EVENT LISTENERS ---
     sendButton.addEventListener('click', sendMessageHandler);
@@ -333,6 +344,7 @@ export function createChatInterface(onSendMessage, showCameraView, onSystemError
         }
     });
 
+    newChatButtonBottom.addEventListener('click', onNewChatCallback);
     cameraButton.addEventListener('click', showCameraView);
     attachButton.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', (e) => {

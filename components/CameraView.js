@@ -33,7 +33,7 @@ export function createCameraView(onCapture, onClose) {
         onClose();
     });
     
-    navigator.mediaDevices.getUserMedia({ video: true })
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
         .then(s => {
             stream = s;
             video.srcObject = stream;

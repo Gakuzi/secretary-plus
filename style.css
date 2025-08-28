@@ -229,7 +229,7 @@ body {
 
 /* --- NEW CHAT INPUT SYSTEM --- */
 
-#input-bar-wrapper {
+#input-bar-container {
   max-height: 40vh;
   overflow-y: auto;
 }
@@ -268,7 +268,7 @@ body.recording-active #voice-record-button {
   background-color: #ef4444; /* red-500 */
 }
 body.recording-active #chat-input,
-body.recording-active #left-input-actions {
+body.recording-active #bottom-left-actions {
     opacity: 0;
     pointer-events: none;
 }
@@ -289,7 +289,7 @@ body.recording-active {
 }
 
 /* When recording is locked */
-#input-bar.recording-locked #left-input-actions {
+#input-bar.recording-locked #internal-left-actions {
     display: none;
 }
 #input-bar.recording-locked #cancel-recording-button {

@@ -9,7 +9,7 @@ import { createHelpModal } from './components/HelpModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
-import { SettingsIcon, ChartBarIcon, SupabaseIcon, GoogleIcon, NewChatIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
+import { SettingsIcon, ChartBarIcon, NewChatIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './constants.js';
 
@@ -79,7 +79,6 @@ if (!window.isSecretaryPlusAppInitialized) {
     const settingsButton = document.getElementById('settings-button');
     const helpButton = document.getElementById('help-button');
     const statsButton = document.getElementById('stats-button');
-    const newChatButton = document.getElementById('new-chat-button');
     const settingsModalContainer = document.getElementById('settings-modal-container');
     const helpModalContainer = document.getElementById('help-modal-container');
     const statsModalContainer = document.getElementById('stats-modal-container');
@@ -101,10 +100,6 @@ if (!window.isSecretaryPlusAppInitialized) {
     function renderAuth() {
         authContainer.innerHTML = '';
         if (state.isGoogleConnected && state.userProfile) {
-            const connectionIcon = state.supabaseUser 
-                ? `<div class="w-6 h-6 text-green-400" title="Подключено через Supabase">${SupabaseIcon}</div>`
-                : `<div class="w-6 h-6" title="Прямое подключение к Google">${GoogleIcon}</div>`;
-            
             let proxyRingClass = '';
             let proxyIndicatorTitle = '';
             if (state.settings.isProxyEnabled) {
@@ -138,15 +133,12 @@ if (!window.isSecretaryPlusAppInitialized) {
             const profileElement = document.createElement('div');
             profileElement.className = 'flex items-center space-x-2';
             profileElement.innerHTML = `
-                ${connectionIcon}
                 <div class="relative" title="${proxyIndicatorTitle}">
                     <img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full ${proxyRingClass} ring-offset-2 ring-offset-gray-800">
                 </div>
                 <span class="text-sm font-medium hidden sm:block">${state.userProfile.name}</span>
-                <button id="logout-button" class="px-3 py-1 text-sm bg-red-600 hover:bg-red-700 rounded-md transition-colors">Выйти</button>
             `;
             authContainer.appendChild(profileElement);
-            document.getElementById('logout-button').addEventListener('click', handleLogout);
         } else {
             const loginButton = document.createElement('button');
             loginButton.id = 'login-button';
@@ -168,7 +160,7 @@ if (!window.isSecretaryPlusAppInitialized) {
 
     function renderMainContent() {
         mainContent.innerHTML = '';
-        const chatContainer = createChatInterface(handleSendMessage, showCameraView, showSystemError);
+        const chatContainer = createChatInterface(handleSendMessage, showCameraView, showSystemError, handleNewChat);
         mainContent.appendChild(chatContainer);
 
         const chatLog = document.getElementById('chat-log');
@@ -476,49 +468,51 @@ if (!window.isSecretaryPlusAppInitialized) {
         state.settings = newSettings;
         saveSettings(newSettings);
 
-        // If logged into Supabase, save to the database as well
-        if (state.supabaseUser && supabaseService) {
-            try {
+        hideSettings(); // Close modal immediately for better UX
+
+        try {
+            // If logged into Supabase, save to the database as well
+            if (state.supabaseUser && supabaseService) {
                 await supabaseService.saveUserSettings(newSettings);
                 console.log("Settings saved to Supabase.");
-            } catch (error) {
-                console.error("Failed to save settings to Supabase:", error);
-                showSystemError(`Не удалось сохранить настройки в облако: ${error.message}`);
             }
-        }
 
-        hideSettings();
-        
-        // Re-apply settings immediately
-        googleProvider.setTimezone(newSettings.timezone);
-        await googleProvider.initClient(newSettings.googleClientId, handleGoogleTokenResponse);
-        
-        // Handle changes that require restarting services
-        if (newSettings.enableAutoSync !== oldSettings.enableAutoSync) {
-            newSettings.enableAutoSync ? startAutoSync() : stopAutoSync();
-        }
-        if (newSettings.enableEmailPolling !== oldSettings.enableEmailPolling) {
-            setupEmailPolling();
-        }
+            // Re-apply settings immediately
+            googleProvider.setTimezone(newSettings.timezone);
+            await googleProvider.initClient(newSettings.googleClientId, handleGoogleTokenResponse);
+            
+            // Handle changes that require restarting services
+            if (newSettings.enableAutoSync !== oldSettings.enableAutoSync) {
+                newSettings.enableAutoSync ? startAutoSync() : stopAutoSync();
+            }
+            if (newSettings.enableEmailPolling !== oldSettings.enableEmailPolling) {
+                setupEmailPolling();
+            }
 
-        // Re-check proxy status if relevant settings changed
-        if (newSettings.geminiProxyUrl !== oldSettings.geminiProxyUrl || newSettings.isProxyEnabled !== oldSettings.isProxyEnabled || newSettings.geminiApiKey !== oldSettings.geminiApiKey) {
-            checkProxyStatus(true);
-        }
-        
-        // If Supabase mode was toggled, reload the app to re-initialize correctly
-        if (newSettings.isSupabaseEnabled !== oldSettings.isSupabaseEnabled) {
-            // Show a message before reloading
-            const app = document.getElementById('app');
-            app.innerHTML = `<div class="flex items-center justify-center h-full text-lg">Переключение режима подключения, перезагрузка...</div>`;
-            setTimeout(() => window.location.reload(), 1500);
+            // Re-check proxy status if relevant settings changed
+            if (newSettings.geminiProxyUrl !== oldSettings.geminiProxyUrl || newSettings.isProxyEnabled !== oldSettings.isProxyEnabled || newSettings.geminiApiKey !== oldSettings.geminiApiKey) {
+                checkProxyStatus(true);
+            }
+            
+            // If Supabase mode was toggled, reload the app to re-initialize correctly
+            if (newSettings.isSupabaseEnabled !== oldSettings.isSupabaseEnabled) {
+                // Show a message before reloading
+                const app = document.getElementById('app');
+                app.innerHTML = `<div class="flex items-center justify-center h-full text-lg">Переключение режима подключения, перезагрузка...</div>`;
+                setTimeout(() => window.location.reload(), 1500);
+            }
+        } catch (error) {
+            console.error("Error applying new settings:", error);
+            showSystemError(`Ошибка при применении настроек: ${error.message}`);
         }
     }
     
     function handleNewChat() {
-        state.messages = [];
-        state.lastSeenEmailId = null;
-        renderMainContent();
+        if (state.messages.length > 0 && confirm('Вы уверены, что хотите начать новый чат? Вся текущая история будет удалена.')) {
+            state.messages = [];
+            state.lastSeenEmailId = null;
+            renderMainContent();
+        }
     }
 
     /**
@@ -907,12 +901,10 @@ ${payload.body}`;
         settingsButton.innerHTML = SettingsIcon;
         helpButton.innerHTML = QuestionMarkCircleIcon;
         statsButton.innerHTML = ChartBarIcon;
-        newChatButton.innerHTML = NewChatIcon;
 
         settingsButton.addEventListener('click', showSettings);
         helpButton.addEventListener('click', showHelpModal);
         statsButton.addEventListener('click', showStatsModal);
-        newChatButton.addEventListener('click', handleNewChat);
         
         document.body.addEventListener('click', handleCardAction);
         document.body.addEventListener('click', handleQuickReply);

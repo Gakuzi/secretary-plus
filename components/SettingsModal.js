@@ -96,10 +96,6 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
     
-    const authButtonText = authState.isGoogleConnected 
-        ? 'Выйти' 
-        : 'Войти через Google';
-
     modalOverlay.innerHTML = `
         <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col m-4" id="settings-content">
             <header class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
@@ -136,7 +132,12 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                         ${authState.isGoogleConnected && authState.userProfile?.email ? `<p class="text-xs text-gray-400">(${authState.userProfile.email})</p>` : ''}
                                     </div>
                                 </div>
-                                <button id="google-auth-action-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors">${authButtonText}</button>
+                                <div>
+                                ${authState.isGoogleConnected 
+                                    ? `<button id="modal-logout-button" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md transition-colors text-sm font-semibold">Выйти</button>`
+                                    : `<button id="modal-login-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors text-sm font-semibold">Войти через Google</button>`
+                                }
+                                </div>
                             </div>
                         </div>
 
@@ -428,17 +429,16 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
 
 
 
-    // Auth action button
-    const googleAuthButton = modalOverlay.querySelector('#google-auth-action-button');
-    if (googleAuthButton) {
-        googleAuthButton.addEventListener('click', () => {
-             if (authState.isGoogleConnected) {
-                onLogout();
-             } else {
-                onLogin();
-             }
-        });
+    // Auth action buttons
+    const loginButton = modalOverlay.querySelector('#modal-login-button');
+    if (loginButton) {
+        loginButton.addEventListener('click', onLogin);
     }
+    const logoutButton = modalOverlay.querySelector('#modal-logout-button');
+    if (logoutButton) {
+        logoutButton.addEventListener('click', onLogout);
+    }
+
 
     // Sync Tab Logic
     const syncStatusList = modalOverlay.querySelector('#sync-status-list');
