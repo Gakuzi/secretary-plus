@@ -192,7 +192,7 @@ body {
   align-items: flex-end;
   gap: 0.5rem;
   background-color: var(--background-light);
-  border-radius: 1.25rem; /* rounded-xl */
+  border-radius: 1.25rem;
   padding: 0.5rem;
   min-height: 52px;
   transition: transform 0.2s ease-out, border-radius 0.2s ease-out;
@@ -216,16 +216,15 @@ body {
     resize: none;
     max-height: 128px; /* ~5 lines */
     align-self: center; /* keep it centered vertically as it grows */
+    transition: opacity 0.2s, transform 0.2s;
 }
 
 /* Voice Button animations */
 #voice-record-button {
   transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.2s;
+  touch-action: none; /* Prevent scrolling while dragging */
 }
-@keyframes pulse-record {
-  0% { box-shadow: 0 0 0 0px rgba(239, 68, 68, 0.7); }
-  100% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
-}
+
 #voice-record-button.recording-active {
   transform: scale(1.5);
   background-color: #ef4444; /* red-500 */
@@ -243,16 +242,25 @@ body {
   height: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 0 0.5rem;
   animation: fadeIn 0.2s ease-in-out;
+  pointer-events: none; /* Allow pointer events to pass through to the wrapper */
+  opacity: 0;
+  transition: opacity 0.2s;
 }
+#recording-view.visible {
+  opacity: 1;
+}
+
 #recording-indicator {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   color: #ef4444; /* red-500 */
   font-weight: 500;
+  opacity: 1;
+  transform: translateX(0);
+  transition: all 0.2s ease-out;
 }
 #recording-indicator .dot {
   width: 0.5rem;
@@ -264,19 +272,38 @@ body {
 #recording-indicator #recording-timer {
   font-variant-numeric: tabular-nums;
 }
+
 #cancel-hint {
   color: var(--text-secondary);
-  transition: transform 0.2s ease-in-out;
+  position: absolute;
+  left: 0;
+  right: 0;
   display: flex;
+  justify-content: center;
   align-items: center;
   gap: 0.25rem;
+  opacity: 0;
+  transform: translateX(30px);
+  transition: all 0.3s ease-out;
+}
+#cancel-hint.visible {
+  opacity: 1;
+  transform: translateX(0);
 }
 @keyframes slide-hint {
   0%, 100% { transform: translateX(0); }
   50% { transform: translateX(-5px); }
 }
-#cancel-hint.active {
+#cancel-hint.animated {
   animation: slide-hint 1.5s infinite ease-in-out;
+}
+
+#input-bar.is-cancelling #recording-indicator {
+  opacity: 0;
+  transform: translateX(20px);
+}
+#input-bar.is-cancelling #cancel-hint {
+  color: #ef4444;
 }
 
 /* Lock icon that appears above */

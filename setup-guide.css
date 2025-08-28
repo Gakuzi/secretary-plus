@@ -22,7 +22,7 @@ body {
     border-radius: 0.375rem;
     font-weight: 500;
     color: var(--text-secondary);
-    transition: background-color 0.2s, color 0.2s;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
     text-decoration: none;
     border-left: 3px solid transparent;
 }
@@ -35,13 +35,18 @@ body {
     font-weight: 600;
     border-left-color: var(--accent-blue);
 }
+.nav-link.completed {
+    color: #34d399; /* emerald-400 */
+    border-left-color: #34d399;
+}
+
 
 /* Main content sections */
-.guide-section {
-    padding-top: 1.5rem;
+.wizard-step {
+    padding-top: 1rem;
     border-top: 1px solid var(--border-color);
 }
-.guide-section:first-child {
+.wizard-step:first-child {
     border-top: none;
     padding-top: 0;
 }
@@ -61,16 +66,6 @@ body {
     color: var(--text-primary);
     margin-bottom: 1rem;
 }
-.sub-step-title {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    margin-top: 2rem;
-    margin-bottom: 0.75rem;
-    padding-bottom: 0.25rem;
-    border-bottom: 1px solid var(--border-color);
-}
-
 
 /* Content styling */
 p, ol, ul {
@@ -99,15 +94,6 @@ a:hover {
 }
 
 /* Code Blocks */
-.code-inline {
-    background-color: var(--background-light);
-    padding: 0.125rem 0.375rem;
-    border-radius: 0.25rem;
-    font-family: monospace;
-    font-size: 0.9em;
-    color: #93c5fd; /* blue-300 */
-}
-
 .code-block {
     position: relative;
     background-color: #0d1117; /* Darker than body */
@@ -153,7 +139,6 @@ a:hover {
     font-weight: 500;
 }
 
-
 /* Note boxes */
 .note {
     background-color: rgba(59, 130, 246, 0.1);
@@ -166,4 +151,86 @@ a:hover {
 }
 .note strong {
     color: var(--text-primary);
+}
+
+/* Wizard Navigation Footer */
+.wizard-footer {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.wizard-footer:has(.next-button:only-child) {
+    justify-content: flex-end;
+}
+
+.wizard-nav-button {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+.back-button {
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+.back-button:hover {
+    background-color: var(--background-light);
+    color: var(--text-primary);
+}
+.next-button {
+    background-color: var(--accent-blue);
+    border: 1px solid var(--accent-blue);
+    color: white;
+}
+.next-button:hover {
+    background-color: #2563eb;
+}
+
+/* Input groups */
+.input-group {
+    margin-top: 1.5rem;
+}
+.input-group label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+}
+.input-wrapper {
+    position: relative;
+    display: flex;
+}
+.input-wrapper input {
+    flex-grow: 1;
+    background-color: var(--background-light);
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    padding: 0.625rem 1rem;
+    color: var(--text-primary);
+    font-family: monospace;
+    padding-right: 6rem; /* space for the button */
+}
+.paste-button {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: #374151;
+    color: var(--text-primary);
+    border: none;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.25rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.paste-button:hover {
+    background-color: #4b5563;
 }

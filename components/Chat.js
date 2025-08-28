@@ -5,15 +5,16 @@ import { SpeechRecognizer } from '../utils/speech.js';
 // Module-level variables
 let chatLog, chatInput, sendButton, voiceRecordButton, cameraButton, toggleInputModeButton, fileInput;
 let speechRecognizer, onSendMessageCallback, showCameraViewCallback;
-let inputBar, composeView, recordingView, lockHint, cancelHint, recordingTimer;
+let inputBar, composeView, recordingView, lockHint, cancelHint, recordingIndicator, recordingTimer;
 
 // State for UI and voice recording
 let isTextModeOnMobile = false;
 const VOICE_LOCK_THRESHOLD_Y = -60; // Pixels to slide up to lock
-const VOICE_CANCEL_THRESHOLD_X = -60; // Pixels to slide left to cancel
+const VOICE_CANCEL_THRESHOLD_X = -80; // Pixels to slide left to cancel
 let voiceState = {
     isRecording: false, isLocked: false, isCancelled: false,
-    pointerStart: { x: 0, y: 0 }, startTime: 0, timerInterval: null,
+    pointerStart: { x: 0, y: 0 }, currentPos: {x: 0, y: 0},
+    startTime: 0, timerInterval: null,
 };
 
 // --- UTILITIES ---
@@ -45,7 +46,7 @@ function handleImageFile(file) {
 // --- SEND MESSAGE LOGIC ---
 const sendMessageHandler = () => {
     const prompt = chatInput.value.trim();
-    if (prompt || (voiceState.isLocked && chatInput.value)) { // Allow sending from locked state
+    if (prompt) {
         onSendMessageCallback(prompt, null);
         chatInput.value = '';
         if (voiceState.isLocked) resetVoiceRecording();
@@ -105,18 +106,20 @@ function startVoiceRecording(e) {
     voiceState = {
         isRecording: true, isLocked: false, isCancelled: false,
         pointerStart: { x: e.clientX, y: e.clientY },
+        currentPos: { x: e.clientX, y: e.clientY },
         startTime: Date.now(), timerInterval: null,
     };
     
     speechRecognizer.start();
     
     // UI Updates
-    chatInput.classList.add('hidden');
-    recordingView.classList.remove('hidden');
+    chatInput.style.opacity = '0';
+    recordingView.classList.add('visible');
     lockHint.classList.add('visible');
-    cancelHint.classList.add('active');
+    cancelHint.classList.add('visible');
+    cancelHint.classList.add('animated');
     voiceRecordButton.classList.add('recording-active');
-
+    
     // Timer
     voiceState.timerInterval = setInterval(updateRecordingTimer, 1000);
     updateRecordingTimer();
@@ -129,17 +132,27 @@ function handlePointerMove(e) {
     if (!voiceState.isRecording || voiceState.isLocked) return;
     e.preventDefault();
 
-    const deltaX = e.clientX - voiceState.pointerStart.x;
-    const deltaY = e.clientY - voiceState.pointerStart.y;
+    voiceState.currentPos = { x: e.clientX, y: e.clientY };
+    const deltaX = voiceState.currentPos.x - voiceState.pointerStart.x;
+    const deltaY = voiceState.currentPos.y - voiceState.pointerStart.y;
+    
+    // Animate UI based on drag
+    inputBar.style.transform = `translateX(${Math.min(0, deltaX)}px)`;
+    lockHint.style.transform = `translateY(${Math.min(0, deltaY)}px)`;
 
-    // Slide left to cancel
-    voiceState.isCancelled = deltaX < VOICE_CANCEL_THRESHOLD_X;
-    inputBar.style.transform = voiceState.isCancelled ? `translateX(${deltaX}px)` : 'translateX(0)';
-    cancelHint.style.color = voiceState.isCancelled ? '#ef4444' : '';
-
-    // Slide up to lock
-    lockHint.style.transform = `translateY(${Math.max(0, deltaY * -0.2)}px)`;
-    if (deltaY < VOICE_LOCK_THRESHOLD_Y) {
+    // Check for cancel
+    const isCancelling = deltaX < VOICE_CANCEL_THRESHOLD_X;
+    if (isCancelling) {
+        voiceState.isCancelled = true;
+        inputBar.classList.add('is-cancelling');
+    } else {
+        voiceState.isCancelled = false;
+        inputBar.classList.remove('is-cancelling');
+    }
+    
+    // Check for lock
+    const isLocking = deltaY < VOICE_LOCK_THRESHOLD_Y;
+    if (isLocking) {
         lockHint.classList.add('is-locking');
         if (!voiceState.isLocked) lockVoiceRecording();
     } else {
@@ -151,7 +164,6 @@ function lockVoiceRecording() {
     voiceState.isLocked = true;
     cleanUpPointerEvents();
     
-    // Keep recognition running in the background
     speechRecognizer.recognition.onend = () => {
         if (!voiceState.isLocked) speechRecognizer.onEnd('');
         speechRecognizer.isListening = false;
@@ -159,7 +171,7 @@ function lockVoiceRecording() {
     
     resetVoiceUI(true); // Reset UI but keep state
     composeView.classList.add('locked');
-    chatInput.classList.remove('hidden');
+    chatInput.style.opacity = '1';
     chatInput.placeholder = 'Запись... говорите';
     composeView.insertAdjacentHTML('afterbegin', `<div id="recording-indicator-locked"><span class="dot"></span><span id="recording-timer-locked">0:00</span></div>`);
     
@@ -179,7 +191,7 @@ function finishVoiceRecording() {
     cleanUpPointerEvents();
     
     if (voiceState.isCancelled) {
-        cancelVoiceRecording();
+        speechRecognizer.stop();
     } else {
         speechRecognizer.stop(); // This triggers onEnd, which sends the message
     }
@@ -187,7 +199,7 @@ function finishVoiceRecording() {
 }
 
 function cancelVoiceRecording() {
-    voiceState.isCancelled = true; // ensure onEnd doesn't send message
+    voiceState.isCancelled = true;
     speechRecognizer.stop();
     resetVoiceRecording();
 }
@@ -217,6 +229,7 @@ function cleanUpPointerEvents() {
 function resetVoiceUI(isEnteringLock = false) {
     clearInterval(voiceState.timerInterval);
     inputBar.style.transform = 'translateX(0)';
+    inputBar.classList.remove('is-cancelling');
     
     if (!isEnteringLock) {
         Object.assign(voiceState, { isRecording: false, isLocked: false, isCancelled: false });
@@ -225,17 +238,15 @@ function resetVoiceUI(isEnteringLock = false) {
         const lockedIndicator = document.getElementById('recording-indicator-locked');
         if (lockedIndicator) lockedIndicator.remove();
         
-        // Restore camera button functionality
         cameraButton.innerHTML = CameraIcon;
         cameraButton.onclick = () => fileInput.click();
     }
     
-    chatInput.classList.remove('hidden');
-    recordingView.classList.add('hidden');
+    chatInput.style.opacity = '1';
+    recordingView.classList.remove('visible');
     lockHint.classList.remove('visible', 'is-locking');
     lockHint.style.transform = 'translateY(20px)';
-    cancelHint.classList.remove('active');
-    cancelHint.style.color = '';
+    cancelHint.classList.remove('visible', 'animated');
     voiceRecordButton.classList.remove('recording-active');
 }
 
@@ -266,7 +277,7 @@ export function createChatInterface(onSendMessage, showCameraView) {
                     <div id="compose-view" class="relative w-full flex items-end">
                       <textarea id="chat-input" placeholder="Сообщение..." rows="1"></textarea>
                     </div>
-                    <div id="recording-view" class="hidden">
+                    <div id="recording-view">
                         <div id="recording-indicator"><span class="dot"></span><span id="recording-timer">0:00</span></div>
                         <div id="cancel-hint">${ArrowLeftIcon} <span>Смахните для отмены</span></div>
                     </div>
@@ -291,6 +302,7 @@ export function createChatInterface(onSendMessage, showCameraView) {
     recordingView = chatWrapper.querySelector('#recording-view');
     lockHint = chatWrapper.querySelector('#lock-hint');
     cancelHint = chatWrapper.querySelector('#cancel-hint');
+    recordingIndicator = chatWrapper.querySelector('#recording-indicator');
     recordingTimer = chatWrapper.querySelector('#recording-timer');
     
     // --- Event Listeners ---
@@ -299,20 +311,24 @@ export function createChatInterface(onSendMessage, showCameraView) {
     chatInput.addEventListener('input', updateInputState);
     toggleInputModeButton.addEventListener('click', toggleInputMode);
     
-    // The camera button now triggers the file input.
-    // The actual camera view logic is separate now.
     cameraButton.addEventListener('click', () => fileInput.click()); 
     fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleImageFile(e.target.files[0]); });
 
     // --- Speech Recognizer Setup ---
     speechRecognizer = new SpeechRecognizer(
         (transcript) => {
-            if (voiceState.isLocked) { chatInput.value = transcript; updateInputState(); }
+            if (voiceState.isLocked) { 
+              chatInput.value = transcript; 
+              updateInputState(); 
+              // Move cursor to end
+              chatInput.scrollTop = chatInput.scrollHeight;
+              chatInput.selectionStart = chatInput.selectionEnd = chatInput.value.length;
+            }
         },
         (finalTranscript) => {
              if (!voiceState.isCancelled && finalTranscript.trim()) { onSendMessageCallback(finalTranscript); }
         },
-        (error) => { console.error('Speech recognition error:', error); resetVoiceRecording(); }
+        (error) => { console.error('Speech recognition error:', error); if (error !== 'no-speech') resetVoiceRecording(); }
     );
     
     voiceRecordButton.addEventListener('pointerdown', startVoiceRecording);
