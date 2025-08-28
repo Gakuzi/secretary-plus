@@ -1,4 +1,5 @@
 const SETTINGS_KEY = 'secretary-plus-settings-v4';
+const SYNC_STATUS_KEY = 'secretary-plus-sync-status-v1';
 
 const defaultSettings = {
     supabaseUrl: '',
@@ -8,7 +9,8 @@ const defaultSettings = {
     isGoogleEnabled: true,
     googleClientId: '',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    enableEmailPolling: true, // New setting for proactive email checks
+    enableEmailPolling: true, // For proactive email notifications
+    enableAutoSync: true, // For background data synchronization
     serviceMap: {
         calendar: 'google',
         tasks: 'google',
@@ -39,5 +41,23 @@ export function saveSettings(settings) {
     } catch (error)
     {
         console.error("Failed to save settings to localStorage", error);
+    }
+}
+
+export function getSyncStatus() {
+    try {
+        const savedStatus = localStorage.getItem(SYNC_STATUS_KEY);
+        return savedStatus ? JSON.parse(savedStatus) : {};
+    } catch (e) {
+        console.error("Failed to parse sync status", e);
+        return {};
+    }
+}
+
+export function saveSyncStatus(status) {
+    try {
+        localStorage.setItem(SYNC_STATUS_KEY, JSON.stringify(status));
+    } catch (e) {
+        console.error("Failed to save sync status", e);
     }
 }

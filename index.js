@@ -2,7 +2,7 @@ import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.j
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
 import { callGemini } from './services/geminiService.js';
-import { getSettings, saveSettings } from './utils/storage.js';
+import { getSettings, saveSettings, getSyncStatus, saveSyncStatus } from './utils/storage.js';
 import { createSettingsModal } from './components/SettingsModal.js';
 import { createStatsModal } from './components/StatsModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
@@ -35,6 +35,8 @@ if (!window.isSecretaryPlusAppInitialized) {
         isLoading: false,
         actionStats: {},
         lastSeenEmailId: null, // For proactive email check
+        syncStatus: getSyncStatus(),
+        isSyncing: false,
     };
 
     // --- SERVICE INSTANCES ---
@@ -42,6 +44,7 @@ if (!window.isSecretaryPlusAppInitialized) {
     const appleProvider = new AppleServiceProvider();
     let supabaseService = null;
     let emailCheckInterval = null;
+    let syncInterval = null; // Interval timer for auto-sync
 
 
     const serviceProviders = {
@@ -122,6 +125,80 @@ if (!window.isSecretaryPlusAppInitialized) {
         renderAuth();
         renderMainContent();
     }
+    
+    // --- AUTO-SYNC LOGIC ---
+    const SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+
+    const syncTasks = [
+        { name: 'Calendar', providerFn: () => googleProvider.getCalendarEvents({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncCalendarEvents(items) },
+        { name: 'Tasks', providerFn: () => googleProvider.getTasks({ max_results: 100 }), supabaseFn: (items) => supabaseService.syncTasks(items) },
+        { name: 'Contacts', providerFn: () => googleProvider.getAllContacts(), supabaseFn: (items) => supabaseService.syncContacts(items) },
+        { name: 'Files', providerFn: () => googleProvider.getAllFiles(), supabaseFn: (items) => supabaseService.syncFiles(items) },
+        { name: 'Emails', providerFn: () => googleProvider.getRecentEmails({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncEmails(items) },
+    ];
+
+    async function runAllSyncs(isForced = false) {
+        if (state.isSyncing && !isForced) {
+            console.log("Sync already in progress. Skipping.");
+            return;
+        }
+        if (!state.isGoogleConnected || !supabaseService) {
+            console.log("Cannot sync: Not connected to Google or Supabase.");
+            return;
+        }
+
+        console.log("Starting background sync...");
+        state.isSyncing = true;
+        // Re-render the settings modal if it's open to show loading state
+        if (document.getElementById('settings-content')) {
+            showSettings();
+        }
+
+        for (const task of syncTasks) {
+            try {
+                console.log(`Syncing ${task.name}...`);
+                const items = await task.providerFn();
+                await task.supabaseFn(items);
+                state.syncStatus[task.name] = new Date().toISOString();
+                console.log(`Syncing ${task.name} successful.`);
+            } catch (error) {
+                console.error(`Failed to sync ${task.name}:`, error);
+                state.syncStatus[task.name] = { error: error.message };
+            }
+            saveSyncStatus(state.syncStatus);
+            // Re-render modal to update status line by line
+            if (document.getElementById('settings-content')) {
+                showSettings();
+            }
+        }
+
+        state.isSyncing = false;
+        console.log("Background sync finished.");
+        if (document.getElementById('settings-content')) {
+            showSettings();
+        }
+    }
+
+    function startAutoSync() {
+        if (syncInterval) clearInterval(syncInterval);
+        if (!state.settings.enableAutoSync || !state.settings.isSupabaseEnabled) {
+            return;
+        }
+
+        // Run once on start, then set interval
+        setTimeout(runAllSyncs, 2000); // Run after 2 seconds to not block initial load
+        syncInterval = setInterval(runAllSyncs, SYNC_INTERVAL_MS);
+        console.log(`Auto-sync started. Interval: ${SYNC_INTERVAL_MS / 1000}s`);
+    }
+
+    function stopAutoSync() {
+        if (syncInterval) {
+            clearInterval(syncInterval);
+            syncInterval = null;
+            console.log("Auto-sync stopped.");
+        }
+    }
+
 
     // --- AUTHENTICATION & INITIALIZATION ---
 
@@ -172,6 +249,7 @@ if (!window.isSecretaryPlusAppInitialized) {
             try {
                 state.userProfile = await googleProvider.getUserProfile();
                 state.isGoogleConnected = true;
+                startAutoSync();
             } catch (error) {
                 console.error("Failed to fetch Google user profile via Supabase:", error);
                 await handleLogout();
@@ -182,6 +260,7 @@ if (!window.isSecretaryPlusAppInitialized) {
             state.isGoogleConnected = false;
             state.userProfile = null;
             googleProvider.setAuthToken(null);
+            stopAutoSync();
         }
         renderAuth();
         setupEmailPolling();
@@ -268,10 +347,18 @@ if (!window.isSecretaryPlusAppInitialized) {
     }
 
     async function handleSaveSettings(newSettings) {
+        const oldSettings = { ...state.settings };
         state.settings = newSettings;
         saveSettings(newSettings);
         hideSettings();
         await initializeAppServices();
+
+        // Start or stop sync based on new settings
+        if (newSettings.enableAutoSync && !oldSettings.enableAutoSync) {
+            startAutoSync();
+        } else if (!newSettings.enableAutoSync && oldSettings.enableAutoSync) {
+            stopAutoSync();
+        }
     }
     
     function handleNewChat() {
@@ -476,6 +563,10 @@ if (!window.isSecretaryPlusAppInitialized) {
         }
     }
 
+    async function handleForceSync() {
+        await runAllSyncs(true);
+    }
+
     // --- PROACTIVE FEATURES ---
 
     async function checkForNewEmail() {
@@ -543,7 +634,10 @@ if (!window.isSecretaryPlusAppInitialized) {
             handleLogin, // Pass auth handlers
             handleLogout,
             googleProvider,
-            supabaseService
+            supabaseService,
+            state.syncStatus,
+            state.isSyncing,
+            handleForceSync
         );
         settingsModalContainer.innerHTML = '';
         settingsModalContainer.appendChild(modal);

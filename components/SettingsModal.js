@@ -56,8 +56,26 @@ function createServiceMappingUI(serviceMap, isSupabaseEnabled) {
     `).join('');
 }
 
+function timeAgo(dateString) {
+    if (!dateString) return 'никогда';
+    if (typeof dateString !== 'string') return 'ошибка'; // Handle error state
 
-export function createSettingsModal(currentSettings, authState, onSave, onClose, onLogin, onLogout, googleProvider, supabaseService) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.round((now - date) / 1000);
+
+    if (seconds < 5) return 'только что';
+    if (seconds < 60) return `${seconds} сек. назад`;
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return `${minutes} мин. назад`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours} ч. назад`;
+    const days = Math.round(hours / 24);
+    return `${days} д. назад`;
+}
+
+
+export function createSettingsModal(currentSettings, authState, onSave, onClose, onLogin, onLogout, googleProvider, supabaseService, syncStatus, isSyncing, onForceSync) {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
 
@@ -214,15 +232,27 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                     <!-- Sync Tab -->
                     <div id="tab-sync" class="settings-tab-content space-y-6 ${!currentSettings.isSupabaseEnabled ? 'hidden' : ''}">
                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                            <h3 class="text-lg font-semibold text-gray-200">Синхронизация данных</h3>
-                            <p class="text-sm text-gray-400">Синхронизируйте данные из Google, чтобы ассистент мог быстро находить контакты и документы.</p>
-                            <div id="sync-status" class="text-sm text-gray-300"></div>
-                            <div class="space-y-3 pt-2">
-                                <button id="sync-calendar-button" ${!authState.isGoogleConnected ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">Синхронизировать Google Календарь</button>
-                                <button id="sync-tasks-button" ${!authState.isGoogleConnected ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">Синхронизировать Google Задачи</button>
-                                <button id="sync-contacts-button" ${!authState.isGoogleConnected ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">Синхронизировать контакты Google</button>
-                                <button id="sync-files-button" ${!authState.isGoogleConnected ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">Синхронизировать файлы Google Drive</button>
-                                <button id="sync-emails-button" ${!authState.isGoogleConnected ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">Синхронизировать Email</button>
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-gray-200">Автоматическая синхронизация</h3>
+                                    <p class="text-sm text-gray-400">Синхронизировать данные в фоновом режиме (каждые 15 минут).</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="auto-sync-enabled-toggle" ${currentSettings.enableAutoSync ? 'checked' : ''}>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                            <h3 class="text-lg font-semibold text-gray-200">Статус синхронизации</h3>
+                            <p class="text-sm text-gray-400">Данные из Google кэшируются для быстрого доступа ассистента.</p>
+                            <div id="sync-status-list" class="space-y-2 text-sm border-t border-b border-gray-700/50 py-3 my-2">
+                                <!-- Status items will be rendered here by JS -->
+                            </div>
+                            <div class="pt-2">
+                                <button id="force-sync-button" ${!authState.isGoogleConnected || isSyncing ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">
+                                    ${isSyncing ? 'Синхронизация...' : 'Синхронизировать сейчас'}
+                                </button>
                             </div>
                             ${!authState.isGoogleConnected ? '<p class="text-xs text-yellow-400 text-center">Для синхронизации необходимо войти в аккаунт Google.</p>' : ''}
                         </div>
@@ -249,6 +279,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             googleClientId: modalOverlay.querySelector('#google-client-id').value.trim(),
             timezone: modalOverlay.querySelector('#timezone-select').value,
             enableEmailPolling: modalOverlay.querySelector('#email-polling-toggle').checked,
+            enableAutoSync: modalOverlay.querySelector('#auto-sync-enabled-toggle').checked,
             serviceMap: {
                 calendar: modalOverlay.querySelector('#calendar-provider-select').value,
                 tasks: modalOverlay.querySelector('#tasks-provider-select').value,
@@ -338,68 +369,40 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
         });
     }
 
-    // Sync buttons logic
-    const syncCalendarBtn = modalOverlay.querySelector('#sync-calendar-button');
-    const syncTasksBtn = modalOverlay.querySelector('#sync-tasks-button');
-    const syncContactsBtn = modalOverlay.querySelector('#sync-contacts-button');
-    const syncFilesBtn = modalOverlay.querySelector('#sync-files-button');
-    const syncEmailsBtn = modalOverlay.querySelector('#sync-emails-button');
-    const syncStatusDiv = modalOverlay.querySelector('#sync-status');
+    // Sync Tab Logic
+    const syncStatusList = modalOverlay.querySelector('#sync-status-list');
+    const SYNC_NAMES = { Calendar: 'Календарь', Tasks: 'Задачи', Contacts: 'Контакты', Files: 'Файлы', Emails: 'Почта' };
+    
+    if (syncStatusList) {
+        syncStatusList.innerHTML = Object.entries(SYNC_NAMES).map(([key, label]) => {
+            const status = syncStatus[key];
+            let statusText;
+            let statusClass = 'text-gray-400';
 
-    const handleSync = async (button, syncFunction, providerFunction, entityName, entityNamePlural) => {
-        button.disabled = true;
-        button.textContent = 'Синхронизация...';
-        syncStatusDiv.innerHTML = `<p>Получаем ${entityNamePlural} из Google...</p>`;
-        try {
-            const items = await providerFunction();
-            syncStatusDiv.innerHTML = `<p>Найдено ${items.length} ${entityNamePlural}. Сохраняем в Supabase...</p>`;
-            const result = await syncFunction(items);
-            syncStatusDiv.innerHTML = `<p class="text-green-400">Успешно синхронизировано ${result.synced} ${entityNamePlural}!</p>`;
-        } catch (error) {
-            console.error(`Sync error for ${entityName}:`, error);
-            syncStatusDiv.innerHTML = `<p class="text-red-400">Ошибка синхронизации: ${error.message}</p>`;
-        } finally {
-            button.disabled = false;
-            button.textContent = `Синхронизировать ${entityNamePlural}`;
+            if (typeof status === 'object' && status !== null && status.error) {
+                statusText = `Ошибка: ${status.error.slice(0, 30)}...`;
+                statusClass = 'text-red-400';
+            } else {
+                statusText = timeAgo(status);
+                statusClass = 'text-green-400';
+            }
+            
+            return `
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-300">${label}:</span>
+                    <span class="font-mono text-xs ${statusClass}">${statusText}</span>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    const forceSyncButton = modalOverlay.querySelector('#force-sync-button');
+    if (forceSyncButton) {
+        if (isSyncing) {
+            forceSyncButton.disabled = true;
+            forceSyncButton.textContent = 'Синхронизация...';
         }
-    };
-
-    if (authState.isGoogleConnected && supabaseService) {
-        syncCalendarBtn.addEventListener('click', () => handleSync(
-            syncCalendarBtn,
-            (items) => supabaseService.syncCalendarEvents(items),
-            () => googleProvider.getCalendarEvents({ max_results: 1000 }), // Fetch more for a full sync
-            'событие',
-            'события'
-        ));
-         syncTasksBtn.addEventListener('click', () => handleSync(
-            syncTasksBtn,
-            (items) => supabaseService.syncTasks(items),
-            () => googleProvider.getTasks({ max_results: 100 }),
-            'задачу',
-            'задачи'
-        ));
-        syncContactsBtn.addEventListener('click', () => handleSync(
-            syncContactsBtn,
-            (items) => supabaseService.syncContacts(items),
-            () => googleProvider.getAllContacts(),
-            'контакт',
-            'контакты'
-        ));
-        syncFilesBtn.addEventListener('click', () => handleSync(
-            syncFilesBtn,
-            (items) => supabaseService.syncFiles(items),
-            () => googleProvider.getAllFiles(),
-            'файл',
-            'файлы'
-        ));
-        syncEmailsBtn.addEventListener('click', () => handleSync(
-            syncEmailsBtn,
-            (items) => supabaseService.syncEmails(items),
-            () => googleProvider.getRecentEmails({ max_results: 1000 }),
-            'письмо',
-            'письма'
-        ));
+        forceSyncButton.addEventListener('click', onForceSync);
     }
 
     return modalOverlay;
