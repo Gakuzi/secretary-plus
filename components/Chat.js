@@ -8,11 +8,12 @@ let onSendMessageCallback;
 let speechRecognizer;
 
 // UI state for the new voice input
-let isRecording = false;
-let isLocked = false;
+let recordMode = 'none'; // 'none', 'hold', 'tap', 'locked'
 let recordingStartTime = 0;
 let timerInterval = null;
 let startY = 0; // For tracking vertical drag to lock
+let tapTimeout = null;
+const TAP_DURATION = 250; // ms to differentiate tap from hold
 
 // --- File Drop & Image Handling ---
 function handleDragOver(e) { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add('drag-over'); }
@@ -41,7 +42,7 @@ const sendMessageHandler = () => {
     if (prompt) {
         onSendMessageCallback(prompt);
         chatInput.value = '';
-        if (isLocked) {
+        if (recordMode === 'locked') {
             stopRecording(false); // Stop and reset UI if it was locked
         }
         updateInputUI();
@@ -66,54 +67,73 @@ function updateInputUI() {
     }
 }
 
-// --- New Voice Recording Logic ---
-function startRecording(e) {
-    if (isRecording || !speechRecognizer?.isSupported) return;
+// --- Voice Recording Logic ---
+
+function pointerDown(e) {
+    if (recordMode !== 'none' || !speechRecognizer?.isSupported) return;
     e.preventDefault();
 
-    isRecording = true;
-    isLocked = false;
     startY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
-    recordingStartTime = Date.now();
-    speechRecognizer.start();
-
-    document.body.classList.add('recording-active'); // For global styling
-    const recordingIndicatorPanel = document.getElementById('recording-indicator-panel');
-    recordingIndicatorPanel.classList.remove('hidden');
-    updateTimer();
-    timerInterval = setInterval(updateTimer, 1000);
     
-    document.addEventListener('pointermove', handlePointerMove);
-    document.addEventListener('pointerup', handlePointerUp, { once: true });
+    // Differentiate between tap and hold
+    tapTimeout = setTimeout(() => {
+        tapTimeout = null;
+        recordMode = 'hold';
+        startRecording(true); // Start in continuous mode for hold
+    }, TAP_DURATION);
+    
+    document.addEventListener('pointermove', pointerMove);
+    document.addEventListener('pointerup', pointerUp, { once: true });
 }
 
-function handlePointerMove(e) {
-    if (!isRecording || isLocked) return;
+function pointerMove(e) {
+    if (recordMode !== 'hold') return;
 
     const currentY = e.clientY;
     const deltaY = startY - currentY;
     
-    // Check if the user has dragged up enough to lock
     if (deltaY > 60) {
         lockRecording();
     }
 }
 
-function handlePointerUp() {
-    if (isRecording && !isLocked) {
+function pointerUp() {
+    clearTimeout(tapTimeout);
+    
+    if (tapTimeout) { // Pointer up happened before hold threshold -> TAP
+        recordMode = 'tap';
+        startRecording(false); // Start in non-continuous mode for tap
+    } else if (recordMode === 'hold') { // Pointer up happened after hold threshold -> HOLD/RELEASE
         stopRecording(false); // Stop and send
     }
-    // Clean up listeners even if locked, as this means the initial press is over
-    document.removeEventListener('pointermove', handlePointerMove);
+    
+    document.removeEventListener('pointermove', pointerMove);
+}
+
+function startRecording(isContinuous) {
+    if (!speechRecognizer) return;
+
+    recordingStartTime = Date.now();
+    speechRecognizer.start(isContinuous);
+
+    if (recordMode === 'hold') {
+        document.body.classList.add('recording-active');
+        document.getElementById('recording-indicator-panel').classList.remove('hidden');
+    }
+    
+    chatInput.placeholder = 'Идет запись...';
+    voiceRecordButton.classList.add('bg-red-500', 'hover:bg-red-600', 'scale-110');
+    
+    updateTimer();
+    timerInterval = setInterval(updateTimer, 1000);
 }
 
 function lockRecording() {
-    if (!isRecording || isLocked) return;
-    isLocked = true;
+    if (recordMode !== 'hold') return;
+    recordMode = 'locked';
     
     // Update UI for locked state
-    const recordingIndicatorPanel = document.getElementById('recording-indicator-panel');
-    recordingIndicatorPanel.classList.add('hidden'); // Hide floating panel
+    document.getElementById('recording-indicator-panel').classList.add('hidden');
     document.body.classList.remove('recording-active');
 
     const inputBar = document.getElementById('input-bar');
@@ -121,15 +141,15 @@ function lockRecording() {
 
     sendButton.classList.remove('hidden');
     voiceRecordButton.classList.add('hidden');
-    chatInput.placeholder = 'Идет запись... Нажмите отправить или отменить.';
+    chatInput.placeholder = 'Запись заблокирована. Нажмите отправить или отменить.';
 }
 
 function stopRecording(isCancel) {
-    if (!isRecording) return;
+    if (recordMode === 'none') return;
     
     clearInterval(timerInterval);
-    isRecording = false;
-    isLocked = false;
+    const wasLocked = recordMode === 'locked';
+    recordMode = 'none';
 
     if (isCancel) {
         speechRecognizer.abort();
@@ -144,9 +164,12 @@ function stopRecording(isCancel) {
     const inputBar = document.getElementById('input-bar');
     inputBar.classList.remove('recording-locked');
     chatInput.placeholder = 'Сообщение...';
+    voiceRecordButton.classList.remove('bg-red-500', 'hover:bg-red-600', 'scale-110');
     
-    // The onEnd callback from speech recognizer will handle sending the message text
-    // We don't need to call updateInputUI() immediately, as onEnd will give us the final text first.
+    // After a locked recording, the text might remain. Update UI accordingly.
+    if (wasLocked) {
+        updateInputUI();
+    }
 }
 
 function updateTimer() {
@@ -161,7 +184,7 @@ function updateTimer() {
 
 
 // --- CHAT INTERFACE CREATION ---
-export function createChatInterface(onSendMessage) {
+export function createChatInterface(onSendMessage, showCameraView) {
     onSendMessageCallback = onSendMessage;
 
     const chatWrapper = document.createElement('div');
@@ -223,7 +246,7 @@ export function createChatInterface(onSendMessage) {
     cameraButton.addEventListener('click', () => fileInput.click()); 
     fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleImageFile(e.target.files[0]); });
 
-    voiceRecordButton.addEventListener('pointerdown', startRecording);
+    voiceRecordButton.addEventListener('pointerdown', pointerDown);
     cancelRecordingButton.addEventListener('click', () => stopRecording(true));
 
     // --- Speech Recognizer Setup ---
@@ -235,18 +258,21 @@ export function createChatInterface(onSendMessage) {
             chatInput.scrollTop = chatInput.scrollHeight; // Keep cursor visible
         },
         (finalTranscript) => {
-            // On successful end, send the message
+            // On successful end
+            stopRecording(false); // Clean up UI state
             if (finalTranscript.trim()) {
                 chatInput.value = finalTranscript;
                 sendMessageHandler();
             }
-            updateInputUI(); // Reset UI state after send
+            updateInputUI();
         },
         (error) => {
             console.error('Speech recognition error:', error);
-            if (error !== 'no-speech') {
-                 stopRecording(true); // Cancel on error
+            if (error !== 'no-speech' && error !== 'aborted') {
+                 alert(`Ошибка распознавания речи: ${error}`);
             }
+            stopRecording(true); // Cancel on error
+            updateInputUI();
         }
     );
 

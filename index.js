@@ -245,31 +245,18 @@ async function handleSaveSettings(newSettings) {
     await initializeAppServices();
 }
 
-async function handleSendMessage(prompt, image = null, isSystem = false) {
-    if (state.isLoading || (!prompt && !image)) return;
-
-    if (!state.settings.geminiApiKey) {
-        const errorMessage = { sender: MessageSender.SYSTEM, text: "Ошибка: Ключ Gemini API не указан. Пожалуйста, добавьте его в настройках." };
-        addMessageToChat(errorMessage);
-        return;
-    }
-    
-    if (state.messages.length === 0) {
-        const chatLog = document.getElementById('chat-log');
-        if (chatLog) chatLog.innerHTML = '';
-    }
-
+/**
+ * Central function to process a prompt (from user or system), call Gemini, and display the response.
+ * @param {string} prompt - The text prompt to send to the Gemini model.
+ * @param {object|null} image - An optional image object to send.
+ */
+async function processBotResponse(prompt, image = null) {
     state.isLoading = true;
-
-    if (!isSystem) {
-      const userMessage = { sender: MessageSender.USER, text: prompt, image, id: Date.now() };
-      state.messages.push(userMessage);
-      addMessageToChat(userMessage);
-    }
-    
     showLoadingIndicator();
 
     try {
+        // The history sent to Gemini is always the state of messages *before* the current prompt.
+        // The current prompt is passed separately.
         const response = await callGemini({
             prompt,
             history: state.messages.slice(0, -1),
@@ -296,6 +283,30 @@ async function handleSendMessage(prompt, image = null, isSystem = false) {
         state.isLoading = false;
         hideLoadingIndicator();
     }
+}
+
+
+async function handleSendMessage(prompt, image = null) {
+    if (state.isLoading || (!prompt && !image)) return;
+
+    if (!state.settings.geminiApiKey) {
+        const errorMessage = { sender: MessageSender.SYSTEM, text: "Ошибка: Ключ Gemini API не указан. Пожалуйста, добавьте его в настройках." };
+        addMessageToChat(errorMessage);
+        return;
+    }
+    
+    if (state.messages.length === 0) {
+        const chatLog = document.getElementById('chat-log');
+        if (chatLog) chatLog.innerHTML = '';
+    }
+    
+    // Add the user's message to history first
+    const userMessage = { sender: MessageSender.USER, text: prompt, image, id: Date.now() };
+    state.messages.push(userMessage);
+    addMessageToChat(userMessage);
+    
+    // Then process the response
+    await processBotResponse(prompt, image);
 }
 
 async function handleCardAction(e) {
@@ -340,14 +351,15 @@ async function handleCardAction(e) {
         systemPrompt = `Пользователь решил создать пустой документ. Вызови функцию create_google_doc с названием "${payload.title}".`;
     }
 
-
     if (!systemPrompt) return;
 
+    // Add a user-facing message to show their action was registered
     const userMessage = { sender: MessageSender.USER, text: userPromptText, id: Date.now() };
     state.messages.push(userMessage);
     addMessageToChat(userMessage);
 
-    await handleSendMessage(systemPrompt, null, true);
+    // Call the bot with the internal system prompt
+    await processBotResponse(systemPrompt);
 }
 
 async function handleQuickReply(e) {

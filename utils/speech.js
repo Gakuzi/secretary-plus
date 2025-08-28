@@ -12,7 +12,6 @@ export class SpeechRecognizer {
         this.recognition.lang = 'ru-RU';
         this.recognition.interimResults = true;
         this.recognition.maxAlternatives = 1;
-        this.recognition.continuous = true;
         this.isListening = false;
         this.finalTranscript = '';
 
@@ -40,8 +39,6 @@ export class SpeechRecognizer {
         };
 
         this.recognition.onend = () => {
-            // Only fire the callback if we were actively listening until the end.
-            // This prevents firing on aborts or errors that have already been handled.
             if (this.isListening) {
                 this.onEnd(this.finalTranscript);
             }
@@ -49,7 +46,6 @@ export class SpeechRecognizer {
         };
 
         this.recognition.onerror = (event) => {
-            // isListening is set to false before calling onError to prevent onend from firing.
             if(this.isListening) {
                 this.isListening = false;
                 this.onError(event.error);
@@ -57,23 +53,21 @@ export class SpeechRecognizer {
         };
     }
 
-    start() {
+    start(continuous = false) {
         if (!this.isSupported || this.isListening) return;
         this.isListening = true;
         this.finalTranscript = '';
+        this.recognition.continuous = continuous;
         this.recognition.start();
     }
 
     stop() {
         if (!this.isSupported || !this.isListening) return;
-        // Let the 'onend' event handler call the onEnd callback to ensure all results are processed.
         this.recognition.stop();
     }
 
     abort() {
         if (!this.isSupported || !this.isListening) return;
-        // Set listening to false *before* aborting.
-        // This prevents the 'onend' handler from calling the onEnd callback.
         this.isListening = false;
         this.recognition.abort();
     }

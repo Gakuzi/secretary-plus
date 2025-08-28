@@ -247,10 +247,20 @@ body.recording-active #camera-button {
     opacity: 0;
     pointer-events: none;
 }
-body.recording-active #main-content {
-    /* Prevent text selection while dragging */
+body.recording-active #main-content,
+body.recording-active {
+    /* Prevent text selection while dragging and scrolling */
     user-select: none; 
     -webkit-user-select: none;
+    overflow: hidden;
+}
+
+#recording-indicator-panel {
+    transition: opacity 0.2s, transform 0.2s;
+}
+#recording-indicator-panel.hidden {
+    opacity: 0;
+    transform: translateY(20px);
 }
 
 /* When recording is locked */
