@@ -13,8 +13,8 @@
 <body class="bg-gray-900 text-gray-200 font-sans">
     <div class="flex min-h-screen">
         <!-- Sidebar Navigation -->
-        <aside class="w-64 bg-gray-800 p-6 border-r border-gray-700 fixed top-0 left-0 h-full">
-            <h1 class="text-xl font-bold text-white mb-8">Гайд по настройке</h1>
+        <aside class="w-64 bg-gray-800 p-6 border-r border-gray-700 fixed top-0 left-0 h-full overflow-y-auto">
+            <h1 class="text-xl font-bold text-white mb-8">Мастер Настройки</h1>
             <nav>
                 <ul class="space-y-2">
                     <li><a href="#introduction" class="nav-link">Введение</a></li>
@@ -54,11 +54,11 @@
                     <div class="step">
                         <h3 class="step-title">Шаг 1.2: Создание таблиц и политик безопасности</h3>
                         <ol>
-                            <li>В меню проекта выберите <strong>SQL Editor</strong>, затем <strong>"New query"</strong>.</li>
+                            <li>В меню проекта выберите <strong>SQL Editor</strong> (иконка базы данных), затем <strong>"+ New query"</strong>.</li>
                             <li>Скопируйте и вставьте весь SQL-скрипт ниже, затем нажмите <strong>"RUN"</strong>.</li>
                         </ol>
                         <div class="code-block">
-                            <pre><code id="sql-script-content">-- Создание таблиц и политик RLS... (полный скрипт)
+                            <pre><code id="sql-script-content">-- 1. Создаем таблицу для контактов
 CREATE TABLE public.contacts (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -72,6 +72,8 @@ CREATE TABLE public.contacts (
   updated_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(user_id, source, source_id)
 );
+
+-- 2. Создаем таблицу для файлов
 CREATE TABLE public.files (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -85,12 +87,19 @@ CREATE TABLE public.files (
   updated_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(user_id, source, source_id)
 );
+
+-- 3. Включаем Row Level Security (RLS) для обеих таблиц
+-- Это КРИТИЧЕСКИ ВАЖНО для безопасности данных
 ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.files ENABLE ROW LEVEL SECURITY;
+
+-- 4. Создаем политику, которая разрешает пользователям видеть и изменять ТОЛЬКО СВОИ контакты
 CREATE POLICY "Allow users to manage their own contacts"
 ON public.contacts FOR ALL
 USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
+
+-- 5. Создаем политику, которая разрешает пользователям видеть и изменять ТОЛЬКО СВОИ файлы
 CREATE POLICY "Allow users to manage their own files"
 ON public.files FOR ALL
 USING (auth.uid() = user_id)
@@ -124,7 +133,8 @@ WITH CHECK (auth.uid() = user_id);</code></pre>
                         <ol>
                             <li>Перейдите в <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> и создайте новый проект.</li>
                             <li>Перейдите в <strong>APIs & Services &gt; OAuth consent screen</strong>.</li>
-                            <li>Выберите <strong>External</strong> и нажмите "Create". Заполните обязательные поля (имя приложения, email). На остальных шагах можно нажимать "Save and Continue".</li>
+                            <li>Выберите <strong>External</strong> и нажмите "Create". Заполните обязательные поля (имя приложения, email). На остальных шагах можно нажимать "Save and Continue". На шаге "Test users" добавьте свой Google аккаунт.</li>
+                            <li>После создания экрана согласия, нажмите <strong>"Publish App"</strong>, чтобы приложение было доступно для всех, а не только для тестовых пользователей.</li>
                         </ol>
                     </div>
 
@@ -132,11 +142,16 @@ WITH CHECK (auth.uid() = user_id);</code></pre>
                         <h3 class="step-title">Шаг 2.2: Включение API</h3>
                         <ol>
                             <li>Перейдите в <strong>APIs & Services &gt; Library</strong>.</li>
-                            <li>Найдите и включите (Enable) следующие API:
-                                <ul>
-                                    <li>- Google Calendar API</li>
-                                    <li>- Google People API</li>
-                                    <li>- Google Drive API</li>
+                            <li>Найдите и включите (Enable) следующие <strong>8 API</strong>:
+                                <ul class="list-disc list-inside mt-2 grid grid-cols-2 gap-x-4">
+                                    <li>Google Calendar API</li>
+                                    <li>Google People API</li>
+                                    <li>Google Drive API</li>
+                                    <li>Google Docs API</li>
+                                    <li>Google Sheets API</li>
+                                    <li>Google Tasks API</li>
+                                    <li>Gmail API</li>
+                                    <li>Cloud Identity API</li>
                                 </ul>
                             </li>
                         </ol>

@@ -79,11 +79,9 @@ function renderAuth() {
 
 function renderMainContent() {
     mainContent.innerHTML = '';
-    const chatContainer = createChatInterface(handleSendMessage);
+    // Pass showCameraView as a callback to createChatInterface
+    const chatContainer = createChatInterface(handleSendMessage, showCameraView);
     mainContent.appendChild(chatContainer);
-    
-    // The camera button event listener is now set inside createChatInterface due to adaptive UI
-    // document.getElementById('camera-button').addEventListener('click', showCameraView);
 
     const chatLog = document.getElementById('chat-log');
     if (state.messages.length === 0) {

@@ -11,9 +11,15 @@ document.addEventListener('DOMContentLoaded', () => {
             navigator.clipboard.writeText(targetElement.textContent.trim())
                 .then(() => {
                     const originalText = button.querySelector('.copy-text').textContent;
-                    button.querySelector('.copy-text').textContent = 'Скопировано!';
+                    const checkIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6 9 17l-5-5"></path></svg>`;
+                    const originalIcon = button.querySelector('svg').outerHTML;
+
+                    button.innerHTML = `${checkIcon}<span class="copy-text">Скопировано!</span>`;
+                    button.style.color = '#34d399'; // emerald-400
+                    
                     setTimeout(() => {
-                        button.querySelector('.copy-text').textContent = originalText;
+                        button.innerHTML = `${originalIcon}<span class="copy-text">${originalText}</span>`;
+                        button.style.color = '';
                     }, 2000);
                 })
                 .catch(err => {
@@ -49,7 +55,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const targetId = link.getAttribute('href');
             const targetElement = document.querySelector(targetId);
             if (targetElement) {
-                targetElement.scrollIntoView({ behavior: 'smooth' });
+                // Manually scroll to have better control over position
+                const headerOffset = 40; // Add some padding from the top
+                const elementPosition = targetElement.getBoundingClientRect().top;
+                const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+                
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: "smooth"
+                });
             }
         });
     });
@@ -63,7 +77,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (targetElement) {
                 // Use a timeout to ensure the page has finished laying out
                 setTimeout(() => {
-                     targetElement.scrollIntoView({ behavior: 'smooth' });
+                     const headerOffset = 40;
+                     const elementPosition = targetElement.getBoundingClientRect().top;
+                     const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+                     window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
                 }, 100);
             }
         }
