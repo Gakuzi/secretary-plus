@@ -314,7 +314,13 @@ export function showLoadingIndicator() {
         <div class="max-w-xl">
             <div class="font-bold">Секретарь+</div>
             <div class="p-3 rounded-lg mt-1 bg-gray-800">
-                <div class="text-gray-400">Думаю<span class="blinking-cursor"></span></div>
+                <div class="text-gray-400 flex items-center">Думаю
+                    <span class="loading-dots">
+                        <span class="dot"></span>
+                        <span class="dot"></span>
+                        <span class="dot"></span>
+                    </span>
+                </div>
             </div>
         </div>
     `;
