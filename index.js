@@ -89,7 +89,42 @@ function render() {
 
 // --- EVENT HANDLERS & LOGIC ---
 
-async function handleSendMessage(prompt, image = null) {
+async function handleCardAction(e) {
+    const target = e.target.closest('[data-action]');
+    if (!target) return;
+
+    e.preventDefault();
+
+    const action = target.dataset.action;
+    const payload = JSON.parse(target.dataset.payload);
+
+    let userPromptText = '';
+    let systemPrompt = '';
+
+    if (action === 'select_contact') {
+        userPromptText = `Выбран контакт: ${payload.name}`;
+        systemPrompt = `Пользователь выбрал контакт: Имя - ${payload.name}, Email - ${payload.email}. Продолжай выполнение первоначального запроса с этой информацией.`;
+    } else if (action === 'select_document') {
+        userPromptText = `Выбран документ: ${payload.name}`;
+        systemPrompt = `Пользователь выбрал документ: Название - "${payload.name}", Ссылка - ${payload.url}. Продолжай выполнение первоначального запроса с этой информацией.`;
+    } else if (action === 'create_document_prompt') {
+        userPromptText = `Да, создать новый документ с названием "${payload.query}"`;
+        systemPrompt = `Пользователь согласился создать новый документ. Вызови функцию create_google_doc с названием "${payload.query}".`;
+    }
+
+    if (!systemPrompt) return;
+
+    // Add a visual confirmation message for the user
+    const userMessage = { sender: MessageSender.USER, text: userPromptText, id: Date.now() };
+    state.messages.push(userMessage);
+    addMessageToChat(userMessage);
+
+    // Send the system-level prompt to Gemini to continue the flow
+    await handleSendMessage(systemPrompt, null, true);
+}
+
+
+async function handleSendMessage(prompt, image = null, isSystem = false) {
     if (state.isLoading || (!prompt && !image)) return;
 
     if (!state.settings.geminiApiKey) {
@@ -105,16 +140,21 @@ async function handleSendMessage(prompt, image = null) {
     }
 
     state.isLoading = true;
-    const userMessage = { sender: MessageSender.USER, text: prompt, image, id: Date.now() };
-    state.messages.push(userMessage);
-    addMessageToChat(userMessage);
+
+    // Only add user message to history if it's not a system message
+    if (!isSystem) {
+      const userMessage = { sender: MessageSender.USER, text: prompt, image, id: Date.now() };
+      state.messages.push(userMessage);
+      addMessageToChat(userMessage);
+    }
+    
     showLoadingIndicator();
 
     try {
         const isUnsupportedDomain = window.location.hostname !== 'localhost' && !window.location.hostname.endsWith('github.io');
         const response = await callGemini(
             prompt,
-            state.messages.slice(0, -1),
+            state.messages.slice(0, -1), // Send history without the last user message
             activeProvider,
             isUnsupportedDomain,
             image,
@@ -240,6 +280,8 @@ function setupActiveProvider() {
 function init() {
     settingsButton.innerHTML = SettingsIcon;
     settingsButton.addEventListener('click', showSettings);
+
+    mainContent.addEventListener('click', handleCardAction);
 
     state.settings = getSettings();
     setupActiveProvider();
