@@ -271,6 +271,7 @@ if (!window.isSecretaryPlusAppInitialized) {
     }
 
     async function updateSupabaseAuthState(session) {
+        const wasConnected = state.isGoogleConnected;
         if (session) {
             state.supabaseUser = session.user;
             const providerToken = session.provider_token;
@@ -293,9 +294,15 @@ if (!window.isSecretaryPlusAppInitialized) {
         }
         renderAuth();
         setupEmailPolling();
+
+        // If connection state changed and there are no messages, re-render the welcome screen.
+        if (wasConnected !== state.isGoogleConnected && state.messages.length === 0) {
+            renderMainContent();
+        }
     }
 
     async function updateGoogleDirectAuthState(token) {
+        const wasConnected = state.isGoogleConnected;
         if (token) {
             googleProvider.setAuthToken(token.access_token);
             try {
@@ -313,6 +320,11 @@ if (!window.isSecretaryPlusAppInitialized) {
         }
          renderAuth();
          setupEmailPolling();
+
+        // If connection state changed and there are no messages, re-render the welcome screen.
+        if (wasConnected !== state.isGoogleConnected && state.messages.length === 0) {
+            renderMainContent();
+        }
     }
 
     function handleGoogleDirectAuthResponse(tokenResponse) {
@@ -442,7 +454,7 @@ if (!window.isSecretaryPlusAppInitialized) {
             state.messages.push(response);
             addMessageToChat(response);
 
-            if (response.contextualActions) {
+            if (response.contextualActions && response.contextualActions.length > 0) {
                 renderContextualActions(response.contextualActions);
             }
         } catch (error) {
@@ -457,6 +469,8 @@ if (!window.isSecretaryPlusAppInitialized) {
 
     async function handleSendMessage(prompt, image = null) {
         if (state.isLoading || (!prompt && !image)) return;
+
+        renderContextualActions(null); // Clear previous actions before sending
 
         if (!state.settings.geminiApiKey) {
             showSystemError("Ключ Gemini API не указан. Пожалуйста, добавьте его в настройках.");

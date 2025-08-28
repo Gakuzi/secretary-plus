@@ -437,6 +437,7 @@ export const callGemini = async ({
                 text: '',
                 card: null,
                 functionCallName: name,
+                contextualActions: [], // Initialize actions array
             };
 
             // Dynamic provider selection
@@ -524,6 +525,10 @@ export const callGemini = async ({
                             });
                             resultMessage.text = `Событие "${result.summary}" успешно создано! Что дальше?`;
                             resultMessage.card = { type: 'event', icon: 'CalendarIcon', title: result.summary, details: { 'Время': new Date(result.start.dateTime).toLocaleString('ru-RU'), 'Участники': attendeesEmails.join(', ') || 'Нет', 'Видеовстреча': result.hangoutLink ? `<a href="${result.hangoutLink}" target="_blank" class="text-blue-400 hover:underline">Присоединиться</a>` : 'Нет', }, actions: eventActions, shareableLink: result.hangoutLink, shareText: `Присоединяйтесь к встрече "${result.summary}": ${result.hangoutLink}`};
+                             resultMessage.contextualActions = [
+                                { label: 'Создать еще событие', prompt: 'Создай еще одно событие в календаре', icon: 'CalendarIcon' },
+                                { label: 'Показать мое расписание', prompt: 'Покажи мое расписание на сегодня', icon: 'CalendarIcon' }
+                            ];
                         }
                         break;
                     }
@@ -592,6 +597,10 @@ export const callGemini = async ({
                         const result = await provider.createNote(args);
                         resultMessage.text = `Заметка "${result.title || 'Без названия'}" успешно создана в ${provider.getName()}.`;
                         resultMessage.card = createNoteCard(result, provider.getName());
+                        resultMessage.contextualActions = [
+                            { label: 'Создать еще заметку', prompt: 'Создай новую заметку о планах на выходные', icon: 'FileIcon' },
+                            { label: 'Найти последние заметки', prompt: 'Найди мои последние заметки', icon: 'FileIcon' }
+                        ];
                         break;
                     }
                     case 'find_notes': {
@@ -624,6 +633,10 @@ export const callGemini = async ({
                         const docType = result.mimeType.includes('spreadsheet') ? 'Таблица' : 'Документ';
                         resultMessage.text = `${docType} "${result.name}" успешно создан.`;
                         resultMessage.card = { type: 'document', icon: 'FileIcon', title: result.name, details: { 'Тип': `Google ${docType}` }, actions: [{ label: 'Открыть документ', url: result.webViewLink }]};
+                        resultMessage.contextualActions = [
+                             { label: `Создать еще ${docType.toLowerCase()}`, prompt: `Создай новую ${docType.toLowerCase()}`, icon: 'FileIcon' },
+                             { label: 'Показать недавние файлы', prompt: 'Покажи мои недавние файлы', icon: 'FileIcon' }
+                        ];
                         break;
                      }
                      case 'create_task': {
@@ -631,6 +644,10 @@ export const callGemini = async ({
                         const result = await provider.createTask(args);
                         resultMessage.text = `Задача "${result.title}" успешно создана.`;
                         resultMessage.card = { type: 'task', icon: 'CheckSquareIcon', title: 'Задача создана', details: { 'Название': result.title, 'Статус': 'Нужно выполнить' }, actions: [{ label: 'Открыть в Google Tasks', url: 'https://tasks.google.com/embed/list/~default', target: '_blank' }, { label: 'Удалить', action: 'request_delete', payload: { id: result.id, type: 'task' }, style: 'danger' }]};
+                        resultMessage.contextualActions = [
+                             { label: 'Создать еще задачу', prompt: 'Создай еще одну задачу', icon: 'CheckSquareIcon' },
+                             { label: 'Показать все задачи', prompt: 'Покажи все мои задачи', icon: 'CheckSquareIcon' }
+                        ];
                         break;
                     }
                     case 'update_task': {
@@ -643,24 +660,37 @@ export const callGemini = async ({
                         const provider = serviceProviders.google;
                         await provider.sendEmail(args);
                         resultMessage.text = `Письмо на тему "${args.subject}" успешно отправлено получателям: ${args.to.join(', ')}.`;
+                        resultMessage.contextualActions = [
+                            { label: 'Написать еще письмо', prompt: 'Напиши новое письмо', icon: 'EmailIcon' },
+                            { label: 'Проверить почту', prompt: 'Покажи последние 5 писем', icon: 'EmailIcon' }
+                        ];
                         break;
                     }
                     case 'delete_calendar_event': {
                         const provider = serviceProviders.google;
                         await provider.deleteCalendarEvent(args);
                         resultMessage.text = `Событие было успешно удалено.`;
+                        resultMessage.contextualActions = [
+                            { label: 'Показать расписание', prompt: 'Покажи мое расписание на сегодня', icon: 'CalendarIcon' }
+                        ];
                         break;
                     }
                     case 'delete_task': {
                         const provider = serviceProviders.google;
                         await provider.deleteTask(args);
                         resultMessage.text = `Задача была успешно удалена.`;
+                        resultMessage.contextualActions = [
+                            { label: 'Показать все задачи', prompt: 'Покажи все мои задачи', icon: 'CheckSquareIcon' }
+                        ];
                         break;
                     }
                     case 'delete_email': {
                         const provider = serviceProviders.google;
                         await provider.deleteEmail(args);
                         resultMessage.text = `Письмо было перемещено в корзину.`;
+                         resultMessage.contextualActions = [
+                            { label: 'Проверить почту', prompt: 'Покажи последние 5 писем', icon: 'EmailIcon' }
+                        ];
                         break;
                     }
                     case 'summarize_and_save_memory': {
