@@ -61,9 +61,11 @@ function updateInputUI() {
     if (hasText) {
         voiceRecordButton.classList.add('hidden');
         sendButton.classList.remove('hidden');
+        sendButton.classList.add('flex');
     } else {
         voiceRecordButton.classList.remove('hidden');
         sendButton.classList.add('hidden');
+        sendButton.classList.remove('flex');
     }
 }
 
@@ -136,12 +138,15 @@ function lockRecording() {
     document.getElementById('recording-indicator-panel').classList.add('hidden');
     document.body.classList.remove('recording-active');
 
-    const inputBar = document.getElementById('input-bar');
-    inputBar.classList.add('recording-locked');
+    document.getElementById('left-actions').classList.add('hidden');
+    document.getElementById('cancel-recording-button').classList.remove('hidden');
+    document.getElementById('input-bar').classList.add('recording-locked');
+    document.getElementById('locked-recording-indicator').classList.remove('hidden');
 
     sendButton.classList.remove('hidden');
+    sendButton.classList.add('flex');
     voiceRecordButton.classList.add('hidden');
-    chatInput.placeholder = 'Запись заблокирована. Нажмите отправить или отменить.';
+    chatInput.placeholder = '';
 }
 
 function stopRecording(isCancel) {
@@ -161,12 +166,15 @@ function stopRecording(isCancel) {
     // Reset UI
     document.body.classList.remove('recording-active');
     document.getElementById('recording-indicator-panel').classList.add('hidden');
-    const inputBar = document.getElementById('input-bar');
-    inputBar.classList.remove('recording-locked');
+    
+    document.getElementById('left-actions').classList.remove('hidden');
+    document.getElementById('cancel-recording-button').classList.add('hidden');
+    document.getElementById('input-bar').classList.remove('recording-locked');
+    document.getElementById('locked-recording-indicator').classList.add('hidden');
+    
     chatInput.placeholder = 'Сообщение...';
     voiceRecordButton.classList.remove('bg-red-500', 'hover:bg-red-600', 'scale-110');
     
-    // After a locked recording, the text might remain. Update UI accordingly.
     if (wasLocked) {
         updateInputUI();
     }
@@ -197,7 +205,7 @@ export function createChatInterface(onSendMessage, showCameraView) {
         <div id="chat-log" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
 
         <!-- This panel appears during hold-to-record -->
-        <div id="recording-indicator-panel" class="hidden fixed inset-x-0 bottom-20 flex items-center justify-center pointer-events-none">
+        <div id="recording-indicator-panel" class="hidden fixed inset-x-0 bottom-24 flex items-center justify-center pointer-events-none">
             <div class="flex items-center gap-4 bg-gray-800/90 backdrop-blur-sm shadow-lg rounded-full px-6 py-3 border border-gray-700">
                 <div class="flex items-center gap-2 text-red-500">
                     <span class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
@@ -212,22 +220,24 @@ export function createChatInterface(onSendMessage, showCameraView) {
         </div>
 
         <div id="input-bar-wrapper" class="p-2 sm:p-4 border-t border-gray-700">
-            <div id="input-bar" class="flex items-end gap-2 bg-gray-800 rounded-xl p-2">
-                <button id="cancel-recording-button" class="p-2.5 rounded-full hover:bg-gray-700 text-red-500 hidden flex-shrink-0">${TrashIcon}</button>
+            <div class="flex items-center w-full gap-2">
+                <div id="left-actions" class="flex items-center gap-1">
+                    <button id="camera-button" class="p-2.5 rounded-full hover:bg-gray-700 flex-shrink-0">${CameraIcon}</button>
+                    <button id="attach-button" class="p-2.5 rounded-full hover:bg-gray-700 flex-shrink-0">${AttachmentIcon}</button>
+                    <input type="file" id="file-input" class="hidden" accept="image/*">
+                </div>
+                <button id="cancel-recording-button" class="hidden p-2.5 rounded-full hover:bg-gray-700 text-red-500 flex-shrink-0">${TrashIcon}</button>
                 
-                <button id="camera-button" class="p-2.5 rounded-full hover:bg-gray-700 flex-shrink-0 self-center">${CameraIcon}</button>
-                <button id="attach-button" class="p-2.5 rounded-full hover:bg-gray-700 flex-shrink-0 self-center">${AttachmentIcon}</button>
-                <input type="file" id="file-input" class="hidden" accept="image/*">
-
-                <textarea id="chat-input" placeholder="Сообщение..." rows="1"></textarea>
-                
-                <div id="locked-recording-indicator" class="hidden items-center gap-2 text-red-500 font-mono font-semibold p-2.5">
-                    <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
-                    <span class="recording-timer">0:00</span>
+                <div id="input-bar" class="flex-1 relative flex items-center bg-gray-800 rounded-2xl">
+                    <div id="locked-recording-indicator" class="hidden absolute left-4 items-center gap-2 text-red-500 font-mono font-semibold">
+                        <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
+                        <span class="recording-timer">0:00</span>
+                    </div>
+                    <textarea id="chat-input" placeholder="Сообщение..." rows="1" class="w-full px-4 py-4 bg-transparent border-none outline-none text-gray-100 text-base resize-none"></textarea>
                 </div>
 
-                <button id="send-button" class="p-3.5 rounded-full bg-blue-600 hover:bg-blue-700 self-center flex-shrink-0 hidden">${SendIcon}</button>
-                <button id="voice-record-button" class="p-3.5 rounded-full bg-blue-600 hover:bg-blue-700 self-center flex-shrink-0">${MicrophoneIcon}</button>
+                <button id="send-button" class="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 flex-shrink-0 hidden items-center justify-center">${SendIcon}</button>
+                <button id="voice-record-button" class="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 flex-shrink-0 flex items-center justify-center">${MicrophoneIcon}</button>
             </div>
         </div>
     `;
@@ -240,7 +250,6 @@ export function createChatInterface(onSendMessage, showCameraView) {
     cameraButton = chatWrapper.querySelector('#camera-button');
     attachButton = chatWrapper.querySelector('#attach-button');
     fileInput = chatWrapper.querySelector('#file-input');
-    const cancelRecordingButton = chatWrapper.querySelector('#cancel-recording-button');
     
     // --- Event Listeners ---
     sendButton.addEventListener('click', sendMessageHandler);
@@ -252,7 +261,7 @@ export function createChatInterface(onSendMessage, showCameraView) {
     fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleImageFile(e.target.files[0]); });
 
     voiceRecordButton.addEventListener('pointerdown', pointerDown);
-    cancelRecordingButton.addEventListener('click', () => stopRecording(true));
+    chatWrapper.querySelector('#cancel-recording-button').addEventListener('click', () => stopRecording(true));
 
     // --- Speech Recognizer Setup ---
     speechRecognizer = new SpeechRecognizer(
