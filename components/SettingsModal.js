@@ -42,22 +42,31 @@ CREATE POLICY "Allow users to manage their own contacts" ON public.contacts FOR 
 CREATE POLICY "Allow users to manage their own files" ON public.files FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 `;
 
-const renderServiceConnection = (serviceName, isConnected, userEmail, content) => {
+const renderServiceConnectionWithToggle = (serviceId, serviceName, isEnabled, isConnected, userEmail, content) => {
     return `
-        <div class="flex items-center gap-3">
-            <span class="w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-500'}"></span>
-            <div>
-                <p class="font-semibold">${serviceName}</p>
-                <p class="text-sm">Статус: <span class="font-semibold">${isConnected ? `Подключено` : 'Не подключено'}</span></p>
-                ${isConnected && userEmail ? `<p class="text-xs text-gray-400">(${userEmail})</p>` : ''}
-            </div>
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-200">${serviceName}</h3>
+            <label class="toggle-switch">
+                <input type="checkbox" id="${serviceId}-enabled-toggle" ${isEnabled ? 'checked' : ''}>
+                <span class="toggle-slider"></span>
+            </label>
         </div>
-        ${content}
+        <div class="service-content-wrapper space-y-4" ${!isEnabled ? 'style="display: none;"' : ''}>
+            <div class="flex items-center gap-3">
+                <span class="w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-500'}"></span>
+                <div>
+                    <p class="font-semibold">Статус</p>
+                    <p class="text-sm">${isConnected ? `Подключено` : 'Не подключено'}</p>
+                    ${isConnected && userEmail ? `<p class="text-xs text-gray-400">(${userEmail})</p>` : ''}
+                </div>
+            </div>
+            ${content}
+        </div>
     `;
 };
 
 
-export function createSettingsModal(currentSettings, authState, onSave, onClose, googleProvider, supabaseService) {
+export function createSettingsModal(currentSettings, authState, onSave, onClose, onLogin, onLogout, googleProvider, supabaseService) {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
 
@@ -73,24 +82,22 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                     <nav class="flex flex-col space-y-2">
                         <a href="#connections" class="settings-tab-button active text-left" data-tab="connections">Подключения</a>
                         <a href="#api-keys" class="settings-tab-button" data-tab="api-keys">API Ключи</a>
-                        <a href="#sync" class="settings-tab-button" data-tab="sync">Синхронизация</a>
+                        <a href="#sync" class="settings-tab-button" data-tab="sync" ${!currentSettings.isSupabaseEnabled ? 'style="display: none;"' : ''}>Синхронизация</a>
                     </nav>
                 </aside>
                 <div class="flex-1 p-6 overflow-y-auto" id="settings-tabs-content">
                     
                     <!-- Connections Tab -->
                     <div id="tab-connections" class="settings-tab-content space-y-6">
-                        <div class="flex border-b border-gray-700 mb-4">
-                            <button class="service-tab-button active" data-service="supabase">Supabase</button>
-                            <button class="service-tab-button" data-service="google">Google</button>
-                            <button class="service-tab-button" data-service="apple">Apple</button>
-                            <button class="service-tab-button" data-service="microsoft">Microsoft</button>
-                            <button class="service-tab-button" data-service="yandex">Яндекс</button>
-                        </div>
-
-                        <div id="service-content-supabase" class="service-content-panel">
-                            <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                                <h3 class="text-lg font-semibold text-gray-200">Подключение к Supabase</h3>
+                       
+                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                            ${renderServiceConnectionWithToggle(
+                                'supabase',
+                                'Supabase (База данных и Аутентификация)',
+                                currentSettings.isSupabaseEnabled,
+                                authState.isSupabaseConnected,
+                                null,
+                                `
                                 <div class="space-y-2">
                                     <label for="supabase-url" class="block text-sm font-medium text-gray-300">Supabase Project URL</label>
                                     <input type="text" id="supabase-url" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.supabaseUrl || ''}">
@@ -112,43 +119,26 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                         <p>4. Включите Google Provider в <code class="text-amber-300">Authentication > Providers</code> и настройте его, используя данные из Google Cloud. Подробнее в <a href="./README.md" target="_blank" class="text-blue-400 hover:underline">README</a>.</p>
                                     </div>
                                 </details>
-                            </div>
-                        </div>
-
-                        <div id="service-content-google" class="service-content-panel hidden">
-                           <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                                ${renderServiceConnection('Google', authState.isGoogleConnected, authState.supabaseUser?.email, `
-                                    <p class="text-sm text-gray-400">Подключение к сервисам Google (Календарь, Диск, Контакты) происходит через основной вход в приложение с помощью аккаунта Google.</p>
-                                    <button id="google-auth-action-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md">${authState.isGoogleConnected ? 'Выйти' : 'Войти через Google'}</button>
-                                `)}
-                           </div>
+                                `
+                            )}
                         </div>
                         
-                        <div id="service-content-apple" class="service-content-panel hidden">
-                           <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                                ${renderServiceConnection('Apple / iCloud', false, null, `
-                                    <p class="text-sm text-gray-400">Интеграция с сервисами Apple (Календарь, Напоминания, Контакты) находится в разработке.</p>
-                                    <button disabled class="px-4 py-2 bg-gray-600 rounded-md cursor-not-allowed">Подключить (скоро)</button>
-                                `)}
-                           </div>
-                        </div>
-
-                        <div id="service-content-microsoft" class="service-content-panel hidden">
-                           <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                                ${renderServiceConnection('Microsoft Outlook', false, null, `
-                                    <p class="text-sm text-gray-400">Интеграция с Microsoft Outlook (Календарь, Почта, Задачи) находится в разработке.</p>
-                                    <button disabled class="px-4 py-2 bg-gray-600 rounded-md cursor-not-allowed">Подключить (скоро)</button>
-                                `)}
-                           </div>
-                        </div>
-                        
-                        <div id="service-content-yandex" class="service-content-panel hidden">
-                           <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                                ${renderServiceConnection('Яндекс', false, null, `
-                                    <p class="text-sm text-gray-400">Интеграция с сервисами Яндекса (Календарь, Почта, Диск) находится в разработке.</p>
-                                    <button disabled class="px-4 py-2 bg-gray-600 rounded-md cursor-not-allowed">Подключить (скоро)</button>
-                                `)}
-                           </div>
+                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                             ${renderServiceConnectionWithToggle(
+                                'google',
+                                'Google (Календарь, Диск, Контакты)',
+                                currentSettings.isGoogleEnabled,
+                                authState.isGoogleConnected,
+                                authState.userProfile?.email,
+                                `
+                                <div class="space-y-2" id="google-client-id-container" ${currentSettings.isSupabaseEnabled ? 'style="display: none;"' : ''}>
+                                    <label for="google-client-id" class="block text-sm font-medium text-gray-300">Google Client ID</label>
+                                    <input type="password" id="google-client-id" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Required when Supabase is disabled" value="${currentSettings.googleClientId || ''}">
+                                     <p class="text-xs text-gray-400">Необходим для прямого входа, если Supabase отключен. Получите его в <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Google Cloud Console</a>.</p>
+                                </div>
+                                <button id="google-auth-action-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md">${authState.isGoogleConnected ? 'Выйти' : 'Войти через Google'}</button>
+                                `
+                            )}
                         </div>
 
                     </div>
@@ -166,10 +156,10 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                     </div>
 
                     <!-- Sync Tab -->
-                    <div id="tab-sync" class="settings-tab-content space-y-6 hidden">
+                    <div id="tab-sync" class="settings-tab-content space-y-6 ${!currentSettings.isSupabaseEnabled ? 'hidden' : ''}">
                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
                             <h3 class="text-lg font-semibold text-gray-200">Синхронизация данных</h3>
-                            <p class="text-sm text-gray-400">Синхронизируйте данные из подключенных сервисов, чтобы ассистент мог быстро находить контакты и документы.</p>
+                            <p class="text-sm text-gray-400">Синхронизируйте данные из Google, чтобы ассистент мог быстро находить контакты и документы.</p>
                             <div id="sync-status" class="text-sm text-gray-300"></div>
                             <div class="space-y-3 pt-2">
                                 <button id="sync-contacts-button" ${!authState.isGoogleConnected ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">Синхронизировать контакты Google</button>
@@ -195,6 +185,9 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             supabaseUrl: modalOverlay.querySelector('#supabase-url').value.trim(),
             supabaseAnonKey: modalOverlay.querySelector('#supabase-anon-key').value.trim(),
             geminiApiKey: modalOverlay.querySelector('#gemini-api-key').value.trim(),
+            isSupabaseEnabled: modalOverlay.querySelector('#supabase-enabled-toggle').checked,
+            isGoogleEnabled: modalOverlay.querySelector('#google-enabled-toggle').checked,
+            googleClientId: modalOverlay.querySelector('#google-client-id').value.trim(),
         };
         onSave(newSettings);
     });
@@ -219,24 +212,26 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             });
         });
     });
-
-    // Service tab switching logic
-    const serviceTabButtons = modalOverlay.querySelectorAll('.service-tab-button');
-    const serviceTabContents = modalOverlay.querySelectorAll('.service-content-panel');
-    serviceTabButtons.forEach(button => {
-        button.addEventListener('click', (e) => {
-            e.preventDefault();
-            const serviceId = e.target.dataset.service;
-
-            serviceTabButtons.forEach(btn => btn.classList.remove('active'));
-            e.target.classList.add('active');
-
-            serviceTabContents.forEach(content => {
-                content.classList.toggle('hidden', content.id !== `service-content-${serviceId}`);
-            });
-        });
-    });
     
+    // Logic for toggles to show/hide their content
+    const supabaseToggle = modalOverlay.querySelector('#supabase-enabled-toggle');
+    supabaseToggle.addEventListener('change', (e) => {
+        const isEnabled = e.target.checked;
+        const content = e.target.closest('.p-4').querySelector('.service-content-wrapper');
+        content.style.display = isEnabled ? '' : 'none';
+        
+        modalOverlay.querySelector('#google-client-id-container').style.display = isEnabled ? 'none' : '';
+        modalOverlay.querySelector('a[data-tab="sync"]').style.display = isEnabled ? '' : 'none';
+        modalOverlay.querySelector('#tab-sync').classList.toggle('hidden', !isEnabled);
+    });
+
+    const googleToggle = modalOverlay.querySelector('#google-enabled-toggle');
+    googleToggle.addEventListener('change', (e) => {
+        const isEnabled = e.target.checked;
+        const content = e.target.closest('.p-4').querySelector('.service-content-wrapper');
+        content.style.display = isEnabled ? '' : 'none';
+    });
+
     // Copy SQL button
     modalOverlay.querySelector('.copy-sql-button').addEventListener('click', (e) => {
         const button = e.target;
@@ -251,11 +246,10 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     if (googleAuthButton) {
         googleAuthButton.addEventListener('click', () => {
              if (authState.isGoogleConnected) {
-                supabaseService.signOut();
+                onLogout();
              } else {
-                supabaseService.signInWithGoogle();
+                onLogin();
              }
-             onClose(); // Close modal to let the auth flow happen
         });
     }
 
@@ -264,36 +258,38 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     const syncFilesBtn = modalOverlay.querySelector('#sync-files-button');
     const syncStatusDiv = modalOverlay.querySelector('#sync-status');
 
-    const handleSync = async (button, syncFunction, providerFunction, entityName) => {
+    const handleSync = async (button, syncFunction, providerFunction, entityName, entityNamePlural) => {
         button.disabled = true;
         button.textContent = 'Синхронизация...';
-        syncStatusDiv.innerHTML = `<p>Получаем данные ${entityName} из Google...</p>`;
+        syncStatusDiv.innerHTML = `<p>Получаем ${entityNamePlural} из Google...</p>`;
         try {
             const items = await providerFunction();
-            syncStatusDiv.innerHTML = `<p>Найдено ${items.length} ${entityName}. Сохраняем в Supabase...</p>`;
+            syncStatusDiv.innerHTML = `<p>Найдено ${items.length} ${entityNamePlural}. Сохраняем в Supabase...</p>`;
             const result = await syncFunction(items);
-            syncStatusDiv.innerHTML = `<p class="text-green-400">Успешно синхронизировано ${result.synced} ${entityName}!</p>`;
+            syncStatusDiv.innerHTML = `<p class="text-green-400">Успешно синхронизировано ${result.synced} ${entityNamePlural}!</p>`;
         } catch (error) {
             console.error(`Sync error for ${entityName}:`, error);
             syncStatusDiv.innerHTML = `<p class="text-red-400">Ошибка синхронизации: ${error.message}</p>`;
         } finally {
             button.disabled = false;
-            button.textContent = `Синхронизировать ${entityName} Google`;
+            button.textContent = `Синхронизировать ${entityNamePlural} Google`;
         }
     };
 
-    if (authState.isGoogleConnected) {
+    if (authState.isGoogleConnected && supabaseService) {
         syncContactsBtn.addEventListener('click', () => handleSync(
             syncContactsBtn,
             (items) => supabaseService.syncContacts(items),
             () => googleProvider.getAllContacts(),
-            'контактов'
+            'контакт',
+            'контакты'
         ));
         syncFilesBtn.addEventListener('click', () => handleSync(
             syncFilesBtn,
             (items) => supabaseService.syncFiles(items),
             () => googleProvider.getAllFiles(),
-            'файлов'
+            'файл',
+            'файлы'
         ));
     }
 

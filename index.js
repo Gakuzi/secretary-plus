@@ -12,18 +12,14 @@ import { MessageSender } from './types.js';
 
 // --- STATE MANAGEMENT ---
 let state = {
-    settings: {
-        supabaseUrl: '',
-        supabaseAnonKey: '',
-        geminiApiKey: '',
-    },
+    settings: getSettings(),
     messages: [],
     isSupabaseConnected: false,
     isGoogleConnected: false,
-    userProfile: null, // From Google
-    supabaseUser: null, // From Supabase
+    userProfile: null,
+    supabaseUser: null,
     isLoading: false,
-    actionStats: {}, // For tracking function calls
+    actionStats: {},
 };
 
 // --- SERVICE INSTANCES ---
@@ -60,6 +56,17 @@ function renderAuth() {
         loginButton.textContent = 'Войти через Google';
         authContainer.appendChild(loginButton);
         document.getElementById('login-button').addEventListener('click', handleLogin);
+        
+        // Disable login if not configured
+        const { isSupabaseEnabled, isGoogleEnabled, googleClientId, supabaseUrl, supabaseAnonKey } = state.settings;
+        const isSupabaseConfigured = isSupabaseEnabled && supabaseUrl && supabaseAnonKey;
+        const isDirectGoogleConfigured = !isSupabaseEnabled && isGoogleEnabled && googleClientId;
+        if (!isSupabaseConfigured && !isDirectGoogleConfigured) {
+             loginButton.disabled = true;
+             loginButton.classList.replace('bg-blue-600', 'bg-gray-600');
+             loginButton.classList.remove('hover:bg-blue-700');
+             loginButton.title = 'Пожалуйста, настройте Supabase или Google Client ID в настройках.';
+        }
     }
 }
 
@@ -78,14 +85,205 @@ function renderMainContent() {
     }
 }
 
-
 function render() {
     renderAuth();
     renderMainContent();
 }
 
+// --- AUTHENTICATION & INITIALIZATION ---
+
+async function initializeSupabase() {
+    const { supabaseUrl, supabaseAnonKey } = state.settings;
+    if (supabaseUrl && supabaseAnonKey) {
+        try {
+            if (supabaseService && supabaseService.url === supabaseUrl) {
+                return; 
+            }
+            supabaseService = new SupabaseService(supabaseUrl, supabaseAnonKey);
+            state.isSupabaseConnected = true;
+
+            supabaseService.onAuthStateChange((event, session) => {
+                console.log(`Supabase auth event: ${event}`);
+                updateSupabaseAuthState(session);
+            });
+            
+            const session = await supabaseService.getSession();
+            await updateSupabaseAuthState(session);
+        } catch (error) {
+            console.error("Supabase initialization failed:", error);
+            state.isSupabaseConnected = false;
+            supabaseService = null;
+        }
+    } else {
+        supabaseService = null;
+        state.isSupabaseConnected = false;
+        if (state.isGoogleConnected && state.settings.isSupabaseEnabled) {
+             await updateSupabaseAuthState(null); // Clear auth if Supabase was logged in but now disabled/unconfigured
+        }
+    }
+}
+
+async function initializeGoogleDirect() {
+    const { googleClientId } = state.settings;
+    await googleProvider.initClient(googleClientId, handleGoogleDirectAuthResponse);
+}
+
+async function updateSupabaseAuthState(session) {
+    if (session) {
+        state.supabaseUser = session.user;
+        const providerToken = session.provider_token;
+        googleProvider.setAuthToken(providerToken);
+        try {
+            state.userProfile = await googleProvider.getUserProfile();
+            state.isGoogleConnected = true;
+        } catch (error) {
+            console.error("Failed to fetch Google user profile via Supabase:", error);
+            await handleLogout();
+            return;
+        }
+    } else {
+        state.supabaseUser = null;
+        state.isGoogleConnected = false;
+        state.userProfile = null;
+        googleProvider.setAuthToken(null);
+    }
+    renderAuth();
+}
+
+async function updateGoogleDirectAuthState(token) {
+    if (token) {
+        googleProvider.setAuthToken(token.access_token);
+        try {
+            state.userProfile = await googleProvider.getUserProfile();
+            state.isGoogleConnected = true;
+        } catch (error) {
+            console.error("Failed to fetch Google user profile directly:", error);
+            await handleLogout();
+            return;
+        }
+    } else {
+         state.isGoogleConnected = false;
+         state.userProfile = null;
+         googleProvider.setAuthToken(null);
+    }
+     renderAuth();
+}
+
+function handleGoogleDirectAuthResponse(tokenResponse) {
+    if (tokenResponse && tokenResponse.access_token) {
+        updateGoogleDirectAuthState(tokenResponse);
+    } else {
+        console.error("Google direct auth failed:", tokenResponse);
+        alert("Ошибка входа через Google.");
+    }
+}
+
+async function initializeAppServices() {
+    // Reset state before re-initialization
+    state.isSupabaseConnected = false;
+    state.isGoogleConnected = false;
+    supabaseService = null;
+
+    if (state.settings.isSupabaseEnabled) {
+        await initializeSupabase();
+    } else if (state.settings.isGoogleEnabled) {
+        await initializeGoogleDirect();
+    }
+    
+    // Fallback if no auth method is configured but was previously logged in
+    if (!state.isGoogleConnected) {
+        await updateSupabaseAuthState(null);
+    }
+
+    renderAuth();
+}
 
 // --- EVENT HANDLERS & LOGIC ---
+
+async function handleLogin() {
+    if (state.settings.isSupabaseEnabled) {
+        if (!supabaseService) {
+            alert('Supabase не настроен. Проверьте настройки.');
+            return;
+        }
+        await supabaseService.signInWithGoogle();
+    } else { // Direct Google Login
+        if (!state.settings.googleClientId) {
+             alert('Google Client ID не настроен. Проверьте настройки.');
+             return;
+        }
+        await googleProvider.authenticate();
+    }
+}
+
+async function handleLogout() {
+    if (state.settings.isSupabaseEnabled && supabaseService) {
+        await supabaseService.signOut();
+    } else {
+        await googleProvider.disconnect();
+        await updateGoogleDirectAuthState(null);
+    }
+}
+
+async function handleSaveSettings(newSettings) {
+    state.settings = newSettings;
+    saveSettings(newSettings);
+    hideSettings();
+    await initializeAppServices();
+}
+
+async function handleSendMessage(prompt, image = null, isSystem = false) {
+    if (state.isLoading || (!prompt && !image)) return;
+
+    if (!state.settings.geminiApiKey) {
+        const errorMessage = { sender: MessageSender.SYSTEM, text: "Ошибка: Ключ Gemini API не указан. Пожалуйста, добавьте его в настройках." };
+        addMessageToChat(errorMessage);
+        return;
+    }
+    
+    if (state.messages.length === 0) {
+        const chatLog = document.getElementById('chat-log');
+        if (chatLog) chatLog.innerHTML = '';
+    }
+
+    state.isLoading = true;
+
+    if (!isSystem) {
+      const userMessage = { sender: MessageSender.USER, text: prompt, image, id: Date.now() };
+      state.messages.push(userMessage);
+      addMessageToChat(userMessage);
+    }
+    
+    showLoadingIndicator();
+
+    try {
+        const response = await callGemini({
+            prompt,
+            history: state.messages.slice(0, -1),
+            serviceProvider: googleProvider,
+            supabaseService,
+            isGoogleConnected: state.isGoogleConnected,
+            isSupabaseEnabled: state.settings.isSupabaseEnabled,
+            image,
+            apiKey: state.settings.geminiApiKey
+        });
+
+        if (response.functionCallName) {
+            state.actionStats[response.functionCallName] = (state.actionStats[response.functionCallName] || 0) + 1;
+        }
+
+        state.messages.push(response);
+        addMessageToChat(response);
+    } catch (error) {
+        console.error("Error calling Gemini:", error);
+        const errorMessage = { sender: MessageSender.SYSTEM, text: `Произошла ошибка: ${error.message}` };
+        state.messages.push(errorMessage);
+        addMessageToChat(errorMessage);
+    } finally {
+        state.isLoading = false;
+        hideLoadingIndicator();
+    }
+}
 
 async function handleCardAction(e) {
     const target = e.target.closest('[data-action]');
@@ -158,57 +356,7 @@ async function handleQuickReply(e) {
 }
 
 
-async function handleSendMessage(prompt, image = null, isSystem = false) {
-    if (state.isLoading || (!prompt && !image)) return;
-
-    if (!state.settings.geminiApiKey) {
-        const errorMessage = { sender: MessageSender.SYSTEM, text: "Ошибка: Ключ Gemini API не указан. Пожалуйста, добавьте его в настройках." };
-        addMessageToChat(errorMessage);
-        return;
-    }
-    
-    if (state.messages.length === 0) {
-        const chatLog = document.getElementById('chat-log');
-        if (chatLog) chatLog.innerHTML = '';
-    }
-
-    state.isLoading = true;
-
-    if (!isSystem) {
-      const userMessage = { sender: MessageSender.USER, text: prompt, image, id: Date.now() };
-      state.messages.push(userMessage);
-      addMessageToChat(userMessage);
-    }
-    
-    showLoadingIndicator();
-
-    try {
-        const response = await callGemini(
-            prompt,
-            state.messages.slice(0, -1),
-            googleProvider,
-            supabaseService,
-            state.isGoogleConnected,
-            image,
-            state.settings.geminiApiKey
-        );
-
-        if (response.functionCallName) {
-            state.actionStats[response.functionCallName] = (state.actionStats[response.functionCallName] || 0) + 1;
-        }
-
-        state.messages.push(response);
-        addMessageToChat(response);
-    } catch (error) {
-        console.error("Error calling Gemini:", error);
-        const errorMessage = { sender: MessageSender.SYSTEM, text: `Произошла ошибка: ${error.message}` };
-        state.messages.push(errorMessage);
-        addMessageToChat(errorMessage);
-    } finally {
-        state.isLoading = false;
-        hideLoadingIndicator();
-    }
-}
+// --- UI MODALS & VIEWS ---
 
 function showSettings() {
     const modal = createSettingsModal(
@@ -216,10 +364,12 @@ function showSettings() {
         {
             isSupabaseConnected: state.isSupabaseConnected,
             isGoogleConnected: state.isGoogleConnected,
-            supabaseUser: state.supabaseUser,
+            userProfile: state.userProfile,
         },
         handleSaveSettings, 
         hideSettings,
+        handleLogin, // Pass auth handlers
+        handleLogout,
         googleProvider,
         supabaseService
     );
@@ -265,88 +415,7 @@ function hideCameraView() {
     cameraViewContainer.innerHTML = '';
 }
 
-
-async function handleSaveSettings(newSettings) {
-    state.settings = newSettings;
-    saveSettings(newSettings);
-    hideSettings();
-    await initializeSupabase(); 
-    // Re-render auth in case connection status changed
-    renderAuth();
-}
-
-async function handleLogin() {
-    if (!supabaseService) {
-        alert('Клиент Supabase не инициализирован. Пожалуйста, проверьте настройки.');
-        return;
-    }
-    try {
-        await supabaseService.signInWithGoogle();
-        // The onAuthStateChange handler will manage the rest
-    } catch (error) {
-        console.error('Login failed', error);
-        alert(`Ошибка входа: ${error.message}`);
-    }
-}
-
-async function handleLogout() {
-    if (supabaseService) {
-        await supabaseService.signOut();
-    }
-    // State will be cleared by onAuthStateChange handler
-}
-
-async function updateAuthState(session) {
-    if (session) {
-        state.supabaseUser = session.user;
-        state.isGoogleConnected = true;
-        const providerToken = session.provider_token;
-        googleProvider.setAuthToken(providerToken);
-        try {
-            state.userProfile = await googleProvider.getUserProfile();
-        } catch (error) {
-            console.error("Failed to fetch Google user profile:", error);
-            // If token is expired, sign out to force re-login
-            await handleLogout();
-            return;
-        }
-    } else {
-        state.supabaseUser = null;
-        state.isGoogleConnected = false;
-        state.userProfile = null;
-        googleProvider.setAuthToken(null);
-    }
-    renderAuth();
-}
-
-async function initializeSupabase() {
-    const { supabaseUrl, supabaseAnonKey } = state.settings;
-    if (supabaseUrl && supabaseAnonKey) {
-        if (supabaseService && supabaseService.url === supabaseUrl) {
-            return; // Already initialized with the same URL
-        }
-        supabaseService = new SupabaseService(supabaseUrl, supabaseAnonKey);
-        state.isSupabaseConnected = true;
-        
-        // Listen for auth changes
-        supabaseService.onAuthStateChange((event, session) => {
-            console.log(`Supabase auth event: ${event}`);
-            updateAuthState(session);
-        });
-
-        // Check initial session
-        const session = await supabaseService.getSession();
-        await updateAuthState(session);
-
-    } else {
-        supabaseService = null;
-        state.isSupabaseConnected = false;
-        await updateAuthState(null); // Clear auth state
-    }
-}
-
-
-// --- INITIALIZATION ---
+// --- APP START ---
 async function init() {
     settingsButton.innerHTML = SettingsIcon;
     statsButton.innerHTML = ChartBarIcon;
@@ -359,8 +428,7 @@ async function init() {
         handleQuickReply(e);
     });
 
-    state.settings = getSettings();
-    await initializeSupabase();
+    await initializeAppServices();
     render();
 }
 

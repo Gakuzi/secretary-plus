@@ -1,25 +1,36 @@
+import { GOOGLE_SCOPES } from "../../constants.js";
+
 export class GoogleServiceProvider {
     constructor() {
         this.gapi = window.gapi;
         this.token = null;
         this.isGapiLoaded = false;
-        this.loadGapiPromise = this.loadGapiClient();
+        this.loadGapiPromise = null;
+        this.gsiClient = null;
+        this.clientId = null;
     }
 
-    // Устанавливаем токен, полученный от Supabase
-    setAuthToken(token) {
-        this.token = token;
-        if (this.isGapiLoaded && token) {
-            this.gapi.client.setToken({ access_token: token });
+    // --- Initialization ---
+
+    async initClient(clientId, onTokenResponse) {
+        if (!clientId) {
+            this.gsiClient = null;
+            return;
         }
+        this.clientId = clientId;
+        this.gsiClient = google.accounts.oauth2.initTokenClient({
+            client_id: this.clientId,
+            scope: GOOGLE_SCOPES,
+            callback: onTokenResponse, // Callback handles the token
+        });
     }
 
-    // Загружаем клиент GAPI один раз
     async loadGapiClient() {
         if (this.loadGapiPromise) return this.loadGapiPromise;
-        
+
         this.loadGapiPromise = new Promise((resolve) => {
-            this.gapi.load('client', () => {
+            this.gapi.load('client', async () => {
+                await this.gapi.client.init({});
                 this.isGapiLoaded = true;
                 if (this.token) {
                     this.gapi.client.setToken({ access_token: this.token });
@@ -37,6 +48,15 @@ export class GoogleServiceProvider {
         }
     }
 
+    setAuthToken(token) {
+        this.token = token;
+        if (this.isGapiLoaded && token) {
+            this.gapi.client.setToken({ access_token: token });
+        }
+    }
+
+    // --- Authentication ---
+
     getId() {
         return "google";
     }
@@ -45,19 +65,28 @@ export class GoogleServiceProvider {
         return "Google";
     }
 
-    // Эти методы больше не управляют состоянием, оно управляется Supabase
     isAuthenticated() {
         return Promise.resolve(!!this.token);
     }
 
     authenticate() {
-        return Promise.reject(new Error("Authentication should be handled via Supabase."));
+        // Direct authentication flow
+        if (this.gsiClient) {
+            this.gsiClient.requestAccessToken();
+            return Promise.resolve(); // The actual result is handled by the callback
+        }
+        return Promise.reject(new Error("Authentication should be handled via Supabase or Google Client must be initialized."));
     }
 
     disconnect() {
-         this.setAuthToken(null);
-         return Promise.resolve();
+        if (this.token) {
+            google.accounts.oauth2.revoke(this.token, () => {});
+        }
+        this.setAuthToken(null);
+        return Promise.resolve();
     }
+
+    // --- API Methods ---
 
     async getUserProfile() {
         await this.ensureGapiIsReady();
@@ -88,7 +117,7 @@ export class GoogleServiceProvider {
             attendees: details.attendees?.map(email => ({ email })),
             conferenceData: {
                 createRequest: {
-                  requestId: `secretary-plus-${Date.now()}`
+                    requestId: `secretary-plus-${Date.now()}`
                 }
             },
         };
@@ -102,52 +131,56 @@ export class GoogleServiceProvider {
         const response = await request;
         return response.result;
     }
-    
-    // Метод для получения всех контактов для синхронизации
+
     async getAllContacts() {
         await this.ensureGapiIsReady();
         await this.gapi.client.load('people', 'v1');
-        
+
         const response = await this.gapi.client.people.people.connections.list({
             resourceName: 'people/me',
             personFields: 'names,emailAddresses,phoneNumbers,photos',
-            pageSize: 1000, // Получаем больше контактов за раз
+            pageSize: 1000,
         });
 
         return response.result.connections || [];
     }
 
-    // Метод для получения всех файлов для синхронизации
     async getAllFiles() {
         await this.ensureGapiIsReady();
         await this.gapi.client.load('drive', 'v3');
 
         let files = [];
         let pageToken = null;
-        
+
         do {
             const response = await this.gapi.client.drive.files.list({
-                q: `trashed = false`,
+                q: `trashed = false and 'me' in owners`,
                 fields: 'nextPageToken, files(id, name, webViewLink, iconLink, mimeType)',
                 spaces: 'drive',
                 pageSize: 1000,
                 pageToken: pageToken,
             });
-            
+
             files = files.concat(response.result.files);
             pageToken = response.result.nextPageToken;
         } while (pageToken);
-        
+
         return files;
     }
-
-
-    async findContacts(query) {
-       throw new Error("findContacts is deprecated. Use SupabaseService to search for synchronized contacts.");
-    }
-
+    
+    // This is now used for direct Google Drive search when Supabase is disabled.
     async findDocuments(query) {
-        throw new Error("findDocuments is deprecated. Use SupabaseService to search for synchronized files.");
+        await this.ensureGapiIsReady();
+        await this.gapi.client.load('drive', 'v3');
+
+        const response = await this.gapi.client.drive.files.list({
+            q: `name contains '${query}' and trashed = false`,
+            fields: 'files(id, name, webViewLink, iconLink, mimeType)',
+            spaces: 'drive',
+            pageSize: 10,
+        });
+
+        return response.result.files || [];
     }
 
     async createGoogleDoc(title) {
@@ -176,11 +209,11 @@ export class GoogleServiceProvider {
             fields: 'id, name, webViewLink, iconLink, mimeType',
         });
         const documentId = driveResponse.result.id;
-    
+
         if (!documentId || !content) {
             return driveResponse.result;
         }
-    
+
         await this.gapi.client.load('docs', 'v1');
         await this.gapi.client.docs.documents.batchUpdate({
             documentId: documentId,
@@ -193,7 +226,7 @@ export class GoogleServiceProvider {
                 }],
             },
         });
-    
+
         return driveResponse.result;
     }
 
@@ -210,7 +243,7 @@ export class GoogleServiceProvider {
         });
         return response.result;
     }
-    
+
     async createTask(details) {
         await this.ensureGapiIsReady();
         await this.gapi.client.load('tasks', 'v1');
@@ -229,7 +262,7 @@ export class GoogleServiceProvider {
     async sendEmail(details) {
         await this.ensureGapiIsReady();
         await this.gapi.client.load('gmail', 'v1');
-        
+
         const emailLines = [
             `To: ${details.to.join(', ')}`,
             `Subject: ${details.subject}`,
@@ -238,7 +271,7 @@ export class GoogleServiceProvider {
             details.body,
         ];
         const email = emailLines.join('\r\n');
-        
+
         const base64EncodedEmail = btoa(unescape(encodeURIComponent(email))).replace(/\+/g, '-').replace(/\//g, '_');
 
         const request = this.gapi.client.gmail.users.messages.send({
@@ -247,7 +280,7 @@ export class GoogleServiceProvider {
                 'raw': base64EncodedEmail
             }
         });
-        
+
         const response = await request;
         return response.result;
     }

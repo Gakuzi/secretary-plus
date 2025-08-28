@@ -1,21 +1,25 @@
-const SETTINGS_KEY = 'secretary-plus-settings-v2';
+const SETTINGS_KEY = 'secretary-plus-settings-v3';
 
 const defaultSettings = {
     supabaseUrl: '',
     supabaseAnonKey: '',
     geminiApiKey: '',
+    isSupabaseEnabled: true,
+    isGoogleEnabled: true,
+    googleClientId: '',
 };
 
 export function getSettings() {
     try {
         const savedSettings = localStorage.getItem(SETTINGS_KEY);
         if (savedSettings) {
-            return { ...defaultSettings, ...JSON.parse(savedSettings) };
+            const parsed = JSON.parse(savedSettings);
+            return { ...defaultSettings, ...parsed };
         }
     } catch (error) {
         console.error("Failed to parse settings from localStorage", error);
     }
-    return defaultSettings;
+    return { ...defaultSettings };
 }
 
 export function saveSettings(settings) {
