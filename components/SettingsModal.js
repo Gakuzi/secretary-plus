@@ -21,7 +21,7 @@ const SERVICE_DEFINITIONS = {
         providers: [
             { id: 'google', name: 'Google Contacts' },
             { id: 'supabase', name: 'Быстрый кэш (Supabase)' },
-            { id: 'apple', name: 'Apple iCloud (скоро)', disabled: true },
+            { id: 'apple', name: 'Apple iCloud (нет API)', disabled: true },
         ]
     },
     files: {
@@ -35,8 +35,8 @@ const SERVICE_DEFINITIONS = {
         label: 'Заметки',
         providers: [
             { id: 'supabase', name: 'База данных Supabase' },
-            { id: 'google', name: 'Google Docs' },
-            { id: 'apple', name: 'Apple Notes (скоро)', disabled: true },
+            { id: 'google', name: 'Google Keep (через Docs)' },
+            { id: 'apple', name: 'Apple Notes (нет API)', disabled: true },
         ]
     },
 };

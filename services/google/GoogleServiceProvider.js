@@ -513,7 +513,17 @@ export class GoogleServiceProvider {
     }
 
     async findNotes(query) {
-        // Find documents which can be considered notes
-        return this.findDocuments(query);
+        await this.ensureGapiIsReady();
+        await this.gapi.client.load('drive', 'v3');
+
+        // Specifically search for Google Docs to better represent "notes"
+        const response = await this.gapi.client.drive.files.list({
+            q: `name contains '${query}' and mimeType='application/vnd.google-apps.document' and trashed = false`,
+            fields: 'files(id, name, webViewLink, iconLink, mimeType, modifiedTime)',
+            spaces: 'drive',
+            pageSize: 10,
+        });
+
+        return response.result.files || [];
     }
 }
