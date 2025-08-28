@@ -48,6 +48,39 @@ const baseTools = [
         required: ["query"],
       },
     },
+     {
+      name: "find_contacts",
+      description: "Ищет контакты по имени, фамилии или email. Если Supabase включен, поиск идет по быстрой синхронизированной базе. Если выключен - напрямую в Google Контактах.",
+      parameters: {
+        type: Type.OBJECT,
+        properties: {
+          query: {
+            type: Type.STRING,
+            description: "Имя, фамилия или email для поиска. Например: 'Иван Петров'.",
+          },
+        },
+        required: ["query"],
+      },
+    },
+    {
+      name: "perform_contact_action",
+      description: "Выполняет немедленное действие с контактом (звонок, email). Поиск контакта происходит в Supabase, если он включен, или напрямую в Google Контактах.",
+      parameters: {
+        type: Type.OBJECT,
+        properties: {
+          query: {
+            type: Type.STRING,
+            description: "Имя, фамилия или email контакта для действия. Например: 'Иван Петров'.",
+          },
+          action: {
+            type: Type.STRING,
+            description: "Тип действия, которое нужно совершить. 'call' для звонка, 'email' для письма.",
+            enum: ['call', 'email']
+          },
+        },
+        required: ["query", "action"],
+      },
+    },
     {
       name: "propose_document_with_content",
       description: "Предлагает пользователю создать документ с предварительно сгенерированным содержанием на основе истории чата.",
@@ -159,66 +192,24 @@ const baseTools = [
     },
 ];
 
-const supabaseOnlyTools = [
-    {
-      name: "find_contacts",
-      description: "Ищет контакты в синхронизированной базе данных по имени, фамилии или email.",
-      parameters: {
-        type: Type.OBJECT,
-        properties: {
-          query: {
-            type: Type.STRING,
-            description: "Имя, фамилия или email для поиска. Например: 'Иван Петров'.",
-          },
-        },
-        required: ["query"],
-      },
-    },
-    {
-      name: "perform_contact_action",
-      description: "Выполняет немедленное действие с контактом, такое как звонок или отправка email, когда не указано конкретное время в будущем. Для этого используется поиск по синхронизированной базе.",
-      parameters: {
-        type: Type.OBJECT,
-        properties: {
-          query: {
-            type: Type.STRING,
-            description: "Имя, фамилия или email контакта для действия. Например: 'Иван Петров'.",
-          },
-          action: {
-            type: Type.STRING,
-            description: "Тип действия, которое нужно совершить. 'call' для звонка, 'email' для письма.",
-            enum: ['call', 'email']
-          },
-        },
-        required: ["query", "action"],
-      },
-    },
-];
+// No longer needed, tools moved to baseTools
+const supabaseOnlyTools = [];
 
 
 const getSystemInstruction = (isSupabaseEnabled) => {
     const baseInstruction = `Ты — «Секретарь+», проактивный личный ИИ-ассистент, работающий с данными пользователя.`;
 
     const principles = [
-        `**Поиск документов:** Для поиска документов (\`find_documents\`) ты используешь доступный источник: либо базу данных (если Supabase включен), либо прямой поиск в Google Drive.`
+        `**Поиск контактов:** Ты ищешь контакты (\`find_contacts\`) и выполняешь с ними действия (\`perform_contact_action\`). ${isSupabaseEnabled ? "Поиск происходит по быстрой синхронизированной базе данных Supabase." : "Поиск происходит напрямую в Google Контактах пользователя, что может занять немного больше времени."}`,
+        `**Поиск документов:** Для поиска документов (\`find_documents\`) ты используешь доступный источник: ${isSupabaseEnabled ? "быструю базу данных Supabase." : "прямой поиск в Google Drive."}`
     ];
-
-    if (isSupabaseEnabled) {
-        principles.unshift(
-            `**Поиск контактов:** Для поиска контактов (\`find_contacts\`) и немедленных действий с ними (\`perform_contact_action\`) ты **всегда** обращаешься к синхронизированной базе данных Supabase. Эти функции доступны только с Supabase.`
-        );
-    } else {
-        principles.unshift(
-            `**Поиск контактов:** Функция поиска контактов через чат в данный момент недоступна, так как Supabase отключен. Сообщай об этом пользователю, если он просит найти контакт.`
-        );
-    }
 
     const commonRules = `
 3.  **Диалог — ключ ко всему:** Если информации недостаточно, задавай уточняющие вопросы.
 4.  **Сначала уточнение, потом действие:** Никогда не создавай событие или задачу, если в запросе есть неоднозначные данные (имена людей, названия документов).
-    -   Упомянуто имя ('Иван')? ${isSupabaseEnabled ? "Используй `find_contacts`, покажи пользователю варианты из базы в виде карточки выбора. Дождись его выбора." : "Сообщи пользователю, что поиск контактов недоступен."}
+    -   Упомянуто имя ('Иван')? Используй \`find_contacts\`, покажи пользователю варианты из доступного источника в виде карточки выбора. Дождись его выбора.
     -   Упомянут документ ('отчет')? Используй \`find_documents\`, покажи пользователю варианты из доступного источника в виде карточки выбора. Дождись его выбора.
-5.  **Работа с контактами:** ${isSupabaseEnabled ? "Если пользователь выбирает контакт без email-адреса для создания события, ты должен явно спросить у пользователя этот email. **КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО** придумывать или подставлять несуществующие email-адреса." : "При создании события запрашивай email-адреса участников напрямую у пользователя."}
+5.  **Работа с контактами:** Если пользователь выбирает контакт без email-адреса для создания события, ты должен явно спросить у пользователя этот email. **КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО** придумывать или подставлять несуществующие email-адреса.
 6.  **Сбор информации:** Только после того, как все участники, документы и другие детали подтверждены пользователем, вызывай финальную функцию, например, \`create_calendar_event\`.
 7.  **Контекст:** **Критически важно:** Ты должен анализировать ВЕСЬ предыдущий диалог, чтобы понимать текущий контекст.
 8.  **Дата и время:** Всегда учитывай текущую дату и время при планировании. Сегодняшняя дата: ${new Date().toLocaleDateString('ru-RU')}.
@@ -268,9 +259,7 @@ export const callGemini = async ({
     }
     
     let availableTools = [...baseTools];
-    if (isSupabaseEnabled) {
-        availableTools.push(...supabaseOnlyTools);
-    }
+    // Supabase tools are now part of base tools, logic is handled in the switch case
     
     const toolsConfig = (isGoogleConnected) ? { functionDeclarations: availableTools } : undefined;
 
@@ -344,11 +333,10 @@ export const callGemini = async ({
                     break;
                 }
                 case 'find_contacts': {
-                    if (!supabaseService) {
-                         resultMessage.text = "Функция поиска контактов отключена, так как Supabase неактивен.";
-                         break;
-                    }
-                    const results = await supabaseService.searchContacts(args.query);
+                    const results = isSupabaseEnabled && supabaseService
+                        ? await supabaseService.searchContacts(args.query)
+                        : await serviceProvider.findContacts(args.query);
+
                     if (results.length === 1) {
                         const person = results[0];
                         resultMessage.text = `Найден контакт: ${person.display_name}. Что вы хотите сделать?`;
@@ -372,11 +360,10 @@ export const callGemini = async ({
                     break;
                 }
                 case 'perform_contact_action': {
-                     if (!supabaseService) {
-                         resultMessage.text = "Функция действий с контактами отключена, так как Supabase неактивен.";
-                         break;
-                    }
-                    const results = await supabaseService.searchContacts(args.query);
+                    const results = isSupabaseEnabled && supabaseService
+                        ? await supabaseService.searchContacts(args.query)
+                        : await serviceProvider.findContacts(args.query);
+                    
                      if (results.length === 1) {
                         const person = results[0];
                         const actionText = args.action === 'call' ? 'позвонить' : 'написать';

@@ -144,6 +144,31 @@ export class GoogleServiceProvider {
 
         return response.result.connections || [];
     }
+    
+    // New method for direct contact search
+    async findContacts(query) {
+        await this.ensureGapiIsReady();
+        await this.gapi.client.load('people', 'v1');
+
+        const response = await this.gapi.client.people.people.searchContacts({
+            query: query,
+            readMask: 'names,emailAddresses,phoneNumbers,photos',
+            pageSize: 10,
+        });
+        
+        const results = response.result.results || [];
+        // Map the Google API response to the same structure Supabase uses
+        // to ensure components like ResultCard work in both modes.
+        return results.map(result => {
+            const c = result.person;
+            return {
+                display_name: c.names?.[0]?.displayName || null,
+                email: c.emailAddresses?.[0]?.value || null,
+                phone: c.phoneNumbers?.[0]?.value || null,
+                avatar_url: c.photos?.[0]?.url || null,
+            };
+        }).filter(c => c.display_name);
+    }
 
     async getAllFiles() {
         await this.ensureGapiIsReady();
