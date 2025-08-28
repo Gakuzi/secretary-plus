@@ -492,18 +492,20 @@ if (!window.isSecretaryPlusAppInitialized) {
 
 ---
 **ДАННЫЕ СОБЫТИЯ**
+- **ID:** ${payload.id}
 - **Название:** ${summary}
 - **Описание:** ${description || 'Нет'}
 - **Время:** ${start} - ${end}`;
                 break;
             }
             case 'analyze_task': {
-                const { title, notes, due } = payload;
+                const { id, title, notes, due } = payload;
                 const dueDate = due ? new Date(due).toLocaleString('ru-RU') : 'Не указан';
-                promptToSend = `Проанализируй эту задачу и предложи релевантные действия (например, "удалить", "создать событие в календаре", "отметить как выполненную").
+                promptToSend = `Проанализируй эту задачу и предложи релевантные действия (например, "изменить", "удалить", "создать событие в календаре").
 
 ---
 **ДАННЫЕ ЗАДАЧИ**
+- **ID:** ${id}
 - **Название:** ${title}
 - **Заметки:** ${notes || 'Нет'}
 - **Срок выполнения:** ${dueDate}`;
@@ -543,7 +545,7 @@ ${payload.body}`;
                 break;
             }
             case 'analyze_document':
-                promptToSend = `Я выбрал документ "${payload.name}". Предложи действия, которые можно с ним совершить (например, "отправить по почте", "создать задачу на его основе", "обобщить по названию").`;
+                promptToSend = `Я выбрал документ "${payload.name}". Ссылка для открытия: ${payload.url}. Предложи действия, которые можно с ним совершить (например, "отправить по почте", "создать задачу на его основе").`;
                 break;
             case 'create_document_prompt':
                 promptToSend = `Да, создать новый документ с названием "${payload.query}".`;

@@ -399,6 +399,26 @@ export class GoogleServiceProvider {
         return response.result;
     }
 
+    async updateTask(details) {
+        await this.ensureGapiIsReady();
+        await this.gapi.client.load('tasks', 'v1');
+        const { taskId, ...updateFields } = details;
+        
+        if (!taskId) throw new Error("Task ID is required for an update.");
+
+        const resource = {};
+        if (updateFields.title) resource.title = updateFields.title;
+        if (updateFields.notes) resource.notes = updateFields.notes;
+        if (updateFields.dueDate) resource.due = updateFields.dueDate;
+        
+        const response = await this.gapi.client.tasks.tasks.patch({
+            tasklist: '@default',
+            task: taskId,
+            resource: resource,
+        });
+        return response.result;
+    }
+
      async deleteTask({ taskId, tasklist = '@default' }) {
         await this.ensureGapiIsReady();
         await this.gapi.client.load('tasks', 'v1');
