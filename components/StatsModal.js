@@ -10,20 +10,36 @@ const CHART_COLORS = [
     '#eab308', // yellow-500
     '#6366f1', // indigo-500
     '#ec4899', // pink-500
+    '#06b6d4', // cyan-500
+    '#22c55e', // green-500
+    '#a855f7', // purple-500
+    '#f43f5e', // rose-500
 ];
 
 // Human-readable names for function calls
 const ACTION_NAMES = {
+    'get_calendar_events': 'Просмотр календаря',
     'create_calendar_event': 'Создание событий',
-    'find_contacts': 'Поиск контактов',
-    'perform_contact_action': 'Действия с контактами',
+    'delete_calendar_event': 'Удаление событий',
+    'get_tasks': 'Просмотр задач',
+    'create_task': 'Создание задач',
+    'update_task': 'Обновление задач',
+    'delete_task': 'Удаление задач',
+    'get_recent_emails': 'Чтение почты',
+    'send_email': 'Отправка Email',
+    'delete_email': 'Удаление писем',
     'find_documents': 'Поиск документов',
+    'get_recent_files': 'Поиск недавних файлов',
     'create_google_doc': 'Создание Google Docs',
     'create_google_sheet': 'Создание Google Sheets',
     'create_google_doc_with_content': 'Создание Docs с текстом',
-    'create_task': 'Создание задач',
-    'send_email': 'Отправка Email',
     'propose_document_with_content': 'Предложение документа',
+    'find_contacts': 'Поиск контактов',
+    'perform_contact_action': 'Действия с контактами',
+    'create_note': 'Создание заметок',
+    'find_notes': 'Поиск заметок',
+    'summarize_and_save_memory': 'Сохранение в память',
+    'recall_memory': 'Чтение из памяти',
 };
 
 export function createStatsModal(statsData, onClose) {

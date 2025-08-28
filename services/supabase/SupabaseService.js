@@ -368,4 +368,28 @@ export class SupabaseService {
         if (error) throw error;
         return data;
     }
+
+    // --- Action Statistics ---
+    async getActionStats() {
+        const { data, error } = await this.client
+            .from('action_stats')
+            .select('function_name, call_count');
+        if (error) {
+            console.error("Error fetching action stats:", error);
+            return {}; // Return empty object on error
+        }
+        // Convert array of objects to a single object like { name: count }
+        return data.reduce((acc, stat) => {
+            acc[stat.function_name] = stat.call_count;
+            return acc;
+        }, {});
+    }
+
+    async incrementActionStat(functionName) {
+        const { error } = await this.client.rpc('increment_stat', { fn_name: functionName });
+        if (error) {
+            console.error(`Failed to increment action stat for "${functionName}":`, error);
+            // Do not throw, this is a non-critical background task.
+        }
+    }
 }

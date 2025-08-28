@@ -278,6 +278,7 @@ if (!window.isSecretaryPlusAppInitialized) {
             try {
                 state.userProfile = await googleProvider.getUserProfile();
                 state.isGoogleConnected = true;
+                state.actionStats = await supabaseService.getActionStats(); // Load stats on login
                 startAutoSync();
             } catch (error) {
                 console.error("Failed to fetch Google user profile via Supabase:", error);
@@ -288,6 +289,7 @@ if (!window.isSecretaryPlusAppInitialized) {
             state.supabaseUser = null;
             state.isGoogleConnected = false;
             state.userProfile = null;
+            state.actionStats = {}; // Clear stats on logout
             googleProvider.setAuthToken(null);
             stopAutoSync();
         }
@@ -435,7 +437,12 @@ if (!window.isSecretaryPlusAppInitialized) {
             });
 
             if (response.functionCallName) {
+                // Update local state for immediate UI feedback
                 state.actionStats[response.functionCallName] = (state.actionStats[response.functionCallName] || 0) + 1;
+                // Persist the stat change to the database in the background
+                if (supabaseService) {
+                    await supabaseService.incrementActionStat(response.functionCallName);
+                }
             }
             
             // If the assistant provides system context (like email content), add it to history
