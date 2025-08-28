@@ -712,6 +712,19 @@ export const callGemini = async ({
 
     } catch (error) {
         console.error("Gemini API call failed:", error);
+
+        // Check for specific quota exhaustion error
+        if (error.message && (error.message.includes('RESOURCE_EXHAUSTED') || error.message.includes('"code":429'))) {
+            return {
+                id: Date.now().toString(),
+                sender: MessageSender.SYSTEM,
+                text: "Достигнут дневной лимит запросов к Gemini API. Вы использовали все бесплатные запросы, доступные на сегодня.\n\n" +
+                      "**Что делать?**\n" +
+                      "*   **Подождать:** Ваш лимит автоматически обновится завтра.\n" +
+                      "*   **Обновить план:** Для более активного использования вы можете подключить биллинг к вашему проекту в [Google Cloud](https://console.cloud.google.com/billing). Подробнее об этом можно прочитать в [инструкции по квотам Gemini API](https://ai.google.dev/gemini-api/docs/rate-limits)."
+            };
+        }
+
         return {
             id: Date.now().toString(),
             sender: MessageSender.SYSTEM,

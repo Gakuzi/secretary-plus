@@ -2,17 +2,6 @@ import { createMessageElement } from './Message.js';
 import { MicrophoneIcon, SendIcon, CameraIcon, LockIcon, TrashIcon, AttachmentIcon } from './icons/Icons.js';
 import { SpeechRecognizer } from '../utils/speech.js';
 
-// Get pdf.js from the global scope, as it's now loaded via a <script> tag.
-const { pdfjsLib } = window;
-
-// Set worker path for pdf.js
-if (pdfjsLib) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js`;
-} else {
-    console.error("pdf.js library not found. PDF functionality will be disabled.");
-}
-
-
 // Module-level variables
 let chatLog, chatInput, sendButton, voiceRecordButton, cameraButton, attachButton, fileInput;
 let onSendMessageCallback;
@@ -48,10 +37,14 @@ async function handleFileSelect(file) {
         };
         reader.readAsDataURL(file);
     } else if (file.type === 'application/pdf') {
+        const { pdfjsLib } = window;
         if (!pdfjsLib) {
             alert('Библиотека для чтения PDF не загружена. Функция недоступна.');
+            console.error("pdf.js library (window.pdfjsLib) not found. PDF functionality will be disabled.");
             return;
         }
+        // Set worker path for pdf.js right before use to avoid race conditions on app load.
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js`;
 
         const originalPlaceholder = chatInput.placeholder;
         chatInput.placeholder = `Обработка PDF: ${file.name}...`;
@@ -284,29 +277,42 @@ export function createChatInterface(onSendMessage, showCameraView) {
             </div>
             <div id="input-bar" class="flex items-end w-full gap-2 bg-gray-800 rounded-2xl p-2 border border-gray-700">
                 <div id="left-input-actions" class="flex items-center self-end flex-shrink-0">
-                     <button id="camera-button" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-700">${CameraIcon}</button>
-                     <button id="attach-button" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-700">${AttachmentIcon}</button>
-                     <input type="file" id="file-input" class="hidden" accept="image/*,application/pdf">
+                     <button id="camera-button" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Сделать фото">
+                        ${CameraIcon}
+                    </button>
+                    <button id="attach-button" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Прикрепить файл">
+                        ${AttachmentIcon}
+                    </button>
                 </div>
-                <button id="cancel-recording-button" class="hidden w-10 h-10 items-center justify-center rounded-full hover:bg-gray-700 text-red-500 flex-shrink-0 self-end">${TrashIcon}</button>
                 
-                <div class="flex-1 relative flex items-end">
-                    <div id="locked-recording-indicator" class="hidden absolute left-2 bottom-2 items-center gap-2 text-red-500 font-mono font-semibold">
-                        <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
-                        <span class="recording-timer">0:00</span>
-                    </div>
-                    <textarea id="chat-input" placeholder="Сообщение..." rows="1" class="w-full bg-transparent border-none outline-none text-gray-100 text-base resize-none"></textarea>
+                <!-- This button is visually hidden but used to trigger file selection -->
+                <input type="file" id="file-input" class="hidden" accept="image/*,application/pdf">
+
+                <!-- Cancel button for locked recording -->
+                <button id="cancel-recording-button" class="hidden self-end flex-shrink-0 p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Отменить запись">
+                    ${TrashIcon}
+                </button>
+
+                <!-- Flashing indicator for locked recording -->
+                <div id="locked-recording-indicator" class="hidden items-center gap-2 self-end flex-shrink-0 text-red-500">
+                    <span class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+                    <span class="font-mono font-semibold recording-timer">0:00</span>
                 </div>
 
+                <textarea id="chat-input" class="w-full self-end bg-transparent border-none focus:outline-none p-2 resize-none" placeholder="Сообщение..." rows="1"></textarea>
+                
                 <div class="flex items-center self-end flex-shrink-0">
-                    <button id="send-button" class="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 hidden items-center justify-center">${SendIcon}</button>
-                    <button id="voice-record-button" class="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 flex items-center justify-center">${MicrophoneIcon}</button>
+                    <button id="send-button" class="hidden items-center justify-center w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 transition-colors" aria-label="Отправить">
+                        ${SendIcon}
+                    </button>
+                    <button id="voice-record-button" class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors" aria-label="Записать голосовое сообщение">
+                        ${MicrophoneIcon}
+                    </button>
                 </div>
             </div>
         </div>
     `;
 
-    // --- DOM Element assignments ---
     chatLog = chatWrapper.querySelector('#chat-log');
     chatInput = chatWrapper.querySelector('#chat-input');
     sendButton = chatWrapper.querySelector('#send-button');
@@ -314,40 +320,52 @@ export function createChatInterface(onSendMessage, showCameraView) {
     cameraButton = chatWrapper.querySelector('#camera-button');
     attachButton = chatWrapper.querySelector('#attach-button');
     fileInput = chatWrapper.querySelector('#file-input');
-    
-    // --- Event Listeners ---
+    const cancelRecordingButton = chatWrapper.querySelector('#cancel-recording-button');
+
+    // --- EVENT LISTENERS ---
     sendButton.addEventListener('click', sendMessageHandler);
-    chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessageHandler(); } });
     chatInput.addEventListener('input', updateInputUI);
-    
-    cameraButton.addEventListener('click', showCameraView); 
-    attachButton.addEventListener('click', () => fileInput.click()); 
-    fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleFileSelect(e.target.files[0]); });
+    chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessageHandler();
+        }
+    });
+
+    cameraButton.addEventListener('click', showCameraView);
+    attachButton.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            handleFileSelect(e.target.files[0]);
+            // Reset the input so the same file can be selected again
+            e.target.value = null;
+        }
+    });
 
     voiceRecordButton.addEventListener('pointerdown', pointerDown);
-    chatWrapper.querySelector('#cancel-recording-button').addEventListener('click', () => stopRecording(true));
+    cancelRecordingButton.addEventListener('click', () => stopRecording(true));
 
-    // --- Speech Recognizer Setup ---
     speechRecognizer = new SpeechRecognizer(
         (transcript) => {
-            // Live transcription
             chatInput.value = transcript;
             updateInputUI();
-            chatInput.scrollTop = chatInput.scrollHeight; // Keep cursor visible
         },
         (finalTranscript) => {
-            // On successful end
-            stopRecording(false); // Clean up UI state
-            if (finalTranscript.trim()) {
-                chatInput.value = finalTranscript;
-                sendMessageHandler();
+            if (recordMode === 'tap' && finalTranscript) {
+                onSendMessageCallback(finalTranscript);
+                chatInput.value = '';
+                stopRecording(false);
+            }
+            if (recordMode === 'hold' && finalTranscript) {
+                 onSendMessageCallback(finalTranscript);
+                 chatInput.value = '';
             }
             updateInputUI();
         },
         (error) => {
             console.error('Speech recognition error:', error);
             if (error !== 'no-speech' && error !== 'aborted') {
-                 alert(`Ошибка распознавания речи: ${error}`);
+                alert(`Ошибка распознавания речи: ${error}`);
             }
             stopRecording(true); // Cancel on error
             updateInputUI();
@@ -355,35 +373,43 @@ export function createChatInterface(onSendMessage, showCameraView) {
     );
 
     updateInputUI();
+
     return chatWrapper;
 }
 
-// --- PUBLIC FUNCTIONS FOR CHAT MANIPULATION ---
 export function addMessageToChat(message) {
     if (!chatLog) return;
-    const welcomeScreen = chatLog.querySelector('.welcome-screen-container');
-    if (welcomeScreen) chatLog.innerHTML = '';
+    const isScrolledToBottom = chatLog.scrollHeight - chatLog.clientHeight <= chatLog.scrollTop + 1;
+    
+    // Find and remove loading indicator if it exists
+    const loadingIndicator = chatLog.querySelector('.loading-indicator');
+    if (loadingIndicator) {
+        loadingIndicator.remove();
+    }
+    
     const messageElement = createMessageElement(message);
     chatLog.appendChild(messageElement);
-    chatLog.scrollTop = chatLog.scrollHeight;
+
+    if (isScrolledToBottom) {
+        chatLog.scrollTop = chatLog.scrollHeight;
+    }
 }
 
 export function showLoadingIndicator() {
-    if (!chatLog) return;
+    if (!chatLog || chatLog.querySelector('.loading-indicator')) return;
+    
     const loadingElement = document.createElement('div');
-    loadingElement.id = 'loading-indicator';
-    loadingElement.className = 'flex items-start space-x-3 message-item';
+    loadingElement.className = 'flex items-start space-x-3 message-item loading-indicator';
     loadingElement.innerHTML = `
-        <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center font-bold text-lg flex-shrink-0">S+</div>
+        <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0 bg-gray-700">S+</div>
         <div class="max-w-xl">
             <div class="font-bold">Секретарь+</div>
-            <div class="p-3 rounded-lg mt-1 bg-gray-800">
-                <div class="text-gray-400 flex items-center">Думаю
-                    <span class="loading-dots">
-                        <span class="dot"></span>
-                        <span class="dot"></span>
-                        <span class="dot"></span>
-                    </span>
+            <div class="p-3 rounded-lg mt-1 bg-gray-800 flex items-center">
+                <span>Думаю</span>
+                <div class="loading-dots">
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
                 </div>
             </div>
         </div>
@@ -393,44 +419,32 @@ export function showLoadingIndicator() {
 }
 
 export function hideLoadingIndicator() {
-    const indicator = document.getElementById('loading-indicator');
-    if (indicator) indicator.remove();
+    const loadingIndicator = chatLog?.querySelector('.loading-indicator');
+    if (loadingIndicator) {
+        loadingIndicator.remove();
+    }
 }
 
-const defaultActions = [
-    { label: 'Что дальше по плану?', prompt: 'Что у меня дальше по плану в календаре?' },
-    { label: 'Какие у меня задачи?', prompt: 'Покажи мои активные задачи.' },
-    { label: 'Написать письмо', prompt: 'Напиши письмо моему коллеге о статусе проекта.' },
-    { label: 'Создать заметку', prompt: 'Создай быструю заметку: ' },
-];
 
 export function renderContextualActions(actions) {
     const frame = document.getElementById('contextual-actions-frame');
     const container = document.getElementById('action-bar-container');
-    if (!container || !frame) return;
 
-    let actionsToRender;
+    if (!frame || !container) return;
 
-    if (actions === undefined) {
-        // If no actions are specified at all (e.g., after a simple text response from AI)
-        actionsToRender = defaultActions;
-    } else {
-        // If actions are specified (e.g. from AI response, or null for welcome screen), respect that.
-        // This means `null` or `[]` will result in hiding the bar.
-        actionsToRender = actions;
+    if (!actions || actions.length === 0) {
+        frame.style.display = 'none';
+        return;
     }
     
-    if (actionsToRender && actionsToRender.length > 0) {
-        container.innerHTML = actionsToRender.map(action => {
-            return `
-                <button class="action-bar-button" data-action-prompt="${action.prompt}">
-                    ${action.label}
-                </button>
-            `;
-        }).join('');
-        frame.style.display = 'block';
-    } else {
-        frame.style.display = 'none';
-        container.innerHTML = '';
-    }
+    container.innerHTML = actions.map(action => {
+        const iconSVG = Icons[action.icon] || '';
+        return `
+            <button class="action-bar-button flex items-center gap-2" data-action-prompt="${action.prompt}">
+                ${iconSVG ? `<span class="w-4 h-4">${iconSVG}</span>` : ''}
+                ${action.label}
+            </button>
+        `;
+    }).join('');
+    frame.style.display = 'block';
 }
