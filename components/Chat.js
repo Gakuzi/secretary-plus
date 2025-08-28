@@ -4,7 +4,7 @@ import { SpeechRecognizer } from '../utils/speech.js';
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Set worker path for pdf.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js`;
 
 
 // Module-level variables
@@ -284,7 +284,7 @@ export function createChatInterface(onSendMessage, showCameraView) {
                         <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
                         <span class="recording-timer">0:00</span>
                     </div>
-                    <textarea id="chat-input" placeholder="Сообщение..." rows="1" class="w-full bg-transparent border-none outline-none text-gray-100 text-base resize-none py-2 px-2"></textarea>
+                    <textarea id="chat-input" placeholder="Сообщение..." rows="1" class="w-full bg-transparent border-none outline-none text-gray-100 text-base resize-none"></textarea>
                 </div>
 
                 <div class="flex items-center self-end flex-shrink-0">
