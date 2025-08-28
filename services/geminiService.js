@@ -679,7 +679,14 @@ export const callGemini = async ({
             return resultMessage;
         }
 
-        const textResponse = response.text || "Я не смог обработать ваш запрос.";
+        // Manually build the text response from all parts for robustness,
+        // ensuring contextual actions are not missed.
+        const rawText = firstCandidate?.content?.parts
+            ?.map(part => part.text ?? '')
+            .join('') || '';
+
+        // Use the raw text, with a fallback if it's empty.
+        const textResponse = rawText.trim() || "Я не смог обработать ваш запрос.";
 
         const contextualActionsRegex = /\[CONTEXT_ACTIONS\]\s*(.*)/s;
         const quickRepliesRegex = /\[QUICK_REPLY\]\s*(.*)/g;
