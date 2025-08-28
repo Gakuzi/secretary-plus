@@ -159,10 +159,10 @@ export class GoogleServiceProvider {
         const response = await this.gapi.client.oauth2.userinfo.get();
         const profile = response.result;
         
-        // Add validation to ensure we have a valid profile.
-        if (!profile || !profile.email) {
-            console.error('Invalid user profile response from Google:', response);
-            throw new Error("Не удалось получить данные профиля Google. Токен может быть недействительным или иметь недостаточные права.");
+        // Add validation to ensure we have a valid profile with all required fields.
+        if (!profile || !profile.email || !profile.name || !profile.picture) {
+            console.error('Incomplete user profile response from Google:', response);
+            throw new Error("Не удалось получить полные данные профиля Google. Токен может быть недействительным или иметь недостаточные права.");
         }
 
         return {

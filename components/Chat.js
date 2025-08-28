@@ -110,11 +110,9 @@ function updateInputUI() {
     if (hasText) {
         voiceRecordButton.classList.add('hidden');
         sendButton.classList.remove('hidden');
-        sendButton.classList.add('flex');
     } else {
         voiceRecordButton.classList.remove('hidden');
         sendButton.classList.add('hidden');
-        sendButton.classList.remove('flex');
     }
 }
 
@@ -193,7 +191,6 @@ function lockRecording() {
     document.getElementById('locked-recording-indicator').classList.remove('hidden');
 
     sendButton.classList.remove('hidden');
-    sendButton.classList.add('flex');
     voiceRecordButton.classList.add('hidden');
     chatInput.placeholder = '';
 }
@@ -290,8 +287,8 @@ export function createChatInterface(onSendMessage, showCameraView, onSystemError
                     </button>
                 </div>
 
-                <div id="input-bar" class="flex items-end w-full flex-1 gap-2 bg-gray-800 rounded-2xl p-2 border border-gray-700">
-                    <div id="internal-left-actions" class="flex items-center self-end flex-shrink-0">
+                <div id="input-bar" class="flex items-end w-full flex-1 gap-2 bg-gray-800 rounded-2xl p-1 border border-gray-700">
+                    <div id="internal-left-actions" class="flex items-center self-end flex-shrink-0 pl-2">
                         <!-- This container is for elements inside the input bar that might appear during special states, like recording lock -->
                     </div>
                     
@@ -304,18 +301,18 @@ export function createChatInterface(onSendMessage, showCameraView, onSystemError
                     </button>
 
                     <!-- Flashing indicator for locked recording -->
-                    <div id="locked-recording-indicator" class="hidden items-center gap-2 self-end flex-shrink-0 text-red-500">
+                    <div id="locked-recording-indicator" class="hidden items-center gap-2 self-end flex-shrink-0 text-red-500 pl-2">
                         <span class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
                         <span class="font-mono font-semibold recording-timer">0:00</span>
                     </div>
 
-                    <textarea id="chat-input" class="w-full self-end bg-transparent border-none focus:outline-none p-2 resize-none" placeholder="Сообщение..." rows="1"></textarea>
+                    <textarea id="chat-input" class="self-end" placeholder="Сообщение..." rows="1"></textarea>
                     
-                    <div class="flex items-center self-end flex-shrink-0">
-                        <button id="send-button" class="hidden items-center justify-center w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 transition-colors" aria-label="Отправить">
+                    <div class="flex items-center self-end flex-shrink-0 p-1">
+                        <button id="send-button" class="hidden flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700 transition-colors" aria-label="Отправить">
                             ${Icons.SendIcon}
                         </button>
-                        <button id="voice-record-button" class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors" aria-label="Записать голосовое сообщение">
+                        <button id="voice-record-button" class="flex items-center justify-center w-8 h-8 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors" aria-label="Записать голосовое сообщение">
                             ${Icons.MicrophoneIcon}
                         </button>
                     </div>

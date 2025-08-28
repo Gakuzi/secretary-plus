@@ -33,6 +33,7 @@ export function createCameraView(onCapture, onClose) {
         onClose();
     });
     
+    // Request the rear camera by default ('environment'). It will fallback to the front camera if not available.
     navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
         .then(s => {
             stream = s;

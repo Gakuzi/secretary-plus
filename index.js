@@ -9,7 +9,7 @@ import { createHelpModal } from './components/HelpModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
-import { SettingsIcon, ChartBarIcon, NewChatIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
+import { SettingsIcon, ChartBarIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './constants.js';
 
@@ -129,32 +129,22 @@ if (!window.isSecretaryPlusAppInitialized) {
                 }
             }
 
-
             const profileElement = document.createElement('div');
             profileElement.className = 'flex items-center space-x-2';
             profileElement.innerHTML = `
                 <div class="relative" title="${proxyIndicatorTitle}">
                     <img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full ${proxyRingClass} ring-offset-2 ring-offset-gray-800">
                 </div>
-                <span class="text-sm font-medium hidden sm:block">${state.userProfile.name}</span>
             `;
             authContainer.appendChild(profileElement);
         } else {
             const loginButton = document.createElement('button');
             loginButton.id = 'login-button';
-            loginButton.className = 'px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors';
-            loginButton.textContent = 'Войти через Google';
+            loginButton.className = 'px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors text-sm font-semibold';
+            loginButton.textContent = 'Войти';
             
-            const loginContainer = document.createElement('div');
-            loginContainer.className = 'flex flex-col items-start';
-            loginContainer.appendChild(loginButton);
-
-            if (state.settings.isSupabaseEnabled && !state.isSupabaseReady) {
-                loginContainer.innerHTML += `<p class="text-xs text-yellow-400 mt-1">Supabase недоступен. Будет использовано резервное подключение.</p>`;
-            }
-
-            authContainer.appendChild(loginContainer);
-            document.getElementById('login-button').addEventListener('click', handleLogin);
+            authContainer.appendChild(loginButton);
+            loginButton.addEventListener('click', handleLogin);
         }
     }
 
@@ -391,9 +381,10 @@ if (!window.isSecretaryPlusAppInitialized) {
         
         // This is called when NOT using Supabase. So we set state directly.
         googleProvider.setAuthToken(tokenResponse.access_token);
-        state.isGoogleConnected = true;
+        
         try {
             state.userProfile = await googleProvider.getUserProfile();
+            state.isGoogleConnected = true;
             // In direct mode, we don't sync settings or stats from a DB.
             state.actionStats = {}; // No stats in direct mode.
         } catch (error) {
@@ -401,6 +392,7 @@ if (!window.isSecretaryPlusAppInitialized) {
             showSystemError(`Не удалось получить профиль Google: ${error.message}`);
             state.isGoogleConnected = false;
             state.userProfile = null;
+            googleProvider.setAuthToken(null);
         }
         
         renderAuth();
@@ -508,7 +500,9 @@ if (!window.isSecretaryPlusAppInitialized) {
     }
     
     function handleNewChat() {
-        if (state.messages.length > 0 && confirm('Вы уверены, что хотите начать новый чат? Вся текущая история будет удалена.')) {
+        if (state.messages.length === 0) return;
+        
+        if (confirm('Вы уверены, что хотите начать новый чат? Вся текущая история будет удалена.')) {
             state.messages = [];
             state.lastSeenEmailId = null;
             renderMainContent();

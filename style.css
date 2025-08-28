@@ -245,7 +245,7 @@ body {
 
 #chat-input {
     box-sizing: border-box;
-    flex: 1;
+    width: 100%;
     background: transparent;
     border: none;
     outline: none;
@@ -254,6 +254,7 @@ body {
     line-height: 1.5rem;
     resize: none;
     overflow-y: hidden; /* Prevent internal scrollbar */
+    padding: 0.5rem; /* 8px */
     transition: opacity 0.2s, transform 0.2s;
 }
 
@@ -297,9 +298,6 @@ body.recording-active {
 }
 #input-bar.recording-locked #locked-recording-indicator {
     display: flex;
-}
-#input-bar.recording-locked #chat-input {
-    padding-left: 0;
 }
 
 

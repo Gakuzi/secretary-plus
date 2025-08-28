@@ -126,11 +126,19 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                              </p>
                              <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-3">
-                                    <span class="w-3 h-3 rounded-full ${authState.isGoogleConnected ? 'bg-green-500' : 'bg-red-500'}"></span>
-                                    <div>
-                                        <p class="font-semibold">Статус: ${authState.isGoogleConnected ? `Подключено` : 'Требуется вход'}</p>
-                                        ${authState.isGoogleConnected && authState.userProfile?.email ? `<p class="text-xs text-gray-400">(${authState.userProfile.email})</p>` : ''}
-                                    </div>
+                                    ${authState.isGoogleConnected && authState.userProfile ? `
+                                        <img src="${authState.userProfile.imageUrl}" alt="${authState.userProfile.name}" class="w-10 h-10 rounded-full">
+                                        <div>
+                                            <p class="font-semibold">${authState.userProfile.name}</p>
+                                            <p class="text-xs text-gray-400">${authState.userProfile.email}</p>
+                                        </div>
+                                    ` : `
+                                        <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">?</div>
+                                        <div>
+                                            <p class="font-semibold">Требуется вход</p>
+                                            <p class="text-xs text-gray-400">Войдите, чтобы начать</p>
+                                        </div>
+                                    `}
                                 </div>
                                 <div>
                                 ${authState.isGoogleConnected 
@@ -237,7 +245,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                     </div>
 
                     <!-- Sync Tab -->
-                    <div id="tab-sync" class="settings-tab-content space-y-6">
+                    <div id="tab-sync" class="settings-tab-content hidden space-y-6">
                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
                             <div class="flex items-center justify-between">
                                 <div>
@@ -283,21 +291,22 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     
     modalOverlay.querySelector('#close-settings').addEventListener('click', onClose);
     modalOverlay.querySelector('#save-settings').addEventListener('click', () => {
+        // More robust way of getting settings to prevent crashes if an element is missing
         const newSettings = {
-            geminiApiKey: modalOverlay.querySelector('#gemini-api-key').value.trim(),
-            googleClientId: modalOverlay.querySelector('#google-client-id').value.trim(),
-            isSupabaseEnabled: modalOverlay.querySelector('#supabase-enabled-toggle').checked,
-            isProxyEnabled: modalOverlay.querySelector('#proxy-enabled-toggle').checked,
-            geminiProxyUrl: modalOverlay.querySelector('#gemini-proxy-url').value.trim(),
-            timezone: modalOverlay.querySelector('#timezone-select').value,
-            enableEmailPolling: modalOverlay.querySelector('#email-polling-toggle').checked,
-            enableAutoSync: modalOverlay.querySelector('#auto-sync-enabled-toggle').checked,
+            geminiApiKey: modalOverlay.querySelector('#gemini-api-key')?.value.trim() ?? '',
+            googleClientId: modalOverlay.querySelector('#google-client-id')?.value.trim() ?? '',
+            isSupabaseEnabled: modalOverlay.querySelector('#supabase-enabled-toggle')?.checked ?? true,
+            isProxyEnabled: modalOverlay.querySelector('#proxy-enabled-toggle')?.checked ?? false,
+            geminiProxyUrl: modalOverlay.querySelector('#gemini-proxy-url')?.value.trim() ?? '',
+            timezone: modalOverlay.querySelector('#timezone-select')?.value ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+            enableEmailPolling: modalOverlay.querySelector('#email-polling-toggle')?.checked ?? true,
+            enableAutoSync: modalOverlay.querySelector('#auto-sync-enabled-toggle')?.checked ?? true,
             serviceMap: {
-                calendar: modalOverlay.querySelector('#calendar-provider-select').value,
-                tasks: modalOverlay.querySelector('#tasks-provider-select').value,
-                contacts: modalOverlay.querySelector('#contacts-provider-select').value,
-                files: modalOverlay.querySelector('#files-provider-select').value,
-                notes: modalOverlay.querySelector('#notes-provider-select').value,
+                calendar: modalOverlay.querySelector('#calendar-provider-select')?.value ?? 'google',
+                tasks: modalOverlay.querySelector('#tasks-provider-select')?.value ?? 'google',
+                contacts: modalOverlay.querySelector('#contacts-provider-select')?.value ?? 'google',
+                files: modalOverlay.querySelector('#files-provider-select')?.value ?? 'google',
+                notes: modalOverlay.querySelector('#notes-provider-select')?.value ?? 'supabase',
             }
         };
         onSave(newSettings);
