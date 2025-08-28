@@ -123,6 +123,12 @@ async function handleCardAction(e) {
     } else if (action === 'create_prep_task') {
         userPromptText = 'Да, создать задачу для подготовки.';
         systemPrompt = `Пользователь хочет создать задачу для подготовки к встрече. Вызови функцию create_task с этими данными: ${JSON.stringify(payload)}`;
+    } else if (action === 'create_doc_with_content') {
+        userPromptText = `Да, создать документ "${payload.title}" с предложенным содержанием.`;
+        systemPrompt = `Пользователь согласился создать документ с содержанием. Вызови функцию create_google_doc_with_content с этими данными: ${JSON.stringify(payload)}`;
+    } else if (action === 'create_empty_doc') {
+        userPromptText = `Нет, создать пустой документ "${payload.title}".`;
+        systemPrompt = `Пользователь решил создать пустой документ. Вызови функцию create_google_doc с названием "${payload.title}".`;
     }
 
 

@@ -186,6 +186,41 @@ export class GoogleServiceProvider {
         return response.result;
     }
 
+    async createGoogleDocWithContent(title, content) {
+        await this.initialize();
+        // 1. Create the document with the Drive API to get an ID
+        await this.gapi.client.load('drive', 'v3');
+        const fileMetadata = {
+            name: title,
+            mimeType: 'application/vnd.google-apps.document',
+        };
+        const driveResponse = await this.gapi.client.drive.files.create({
+            resource: fileMetadata,
+            fields: 'id, name, webViewLink, iconLink, mimeType',
+        });
+        const documentId = driveResponse.result.id;
+    
+        if (!documentId || !content) {
+            return driveResponse.result;
+        }
+    
+        // 2. Insert the content using the Docs API
+        await this.gapi.client.load('docs', 'v1');
+        await this.gapi.client.docs.documents.batchUpdate({
+            documentId: documentId,
+            resource: {
+                requests: [{
+                    insertText: {
+                        location: { index: 1 }, // Beginning of the document
+                        text: content,
+                    },
+                }],
+            },
+        });
+    
+        return driveResponse.result;
+    }
+
     async createGoogleSheet(title) {
         await this.initialize();
         await this.gapi.client.load('drive', 'v3');

@@ -66,6 +66,34 @@ function createStandardCard(card) {
     `;
 }
 
+function createDocumentProposalCard(card) {
+    const iconSVG = Icons[card.icon] || '';
+    const summaryHtml = card.summary.replace(/\n/g, '<br>');
+
+    const actionsHtml = card.actions.map(action => {
+         const payload = JSON.stringify(action.payload || {});
+         const isPrimary = action.label.includes('с содержанием');
+         const buttonClass = isPrimary 
+            ? 'bg-blue-600 hover:bg-blue-500' 
+            : 'bg-gray-600 hover:bg-gray-500';
+         return `<button data-action="${action.action}" data-payload='${payload}' class="px-4 py-2 ${buttonClass} rounded-md text-sm font-semibold transition-colors">${action.label}</button>`;
+    }).join('');
+
+    return `
+        <div class="flex items-center mb-3">
+            <div class="w-6 h-6 mr-2 text-gray-300">${iconSVG}</div>
+            <h4 class="font-bold">${card.title}</h4>
+        </div>
+        <p class="text-sm text-gray-300 mb-2">Предлагаемое содержание:</p>
+        <div class="text-sm bg-gray-900/50 p-3 rounded-md border border-gray-600 max-h-40 overflow-y-auto mb-4">
+            ${summaryHtml}
+        </div>
+        <div class="flex flex-wrap gap-2 justify-end">
+            ${actionsHtml}
+        </div>
+    `;
+}
+
 function createContactCard(card) {
     const person = card.person;
     const name = person.names?.[0]?.displayName || 'Имя не указано';
@@ -211,6 +239,9 @@ export function createResultCardElement(card) {
             break;
         case 'document_choice':
             cardElement.innerHTML = createDocumentChoiceCard(card);
+            break;
+        case 'document_creation_proposal':
+            cardElement.innerHTML = createDocumentProposalCard(card);
             break;
         case 'event':
         case 'document':
