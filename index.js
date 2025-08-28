@@ -421,9 +421,19 @@ if (!window.isSecretaryPlusAppInitialized) {
     // --- EVENT HANDLERS & LOGIC ---
 
     async function handleLogin() {
-        if (state.isSupabaseReady) {
+        // If Supabase is the chosen method
+        if (state.settings.isSupabaseEnabled) {
+            // But it's not ready (e.g., missing keys)
+            if (!state.isSupabaseReady) {
+                showSystemError('Подключение к Supabase не настроено. Пожалуйста, укажите URL и ключ в настройках.');
+                showSettings();
+                return;
+            }
+            // If it is ready, proceed with Supabase auth
             await supabaseService.signInWithGoogle();
-        } else {
+        } 
+        // Otherwise, use the direct Google method
+        else {
              if (!state.settings.googleClientId) {
                 showSystemError('Резервное подключение не настроено. Пожалуйста, укажите Google Client ID в настройках.');
                 showSettings();
