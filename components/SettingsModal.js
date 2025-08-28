@@ -1,47 +1,5 @@
 import { SettingsIcon } from './icons/Icons.js';
 
-const sqlSchemaToCopy = `-- Таблица для хранения синхронизированных контактов
-CREATE TABLE public.contacts (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  source TEXT NOT NULL, -- Источник (например, 'google', 'apple')
-  source_id TEXT, -- ID контакта в исходной системе
-  display_name TEXT,
-  email TEXT,
-  phone TEXT,
-  avatar_url TEXT,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(user_id, source, source_id) -- Уникальность контакта для пользователя и источника
-);
-COMMENT ON TABLE public.contacts IS 'Stores synchronized contacts from various services.';
-
--- Таблица для хранения метаданных синхронизированных файлов
-CREATE TABLE public.files (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  source TEXT NOT NULL, -- Источник (например, 'google_drive')
-  source_id TEXT, -- ID файла в исходной системе
-  name TEXT NOT NULL,
-  mime_type TEXT,
-  url TEXT,
-  icon_link TEXT,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(user_id, source, source_id) -- Уникальность файла для пользователя и источника
-);
-COMMENT ON TABLE public.files IS 'Stores synchronized file metadata from cloud storage services.';
-
--- ВАЖНО: Настройка политик безопасности (Row Level Security)
--- 1. Включаем RLS для таблиц
-ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.files ENABLE ROW LEVEL SECURITY;
-
--- 2. Создаем политики, которые разрешают пользователям доступ ТОЛЬКО к их собственным данным
-CREATE POLICY "Allow users to manage their own contacts" ON public.contacts FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Allow users to manage their own files" ON public.files FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-`;
-
 const renderServiceConnectionWithToggle = (serviceId, serviceName, isEnabled, isConnected, userEmail, content) => {
     return `
         <div class="flex items-center justify-between mb-4">
@@ -106,19 +64,12 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                     <label for="supabase-anon-key" class="block text-sm font-medium text-gray-300">Supabase Anon Key</label>
                                     <input type="password" id="supabase-anon-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.supabaseAnonKey || ''}">
                                 </div>
-                                <details class="text-sm text-gray-400">
-                                    <summary class="cursor-pointer hover:text-white">Инструкция по настройке</summary>
-                                    <div class="mt-2 p-3 bg-gray-900 rounded-md border border-gray-600 space-y-3 text-xs">
-                                        <p>1. Создайте проект в <a href="https://supabase.com/" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Supabase</a>.</p>
-                                        <p>2. Перейдите в <code class="text-amber-300">Project Settings > API</code> и скопируйте URL и Anon Key.</p>
-                                        <p>3. Перейдите в <code class="text-amber-300">SQL Editor</code>, вставьте и выполните скрипт ниже для создания таблиц:</p>
-                                        <div class="relative">
-                                          <pre class="bg-gray-800 p-2 rounded text-gray-300 overflow-auto max-h-32"><code>${sqlSchemaToCopy}</code></pre>
-                                          <button class="copy-sql-button absolute top-2 right-2 px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 rounded transition-colors">Копировать</button>
-                                        </div>
-                                        <p>4. Включите Google Provider в <code class="text-amber-300">Authentication > Providers</code> и настройте его, используя данные из Google Cloud. Подробнее в <a href="./README.md" target="_blank" class="text-blue-400 hover:underline">README</a>.</p>
-                                    </div>
-                                </details>
+                                <div class="text-sm text-gray-400 mt-3 space-y-1">
+                                    <p>Supabase используется для безопасной аутентификации и хранения синхронизированных данных.</p>
+                                    <a href="./SUPABASE_SETUP.md" target="_blank" class="text-blue-400 hover:underline font-semibold">
+                                        ➡️ Открыть пошаговую инструкцию по настройке
+                                    </a>
+                                </div>
                                 `
                             )}
                         </div>
@@ -230,15 +181,6 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
         const isEnabled = e.target.checked;
         const content = e.target.closest('.p-4').querySelector('.service-content-wrapper');
         content.style.display = isEnabled ? '' : 'none';
-    });
-
-    // Copy SQL button
-    modalOverlay.querySelector('.copy-sql-button').addEventListener('click', (e) => {
-        const button = e.target;
-        navigator.clipboard.writeText(sqlSchemaToCopy).then(() => {
-            button.textContent = 'Скопировано!';
-            setTimeout(() => { button.textContent = 'Копировать'; }, 2000);
-        });
     });
 
     // Auth action button
