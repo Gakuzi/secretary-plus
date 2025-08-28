@@ -5,6 +5,7 @@ const defaultSettings = {
     supabaseUrl: '',
     supabaseAnonKey: '',
     geminiApiKey: '',
+    geminiProxyUrl: '', // URL for Gemini API proxy
     isSupabaseEnabled: true,
     isGoogleEnabled: true,
     googleClientId: '',

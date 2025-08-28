@@ -383,7 +383,8 @@ export const callGemini = async ({
     timezone,
     isGoogleConnected,
     image,
-    apiKey
+    apiKey,
+    proxyUrl
 }) => {
     if (!apiKey) {
         return {
@@ -392,7 +393,12 @@ export const callGemini = async ({
             text: "Ошибка: Ключ Gemini API не предоставлен. Пожалуйста, добавьте его в настройках.",
         };
     }
-    const ai = new GoogleGenAI({ apiKey });
+    
+    const clientOptions = { apiKey };
+    if (proxyUrl) {
+        clientOptions.apiEndpoint = proxyUrl;
+    }
+    const ai = new GoogleGenAI(clientOptions);
     
     // Limit short-term memory to the last 10 messages to keep context relevant and payload small
     const limitedHistory = history.slice(-10);
@@ -785,11 +791,15 @@ export const callGemini = async ({
 };
 
 
-export const analyzeSyncErrorWithGemini = async ({ errorMessage, context, apiKey }) => {
+export const analyzeSyncErrorWithGemini = async ({ errorMessage, context, apiKey, proxyUrl }) => {
     if (!apiKey) {
         throw new Error("Ключ Gemini API не предоставлен.");
     }
-    const ai = new GoogleGenAI({ apiKey });
+    const clientOptions = { apiKey };
+    if (proxyUrl) {
+        clientOptions.apiEndpoint = proxyUrl;
+    }
+    const ai = new GoogleGenAI(clientOptions);
 
     const systemInstruction = `Ты — элитный инженер технической поддержки для веб-приложения "Секретарь+". Пользователь столкнулся с ошибкой.
 Твоя задача:
@@ -820,11 +830,15 @@ ${errorMessage}
     }
 };
 
-export const analyzeGenericErrorWithGemini = async ({ errorMessage, appStructure, apiKey }) => {
+export const analyzeGenericErrorWithGemini = async ({ errorMessage, appStructure, apiKey, proxyUrl }) => {
     if (!apiKey) {
         throw new Error("Ключ Gemini API не предоставлен.");
     }
-    const ai = new GoogleGenAI({ apiKey });
+    const clientOptions = { apiKey };
+    if (proxyUrl) {
+        clientOptions.apiEndpoint = proxyUrl;
+    }
+    const ai = new GoogleGenAI(clientOptions);
 
     const systemInstruction = `Ты — элитный Full-Stack инженер, отлаживающий веб-приложение "Секретарь+". Пользователь столкнулся с ошибкой.
 Твоя задача:

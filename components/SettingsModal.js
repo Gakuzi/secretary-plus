@@ -200,6 +200,15 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                 Ассистент не будет работать корректно до тех пор, пока вы не войдете в аккаунт.
                             </p>
                         </div>
+
+                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                            <h3 class="text-lg font-semibold text-gray-200">3. Прокси-сервер Gemini (Опционально)</h3>
+                            <div class="space-y-2">
+                                <label for="gemini-proxy-url" class="block text-sm font-medium text-gray-300">URL прокси-сервера</label>
+                                <input type="text" id="gemini-proxy-url" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="https://my-proxy.example.com" value="${currentSettings.geminiProxyUrl || ''}">
+                            </div>
+                            <p class="text-xs text-gray-400 mt-1">Используйте, если доступ к API Gemini ограничен. <a href="./setup-guide.html#proxy-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как настроить прокси?</a></p>
+                        </div>
                     </div>
 
                     <!-- General Tab -->
@@ -302,6 +311,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             supabaseUrl: modalOverlay.querySelector('#supabase-url').value.trim(),
             supabaseAnonKey: modalOverlay.querySelector('#supabase-anon-key').value.trim(),
             geminiApiKey: modalOverlay.querySelector('#gemini-api-key').value.trim(),
+            geminiProxyUrl: modalOverlay.querySelector('#gemini-proxy-url').value.trim(),
             isSupabaseEnabled: modalOverlay.querySelector('#supabase-enabled-toggle').checked,
             isGoogleEnabled: true, 
             googleClientId: modalOverlay.querySelector('#google-client-id').value.trim(),
@@ -380,7 +390,8 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             const analysisPromise = analyzeSyncErrorWithGemini({
                 errorMessage,
                 context: errorContext,
-                apiKey
+                apiKey,
+                proxyUrl: currentSettings.geminiProxyUrl
             });
 
             showErrorAnalysisModal(`Анализ ошибки: ${errorContext}`, analysisPromise);

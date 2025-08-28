@@ -433,7 +433,8 @@ if (!window.isSecretaryPlusAppInitialized) {
                 timezone: state.settings.timezone,
                 isGoogleConnected: state.isGoogleConnected,
                 image,
-                apiKey: state.settings.geminiApiKey
+                apiKey: state.settings.geminiApiKey,
+                proxyUrl: state.settings.geminiProxyUrl
             });
 
             if (response.functionCallName) {
@@ -747,6 +748,7 @@ ${payload.body}`;
                 errorMessage,
                 appStructure: APP_STRUCTURE_CONTEXT,
                 apiKey: state.settings.geminiApiKey,
+                proxyUrl: state.settings.geminiProxyUrl
             });
         };
         const modal = createHelpModal(hideHelpModal, state.settings, handleAnalyzeError);

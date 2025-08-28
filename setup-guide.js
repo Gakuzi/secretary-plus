@@ -7,18 +7,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const adjustNavForChoice = () => {
         const supabaseNavLink = document.querySelector('a[href="#supabase-setup"]');
-        const googleCloudNavLink = document.querySelector('a[href="#google-cloud-setup"]');
-
+        
         if (authChoice === 'direct') {
             supabaseNavLink.classList.add('disabled');
-            googleCloudNavLink.innerHTML = '2. Настройка Google Cloud';
-            document.querySelector('a[href="#gemini-setup"]').innerHTML = '3. Настройка Gemini API';
-            document.querySelector('a[href="#final-step"]').innerHTML = '4. Завершение';
-        } else { // supabase or null
-            supabaseNavLink.classList.remove('disabled');
-            googleCloudNavLink.innerHTML = '3. Настройка Google Cloud';
+            document.querySelector('a[href="#google-cloud-setup"]').innerHTML = '2. Настройка Google Cloud';
+            document.querySelector('a[href="#proxy-setup"]').innerHTML = '3. (Опц.) Настройка Прокси';
             document.querySelector('a[href="#gemini-setup"]').innerHTML = '4. Настройка Gemini API';
             document.querySelector('a[href="#final-step"]').innerHTML = '5. Завершение';
+        } else { // supabase or null
+            supabaseNavLink.classList.remove('disabled');
+            document.querySelector('a[href="#google-cloud-setup"]').innerHTML = '3. Настройка Google Cloud';
+            document.querySelector('a[href="#proxy-setup"]').innerHTML = '4. (Опц.) Настройка Прокси';
+            document.querySelector('a[href="#gemini-setup"]').innerHTML = '5. Настройка Gemini API';
+            document.querySelector('a[href="#final-step"]').innerHTML = '6. Завершение';
         }
     };
 
@@ -27,10 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (authChoice === 'direct' && stepIndex === 2) {
             stepIndex = currentStep < 2 ? 3 : 1; // if going forward, skip to 3, if back, skip to 1
         }
-        if (authChoice === 'supabase' && stepIndex < 2 && currentStep >=2) {
-            // allows going back to choice
-        }
-
+        
         wizardSteps.forEach((step, index) => {
             step.style.display = index === stepIndex ? 'block' : 'none';
         });

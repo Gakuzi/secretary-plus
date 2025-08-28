@@ -21,8 +21,9 @@
                     <li><a href="#auth-choice" class="nav-link" data-step="1">1. Выбор способа</a></li>
                     <li><a href="#supabase-setup" class="nav-link" data-step="2">2. Настройка Supabase</a></li>
                     <li><a href="#google-cloud-setup" class="nav-link" data-step="3">3. Настройка Google Cloud</a></li>
-                    <li><a href="#gemini-setup" class="nav-link" data-step="4">4. Настройка Gemini API</a></li>
-                    <li><a href="#final-step" class="nav-link" data-step="5">5. Завершение</a></li>
+                    <li><a href="#proxy-setup" class="nav-link" data-step="4">4. (Опц.) Настройка Прокси</a></li>
+                    <li><a href="#gemini-setup" class="nav-link" data-step="5">5. Настройка Gemini API</a></li>
+                    <li><a href="#final-step" class="nav-link" data-step="6">6. Завершение</a></li>
                 </ul>
             </nav>
         </aside>
@@ -392,9 +393,100 @@ $$;
                     </footer>
                 </section>
                 
+                <!-- Proxy Setup -->
+                <section id="proxy-setup" class="wizard-step" style="display: none;">
+                    <h2 class="section-title">4. (Опционально) Настройка Прокси-сервера</h2>
+                    <p class="mb-6">Если доступ к API Gemini ограничен в вашем регионе (например, в России), вы можете настроить бесплатный прокси-сервер. Он будет перенаправлять запросы от приложения к серверам Google, обходя блокировки. Это безопасно, так как код сервера будет принадлежать вам.</p>
+                    <p>Ниже приведены инструкции для двух популярных и надежных сервисов. Выберите один из них.</p>
+                
+                    <div class="step">
+                        <h3 class="step-title">Вариант A: Cloudflare Workers (Рекомендуется)</h3>
+                        <p>Cloudflare предоставляет очень щедрый бесплатный тариф, которого более чем достаточно для личного использования.</p>
+                        <ol>
+                            <li><a href="https://dash.cloudflare.com/sign-up" target="_blank" rel="noopener noreferrer">Зарегистрируйтесь</a> или войдите в аккаунт Cloudflare.</li>
+                            <li>В левом меню выберите <strong>Workers & Pages</strong>.</li>
+                            <li>Нажмите <strong>Create application</strong> > <strong>Create Worker</strong>.</li>
+                            <li>Придумайте имя для вашего worker (например, `gemini-proxy`) и нажмите <strong>Deploy</strong>.</li>
+                            <li>После развертывания нажмите <strong>Edit code</strong>.</li>
+                            <li>Полностью замените существующий код на тот, что указан ниже.</li>
+                        </ol>
+                        <div class="code-block">
+                            <pre><code id="cloudflare-script-content">export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const targetUrl = 'https://generativelanguage.googleapis.com' + url.pathname + url.search;
+    
+    const newRequest = new Request(targetUrl, {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+      redirect: 'follow',
+    });
+
+    return fetch(newRequest);
+  },
+};
+</code></pre>
+                            <button class="copy-button" data-copy-target="cloudflare-script-content">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                                <span class="copy-text">Копировать</span>
+                            </button>
+                        </div>
+                        <ol start="7">
+                            <li>Нажмите <strong>Save and deploy</strong>.</li>
+                            <li>Вернитесь на страницу вашего worker. Сверху вы найдете его URL (например, `https://gemini-proxy.your-username.workers.dev`). <strong>Скопируйте этот URL.</strong></li>
+                            <li>Вставьте скопированный URL в поле "Прокси-сервер для Gemini API" в настройках приложения.</li>
+                        </ol>
+                    </div>
+
+                    <div class="step">
+                        <h3 class="step-title">Вариант B: Vercel Edge Functions</h3>
+                         <p>Vercel также предоставляет отличный бесплатный тариф и простую настройку.</p>
+                        <ol>
+                            <li><a href="https://vercel.com/signup" target="_blank" rel="noopener noreferrer">Зарегистрируйтесь</a> на Vercel, удобнее всего через GitHub.</li>
+                            <li>Создайте новый пустой репозиторий на <a href="https://github.com/new" target="_blank">GitHub</a> (например, `gemini-proxy`).</li>
+                            <li>В этом репозитории создайте папку `api`, а внутри нее — файл `proxy.js`.</li>
+                            <li>Вставьте в файл `proxy.js` следующий код:</li>
+                        </ol>
+                         <div class="code-block">
+                            <pre><code id="vercel-script-content">export const config = {
+  runtime: 'edge',
+};
+
+export default async function handler(request) {
+  const url = new URL(request.url);
+  const targetUrl = `https://generativelanguage.googleapis.com${url.pathname.replace('/api/proxy', '')}${url.search}`;
+
+  return fetch(targetUrl, {
+    headers: request.headers,
+    method: request.method,
+    body: request.body,
+    redirect: 'follow',
+  });
+}
+</code></pre>
+                            <button class="copy-button" data-copy-target="vercel-script-content">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                                <span class="copy-text">Копировать</span>
+                            </button>
+                        </div>
+                         <ol start="5">
+                             <li><a href="https://vercel.com/new" target="_blank" rel="noopener noreferrer">Создайте новый проект на Vercel</a>, импортировав созданный репозиторий с GitHub. Vercel автоматически определит настройки. Нажмите <strong>Deploy</strong>.</li>
+                            <li>После развертывания перейдите в панель управления проектом. В разделе <strong>Domains</strong> вы найдете URL вашего проекта (например, `https://gemini-proxy.vercel.app`).</li>
+                            <li>К этому URL добавьте `/api/proxy`. Ваш полный URL для настроек будет выглядеть так: `https://gemini-proxy.vercel.app/api/proxy`. <strong>Скопируйте его.</strong></li>
+                             <li>Вставьте этот URL в поле "Прокси-сервер для Gemini API" в настройках приложения.</li>
+                        </ol>
+                    </div>
+
+                    <footer class="wizard-footer">
+                        <button class="wizard-nav-button back-button" data-back="3">Назад</button>
+                        <button class="wizard-nav-button next-button" data-next="5">Далее</button>
+                    </footer>
+                </section>
+                
                 <!-- Gemini Setup -->
                 <section id="gemini-setup" class="wizard-step" style="display: none;">
-                    <h2 class="section-title">4. Настройка Gemini API</h2>
+                    <h2 class="section-title">5. Настройка Gemini API</h2>
                     <p class="mb-6">Gemini — это модель искусственного интеллекта от Google, которая является "мозгом" ассистента. Вам нужен API-ключ для отправки запросов.</p>
                     <div class="step">
                          <ol>
@@ -405,32 +497,34 @@ $$;
                         <p class="note">Ваш ключ будет храниться только локально в вашем браузере и никуда не передается.</p>
                     </div>
                      <footer class="wizard-footer">
-                        <button class="wizard-nav-button back-button" data-back="3">Назад</button>
-                        <button class="wizard-nav-button next-button" data-next="5">Далее</button>
+                        <button class="wizard-nav-button back-button" data-back="4">Назад</button>
+                        <button class="wizard-nav-button next-button" data-next="6">Далее</button>
                     </footer>
                 </section>
                 
                  <!-- Final -->
                 <section id="final-step" class="wizard-step" style="display: none;">
-                    <h2 class="section-title">5. Завершение</h2>
+                    <h2 class="section-title">6. Завершение</h2>
                     <p>Поздравляем! Вы получили все необходимые ключи. Теперь откройте настройки приложения «Секретарь+» и вставьте их в соответствующие поля.</p>
                     <div id="final-supabase-instructions" style="display: none;">
                         <ol class="list-decimal list-inside space-y-2 mt-4">
-                            <li>Включите переключатель <strong>"Использовать Supabase"</strong>.</li>
+                            <li>На вкладке "Подключения" включите переключатель <strong>"Использовать Supabase"</strong>.</li>
                             <li>Вставьте <strong>Project URL</strong> и <strong>Anon Key</strong> из <a href="#supabase-setup" class="nav-link-inline" data-step="2">Шага 2</a>.</li>
-                            <li>На вкладке "API Ключи" вставьте <strong>Gemini API Key</strong> из <a href="#gemini-setup" class="nav-link-inline" data-step="4">Шага 4</a>.</li>
+                            <li>(Опционально) Вставьте URL вашего прокси-сервера из <a href="#proxy-setup" class="nav-link-inline" data-step="4">Шага 4</a>.</li>
+                            <li>На вкладке "API Ключи" вставьте <strong>Gemini API Key</strong> из <a href="#gemini-setup" class="nav-link-inline" data-step="5">Шага 5</a>.</li>
                         </ol>
                     </div>
                      <div id="final-direct-instructions" style="display: none;">
                         <ol class="list-decimal list-inside space-y-2 mt-4">
-                            <li>Выключите переключатель <strong>"Использовать Supabase"</strong>.</li>
+                            <li>На вкладке "Подключения" выключите переключатель <strong>"Использовать Supabase"</strong>.</li>
                             <li>Вставьте <strong>Google Client ID</strong> из <a href="#google-cloud-setup" class="nav-link-inline" data-step="3">Шага 3</a>.</li>
-                             <li>На вкладке "API Ключи" вставьте <strong>Gemini API Key</strong> из <a href="#gemini-setup" class="nav-link-inline" data-step="4">Шага 4</a>.</li>
+                            <li>(Опционально) Вставьте URL вашего прокси-сервера из <a href="#proxy-setup" class="nav-link-inline" data-step="4">Шага 4</a>.</li>
+                             <li>На вкладке "API Ключи" вставьте <strong>Gemini API Key</strong> из <a href="#gemini-setup" class="nav-link-inline" data-step="5">Шага 5</a>.</li>
                         </ol>
                     </div>
                     <p class="mt-4">После сохранения настроек приложение будет полностью готово к работе. Вы можете войти в свой аккаунт Google и начать использовать ассистента.</p>
                      <footer class="wizard-footer">
-                        <button class="wizard-nav-button back-button" data-back="4">Назад</button>
+                        <button class="wizard-nav-button back-button" data-back="5">Назад</button>
                         <button class="wizard-nav-button next-button" onclick="window.close()">Закрыть</button>
                     </footer>
                 </section>
