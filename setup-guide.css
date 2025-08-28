@@ -115,7 +115,6 @@ a:not(.nav-link):hover {
 }
 .code-block pre {
     padding: 1.25rem;
-    padding-top: 3.5rem;
     overflow-x: auto;
     font-family: monospace;
     font-size: 0.875rem;

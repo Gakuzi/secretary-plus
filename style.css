@@ -374,16 +374,13 @@ input:checked + .toggle-slider:before {
 }
 
 /* --- CONTEXTUAL ACTION BAR --- */
-#action-bar-container {
-    overflow-x: auto;
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE 10+ */
+#contextual-actions-frame {
+    padding: 0.75rem; /* 12px */
+    margin-bottom: 0.5rem; /* 8px */
+    background-color: var(--background-light);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem; /* 12px */
     animation: fadeIn 0.3s ease-out;
-    justify-content: center;
-    flex-wrap: wrap;
-}
-#action-bar-container::-webkit-scrollbar {
-    display: none; /* Safari and Chrome */
 }
 
 .action-bar-button {

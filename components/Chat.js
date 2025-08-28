@@ -220,9 +220,11 @@ export function createChatInterface(onSendMessage, showCameraView) {
         </div>
 
         <div id="input-bar-wrapper" class="p-2 sm:p-4 border-t border-gray-700">
-            <!-- Contextual Action Buttons -->
-            <div id="action-bar-container" class="pb-2 flex items-center gap-2">
-                <!-- Buttons will be rendered here by renderContextualActions -->
+            <!-- Contextual Actions Frame -->
+            <div id="contextual-actions-frame" style="display: none;">
+                <div id="action-bar-container" class="flex items-center justify-center flex-wrap gap-2">
+                    <!-- Buttons will be rendered here by renderContextualActions -->
+                </div>
             </div>
             <div class="flex items-end w-full gap-2">
                 <div id="left-actions" class="flex items-center gap-1">
@@ -345,18 +347,22 @@ const defaultActions = [
 ];
 
 export function renderContextualActions(actions) {
+    const frame = document.getElementById('contextual-actions-frame');
     const container = document.getElementById('action-bar-container');
-    if (!container) return;
+    if (!container || !frame) return;
     
     const actionsToRender = actions || defaultActions;
 
-    container.innerHTML = actionsToRender.map(action => {
-        return `
-            <button class="action-bar-button" data-action-prompt="${action.prompt}">
-                ${action.label}
-            </button>
-        `;
-    }).join('');
-    
-    container.style.display = actionsToRender.length > 0 ? 'flex' : 'none';
+    if (actionsToRender.length > 0) {
+        container.innerHTML = actionsToRender.map(action => {
+            return `
+                <button class="action-bar-button" data-action-prompt="${action.prompt}">
+                    ${action.label}
+                </button>
+            `;
+        }).join('');
+        frame.style.display = 'block';
+    } else {
+        frame.style.display = 'none';
+    }
 }
