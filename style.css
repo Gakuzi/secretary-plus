@@ -241,9 +241,14 @@ body {
 /* --- NEW VOICE INPUT SYSTEM --- */
 
 #input-bar {
-  /* Fix for the UI jump bug */
-  min-height: 56px; /* Corresponds to h-14 in Tailwind */
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
 }
+
+#input-bar:focus-within {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 1px var(--accent-blue);
+}
+
 
 #chat-input {
     box-sizing: border-box;
@@ -256,6 +261,7 @@ body {
     line-height: 1.5rem;
     resize: none;
     max-height: 128px; /* ~5 lines */
+    min-height: 24px; /* Matches line-height to prevent jump */
     transition: opacity 0.2s, transform 0.2s;
 }
 
@@ -373,6 +379,8 @@ input:checked + .toggle-slider:before {
     scrollbar-width: none; /* Firefox */
     -ms-overflow-style: none; /* IE 10+ */
     animation: fadeIn 0.3s ease-out;
+    justify-content: center;
+    flex-wrap: wrap;
 }
 #action-bar-container::-webkit-scrollbar {
     display: none; /* Safari and Chrome */
@@ -383,24 +391,16 @@ input:checked + .toggle-slider:before {
     font-size: 0.875rem;
     font-weight: 500;
     color: var(--text-secondary);
-    background-color: var(--background-light);
+    background-color: transparent;
     border: 1px solid var(--border-color);
-    border-radius: 0.5rem;
+    border-radius: 9999px;
     cursor: pointer;
     transition: background-color 0.2s, color 0.2s, border-color 0.2s;
     white-space: nowrap;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
 }
 
 .action-bar-button:hover {
-    background-color: #374151; /* gray-700 */
+    background-color: var(--background-light);
     border-color: #4b5563; /* gray-600 */
     color: var(--text-primary);
-}
-
-.action-bar-button svg {
-    width: 1rem;
-    height: 1rem;
 }

@@ -1,7 +1,6 @@
 import { createMessageElement } from './Message.js';
 import { MicrophoneIcon, SendIcon, CameraIcon, LockIcon, TrashIcon, AttachmentIcon } from './icons/Icons.js';
 import { SpeechRecognizer } from '../utils/speech.js';
-import * as Icons from './icons/Icons.js';
 
 // Module-level variables
 let chatLog, chatInput, sendButton, voiceRecordButton, cameraButton, attachButton, fileInput;
@@ -225,24 +224,24 @@ export function createChatInterface(onSendMessage, showCameraView) {
             <div id="action-bar-container" class="pb-2 flex items-center gap-2">
                 <!-- Buttons will be rendered here by renderContextualActions -->
             </div>
-            <div class="flex items-center w-full gap-2">
+            <div class="flex items-end w-full gap-2">
                 <div id="left-actions" class="flex items-center gap-1">
-                    <button id="camera-button" class="p-2.5 rounded-full hover:bg-gray-700 flex-shrink-0">${CameraIcon}</button>
-                    <button id="attach-button" class="p-2.5 rounded-full hover:bg-gray-700 flex-shrink-0">${AttachmentIcon}</button>
+                    <button id="camera-button" class="w-11 h-11 flex items-center justify-center rounded-full hover:bg-gray-700 flex-shrink-0">${CameraIcon}</button>
+                    <button id="attach-button" class="w-11 h-11 flex items-center justify-center rounded-full hover:bg-gray-700 flex-shrink-0">${AttachmentIcon}</button>
                     <input type="file" id="file-input" class="hidden" accept="image/*">
                 </div>
-                <button id="cancel-recording-button" class="hidden p-2.5 rounded-full hover:bg-gray-700 text-red-500 flex-shrink-0">${TrashIcon}</button>
+                <button id="cancel-recording-button" class="hidden w-11 h-11 flex items-center justify-center rounded-full hover:bg-gray-700 text-red-500 flex-shrink-0">${TrashIcon}</button>
                 
-                <div id="input-bar" class="flex-1 relative flex items-center bg-gray-800 rounded-2xl">
+                <div id="input-bar" class="flex-1 relative flex items-center bg-gray-800 rounded-3xl border border-gray-700">
                     <div id="locked-recording-indicator" class="hidden absolute left-4 items-center gap-2 text-red-500 font-mono font-semibold">
                         <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
                         <span class="recording-timer">0:00</span>
                     </div>
-                    <textarea id="chat-input" placeholder="Сообщение..." rows="1" class="w-full px-4 py-4 bg-transparent border-none outline-none text-gray-100 text-base resize-none"></textarea>
+                    <textarea id="chat-input" placeholder="Сообщение..." rows="1" class="w-full px-4 py-3 bg-transparent border-none outline-none text-gray-100 text-base resize-none"></textarea>
                 </div>
 
-                <button id="send-button" class="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 flex-shrink-0 hidden items-center justify-center">${SendIcon}</button>
-                <button id="voice-record-button" class="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 flex-shrink-0 flex items-center justify-center">${MicrophoneIcon}</button>
+                <button id="send-button" class="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 flex-shrink-0 hidden items-center justify-center">${SendIcon}</button>
+                <button id="voice-record-button" class="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 flex-shrink-0 flex items-center justify-center">${MicrophoneIcon}</button>
             </div>
         </div>
     `;
@@ -339,10 +338,10 @@ export function hideLoadingIndicator() {
 }
 
 const defaultActions = [
-    { label: 'Что в календаре?', prompt: 'Что у меня сегодня в календаре?', icon: 'CalendarIcon' },
-    { label: 'Мои задачи', prompt: 'Покажи мои задачи', icon: 'CheckSquareIcon' },
-    { label: 'Найти контакт', prompt: 'Найди контакт Иван', icon: 'UsersIcon' },
-    { label: 'Найти документ', prompt: 'Найди документ "план"', icon: 'FileIcon' },
+    { label: 'Что в календаре?', prompt: 'Что у меня сегодня в календаре?' },
+    { label: 'Мои задачи', prompt: 'Покажи мои задачи' },
+    { label: 'Найти контакт', prompt: 'Найди контакт Иван' },
+    { label: 'Найти документ', prompt: 'Найди документ "план"' },
 ];
 
 export function renderContextualActions(actions) {
@@ -352,10 +351,8 @@ export function renderContextualActions(actions) {
     const actionsToRender = actions || defaultActions;
 
     container.innerHTML = actionsToRender.map(action => {
-        const iconSVG = Icons[action.icon] || '';
         return `
             <button class="action-bar-button" data-action-prompt="${action.prompt}">
-                ${iconSVG}
                 ${action.label}
             </button>
         `;
