@@ -110,7 +110,17 @@ async function handleCardAction(e) {
     } else if (action === 'create_document_prompt') {
         userPromptText = `Да, создать новый документ с названием "${payload.query}"`;
         systemPrompt = `Пользователь согласился создать новый документ. Вызови функцию create_google_doc с названием "${payload.query}".`;
+    } else if (action === 'create_meet_with') {
+        userPromptText = `Создать видеовстречу с ${payload.name}`;
+        systemPrompt = `Создай видеовстречу с ${payload.name} (${payload.email}) на ближайшее удобное время. Установи продолжительность 30 минут.`;
+    } else if (action === 'send_meeting_link') {
+        userPromptText = 'Да, отправить ссылку участникам.';
+        systemPrompt = `Пользователь хочет отправить приглашение на встречу. Вызови функцию send_email с этими данными: ${JSON.stringify(payload)}`;
+    } else if (action === 'create_prep_task') {
+        userPromptText = 'Да, создать задачу для подготовки.';
+        systemPrompt = `Пользователь хочет создать задачу для подготовки к встрече. Вызови функцию create_task с этими данными: ${JSON.stringify(payload)}`;
     }
+
 
     if (!systemPrompt) return;
 

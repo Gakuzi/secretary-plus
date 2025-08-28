@@ -199,4 +199,46 @@ export class GoogleServiceProvider {
         });
         return response.result;
     }
+    
+    async createTask(details) {
+        await this.initialize();
+        await this.gapi.client.load('tasks', 'v1');
+        const task = {
+            title: details.title,
+            notes: details.notes,
+            due: details.dueDate,
+        };
+        const response = await this.gapi.client.tasks.tasks.insert({
+            tasklist: '@default',
+            resource: task,
+        });
+        return response.result;
+    }
+
+    async sendEmail(details) {
+        await this.initialize();
+        await this.gapi.client.load('gmail', 'v1');
+        
+        const emailLines = [
+            `To: ${details.to.join(', ')}`,
+            `Subject: ${details.subject}`,
+            'Content-Type: text/html; charset=utf-8',
+            '',
+            details.body,
+        ];
+        const email = emailLines.join('\r\n');
+        
+        // Base64-encode the email for the Gmail API
+        const base64EncodedEmail = btoa(unescape(encodeURIComponent(email))).replace(/\+/g, '-').replace(/\//g, '_');
+
+        const request = this.gapi.client.gmail.users.messages.send({
+            'userId': 'me',
+            'resource': {
+                'raw': base64EncodedEmail
+            }
+        });
+        
+        const response = await request;
+        return response.result;
+    }
 }
