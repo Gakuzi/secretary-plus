@@ -1,5 +1,5 @@
 import { createMessageElement } from './Message.js';
-import { MicrophoneIcon, SendIcon, CameraIcon, LockIcon, TrashIcon, AttachmentIcon } from './icons/Icons.js';
+import * as Icons from './icons/Icons.js';
 import { SpeechRecognizer } from '../utils/speech.js';
 
 // Module-level variables
@@ -262,7 +262,7 @@ export function createChatInterface(onSendMessage, showCameraView) {
                 </div>
                 <div class="text-gray-400">Отпустите, чтобы отправить</div>
                 <div class="flex items-center gap-2 text-gray-400">
-                    ${LockIcon}
+                    ${Icons.LockIcon}
                     <span>Проведите вверх, чтобы зафиксировать</span>
                 </div>
             </div>
@@ -278,10 +278,10 @@ export function createChatInterface(onSendMessage, showCameraView) {
             <div id="input-bar" class="flex items-end w-full gap-2 bg-gray-800 rounded-2xl p-2 border border-gray-700">
                 <div id="left-input-actions" class="flex items-center self-end flex-shrink-0">
                      <button id="camera-button" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Сделать фото">
-                        ${CameraIcon}
+                        ${Icons.CameraIcon}
                     </button>
                     <button id="attach-button" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Прикрепить файл">
-                        ${AttachmentIcon}
+                        ${Icons.AttachmentIcon}
                     </button>
                 </div>
                 
@@ -290,7 +290,7 @@ export function createChatInterface(onSendMessage, showCameraView) {
 
                 <!-- Cancel button for locked recording -->
                 <button id="cancel-recording-button" class="hidden self-end flex-shrink-0 p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Отменить запись">
-                    ${TrashIcon}
+                    ${Icons.TrashIcon}
                 </button>
 
                 <!-- Flashing indicator for locked recording -->
@@ -303,10 +303,10 @@ export function createChatInterface(onSendMessage, showCameraView) {
                 
                 <div class="flex items-center self-end flex-shrink-0">
                     <button id="send-button" class="hidden items-center justify-center w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 transition-colors" aria-label="Отправить">
-                        ${SendIcon}
+                        ${Icons.SendIcon}
                     </button>
                     <button id="voice-record-button" class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors" aria-label="Записать голосовое сообщение">
-                        ${MicrophoneIcon}
+                        ${Icons.MicrophoneIcon}
                     </button>
                 </div>
             </div>

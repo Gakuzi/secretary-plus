@@ -300,6 +300,18 @@ export class GoogleServiceProvider {
         return response.result.files || [];
     }
 
+    async getRecentFiles({ max_results = 10 }) {
+        await this.ensureGapiIsReady();
+        await this.gapi.client.load('drive', 'v3');
+        const response = await this.gapi.client.drive.files.list({
+            orderBy: 'modifiedTime desc',
+            q: `trashed = false and 'me' in owners`,
+            pageSize: max_results,
+            fields: 'files(id, name, webViewLink, iconLink, mimeType, modifiedTime)',
+        });
+        return response.result.files || [];
+    }
+
     async createGoogleDoc(title) {
         await this.ensureGapiIsReady();
         await this.gapi.client.load('drive', 'v3');
@@ -427,13 +439,33 @@ export class GoogleServiceProvider {
             const headers = payload.payload.headers;
             const getHeader = (name) => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
 
+            const attachments = [];
+            const parts = payload.payload.parts || [];
+            const findAttachments = (parts) => {
+                 for (const part of parts) {
+                    if (part.filename && part.body && part.body.attachmentId) {
+                        attachments.push({
+                            filename: part.filename,
+                            mimeType: part.mimeType,
+                            size: part.body.size,
+                        });
+                    }
+                    if (part.parts) {
+                        findAttachments(part.parts);
+                    }
+                }
+            };
+            findAttachments(parts);
+
             return {
                 id: payload.id,
                 snippet: payload.snippet,
                 subject: getHeader('Subject'),
                 from: getHeader('From'),
                 date: getHeader('Date'),
-                body: getEmailBody(payload.payload) // Extract and decode body
+                body: getEmailBody(payload.payload), // Extract and decode body
+                attachments: attachments,
+                gmailLink: `https://mail.google.com/mail/u/0/#inbox/${payload.id}`
             };
         });
     }

@@ -1,4 +1,4 @@
-import { SettingsIcon } from './icons/Icons.js';
+import { SettingsIcon, CodeIcon } from './icons/Icons.js';
 
 const SERVICE_DEFINITIONS = {
     calendar: {
@@ -97,6 +97,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                         <a href="#service-map" class="settings-tab-button" data-tab="service-map">Назначение сервисов</a>
                         <a href="#api-keys" class="settings-tab-button" data-tab="api-keys">API Ключи</a>
                         <a href="#sync" class="settings-tab-button" data-tab="sync" ${!currentSettings.isSupabaseEnabled ? 'style="display: none;"' : ''}>Синхронизация</a>
+                        <a href="#dev" class="settings-tab-button" data-tab="dev">Разработка</a>
                     </nav>
                 </aside>
                 <div class="flex-1 p-6 overflow-y-auto" id="settings-tabs-content">
@@ -257,6 +258,19 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                             ${!authState.isGoogleConnected ? '<p class="text-xs text-yellow-400 text-center">Для синхронизации необходимо войти в аккаунт Google.</p>' : ''}
                         </div>
                     </div>
+                    
+                    <!-- Dev Tab -->
+                    <div id="tab-dev" class="settings-tab-content hidden space-y-6">
+                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                            <h3 class="text-lg font-semibold text-gray-200">Инструменты разработчика</h3>
+                            <p class="text-sm text-gray-400 mt-1 mb-4">Быстрый доступ для редактирования и отладки приложения.</p>
+                            <button id="edit-service-button" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md font-semibold transition-colors">
+                                ${CodeIcon}
+                                <span>Редактировать сервис</span>
+                            </button>
+                        </div>
+                    </div>
+
                 </div>
             </main>
 
@@ -402,6 +416,13 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
         // It is independent of the auto-sync toggle.
         forceSyncButton.disabled = !authState.isGoogleConnected || isSyncing;
         forceSyncButton.addEventListener('click', onForceSync);
+    }
+    
+    const editServiceButton = modalOverlay.querySelector('#edit-service-button');
+    if (editServiceButton) {
+        editServiceButton.addEventListener('click', () => {
+            window.open(window.location.href, '_blank');
+        });
     }
 
     return modalOverlay;

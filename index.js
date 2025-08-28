@@ -10,7 +10,6 @@ import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadin
 import { createCameraView } from './components/CameraView.js';
 import { SettingsIcon, ChartBarIcon, SupabaseIcon, GoogleIcon, NewChatIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
-import { createItemDetailsCard } from './components/ResultCard.js';
 
 // Add a guard to prevent the script from running multiple times
 // if it's loaded by both the HTML and the TSX entry point.
@@ -464,21 +463,56 @@ if (!window.isSecretaryPlusAppInitialized) {
         let promptToSend = '';
 
         switch (action) {
-            case 'view_item_details': {
-                const cardElement = target.closest('.message-item');
-                const messageId = cardElement.dataset.messageId;
-                const message = state.messages.find(m => m.id == messageId);
-                
-                if (message) {
-                    // Replace the list card with a details card
-                    message.card = createItemDetailsCard(payload);
-                    renderMainContent(); // Re-render the chat
-                }
-                return; // No bot call needed, just UI update
-            }
              case 'use_item_context':
                 promptToSend = payload.prompt;
                 break;
+            case 'analyze_event': {
+                const { summary, description, startTime, endTime } = payload;
+                const start = new Date(startTime).toLocaleString('ru-RU');
+                const end = new Date(endTime).toLocaleString('ru-RU');
+                promptToSend = `Проанализируй это событие календаря и предложи релевантные действия (например, "удалить", "создать задачу для подготовки", "написать участникам").
+
+---
+**ДАННЫЕ СОБЫТИЯ**
+- **Название:** ${summary}
+- **Описание:** ${description || 'Нет'}
+- **Время:** ${start} - ${end}`;
+                break;
+            }
+            case 'analyze_task': {
+                const { title, notes, due } = payload;
+                const dueDate = due ? new Date(due).toLocaleString('ru-RU') : 'Не указан';
+                promptToSend = `Проанализируй эту задачу и предложи релевантные действия (например, "удалить", "создать событие в календаре", "отметить как выполненную").
+
+---
+**ДАННЫЕ ЗАДАЧИ**
+- **Название:** ${title}
+- **Заметки:** ${notes || 'Нет'}
+- **Срок выполнения:** ${dueDate}`;
+                break;
+            }
+            case 'analyze_email': {
+                const attachmentText = payload.attachments?.length > 0
+                    ? payload.attachments.map(a => `${a.filename} (${a.mimeType})`).join(', ')
+                    : 'Нет';
+                
+                promptToSend = `Проанализируй полное содержимое этого письма.
+                
+Твой ответ должен включать:
+1.  **Сводка:** Краткое и ясное изложение сути письма. Если есть вложения, упомяни их.
+2.  **Ссылка:** Обязательно включи ссылку на оригинал в Gmail.
+3.  **Действия:** Предложи релевантные действия в виде кнопок [CONTEXT_ACTIONS], включая стандартные "Удалить" и "Ответить".
+
+---
+**ДАННЫЕ ПИСЬМА**
+- **От кого:** ${payload.from}
+- **Тема:** ${payload.subject}
+- **Ссылка:** ${payload.gmailLink}
+- **Вложения:** ${attachmentText}
+- **Содержимое:**
+${payload.body}`;
+                break;
+            }
             case 'select_contact':
                 promptToSend = `Для моей задачи я выбираю контакт: ${payload.name} (${payload.email || 'email не указан'}).`;
                 break;

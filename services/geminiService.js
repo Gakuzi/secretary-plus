@@ -96,6 +96,19 @@ const baseTools = [
         required: ["query"],
       },
     },
+    {
+      name: "get_recent_files",
+      description: "Получает список недавно измененных файлов и документов из Google Drive, чтобы пользователь мог продолжить работу.",
+      parameters: {
+        type: Type.OBJECT,
+        properties: {
+          max_results: {
+            type: Type.INTEGER,
+            description: "Максимальное количество файлов для возврата. По умолчанию 10.",
+          },
+        },
+      },
+    },
      {
       name: "find_contacts",
       description: "Ищет контакты по имени, фамилии или email. Использует сервис, выбранный пользователем в настройках. НЕ ИСПОЛЬЗУЙ этот инструмент, если пользователь просит совершить действие (позвонить, написать), для этого есть perform_contact_action.",
@@ -328,9 +341,9 @@ const getSystemInstruction = (serviceMap, timezone) => {
 Принципы работы:
 1.  **Проактивность - твой главный приоритет.** После выполнения задачи ты ОБЯЗАН проанализировать результат и предложить наиболее вероятные следующие шаги. Для этого используй специальный формат в конце своего ответа: \`[CONTEXT_ACTIONS] [{"label": "Название кнопки", "prompt": "Текст запроса для этой кнопки", "icon": "UsersIcon"}]\`. Например, после анализа письма с приглашением на встречу, предложи создать событие в календаре.
 2.  **Понимай намерение, а не слова.** Если запрос звучит как "Позвони Ивану Петрову", твоя задача — инициировать звонок. Используй инструмент \`perform_contact_action\`, а не \`find_contacts\`. Не показывай карточку, а сразу предлагай действие.
-3.  **Анализируй почту.** Инструмент \`get_recent_emails\` возвращает ПОЛНОЕ содержимое письма. Твоя задача — прочитать его, понять суть и предложить пользователю релевантные действия (например, создать задачу, запланировать встречу, ответить).
+3.  **Глубокий анализ элементов.** Когда пользователь нажимает на элемент в списке (письмо, задача, контакт, файл), он отправляет тебе системное сообщение с полной информацией об этом элементе. Твоя задача — проанализировать эту информацию, предоставить краткую сводку и предложить наиболее релевантные контекстные действия (например, для задачи — 'удалить', 'перенести', 'создать событие в календаре'; для файла - 'обобщить', 'отправить по почте').
 4.  **Безопасное удаление.** Инструменты \`delete_calendar_event\`, \`delete_task\`, \`delete_email\` очень мощные. Перед тем как их вызвать, ты ОБЯЗАН найти нужный объект, показать его пользователю и задать прямой вопрос: "Вы уверены, что хотите удалить [название объекта]?". И только после утвердительного ответа вызывать инструмент удаления.
-5.  **Интерактивные списки.** Когда ты возвращаешь список (событий, задач, писем), пользователь может нажать на любой элемент. После этого он отправит тебе системное сообщение с деталями этого элемента. Твоя задача — отреагировать на это, предоставив более подробную информацию и предложив контекстные действия (удалить, ответить, создать что-то на основе элемента).
+5.  **Интерактивные списки.** Когда ты возвращаешь список (событий, задач, писем, файлов), пользователь может нажать на любой элемент. Это запустит процесс из пункта 3.
 6.  **Используй правильный сервис.** Ты ВСЕГДА проверяешь, какой сервис пользователь выбрал для каждой задачи, и используешь только его.
     -   Календарь: ${serviceMap.calendar}
     -   Задачи: ${serviceMap.tasks}
@@ -447,14 +460,8 @@ export const callGemini = async ({
                         const provider = serviceProviders.google; // Email is always Google
                         const results = await provider.getRecentEmails(args);
                          if (results && results.length > 0) {
-                            // Only show summary in UI, but pass full content to model in next turn
-                            const summarizedResults = results.map(({ body, ...rest }) => rest);
-                            resultMessage.text = `Вот последние ${results.length} писем. Я изучил их содержание. Нажмите на письмо, чтобы я предложил действия.`;
-                            resultMessage.card = createEmailsViewCard(summarizedResults);
-                            
-                            // Prepend a system message with the full content for the next turn
-                            const emailContentForContext = results.map(e => `--- EMAIL START ---\nFrom: ${e.from}\nSubject: ${e.subject}\nID: ${e.id}\n\n${e.body}\n--- EMAIL END ---`).join('\n\n');
-                            resultMessage.systemContext = `Проанализируй содержимое этих писем и предложи релевантные действия:\n${emailContentForContext}`;
+                            resultMessage.text = `Вот последние ${results.length} писем. Нажмите на любое, чтобы получить подробный анализ и действия.`;
+                            resultMessage.card = createEmailsViewCard(results);
                         } else {
                             resultMessage.text = "Ваш почтовый ящик пуст.";
                         }
@@ -529,14 +536,23 @@ export const callGemini = async ({
                         }
                         break;
                     }
-                    case 'find_documents': {
+                    case 'find_documents':
+                    case 'get_recent_files': {
                         const provider = getProvider('files');
-                        let results = await provider.findDocuments(args.query);
-
-                        if (results.length === 0 && provider.getId() === 'supabase') {
+                        let results = [];
+                        
+                        if (name === 'get_recent_files') {
                             const googleProvider = serviceProviders.google;
-                            if (googleProvider && await googleProvider.isAuthenticated()) {
-                                 results = await googleProvider.findDocuments(args.query);
+                             if (googleProvider && await googleProvider.isAuthenticated()) {
+                                results = await googleProvider.getRecentFiles(args);
+                             }
+                        } else { // find_documents
+                            results = await provider.findDocuments(args.query);
+                             if (results.length === 0 && provider.getId() === 'supabase') {
+                                const googleProvider = serviceProviders.google;
+                                if (googleProvider && await googleProvider.isAuthenticated()) {
+                                     results = await googleProvider.findDocuments(args.query);
+                                }
                             }
                         }
 
@@ -549,10 +565,10 @@ export const callGemini = async ({
                         }));
                         
                         if (normalizedResults.length > 0) {
-                            resultMessage.text = `Вот документы, которые я нашел. Какой из них использовать?`;
+                            resultMessage.text = `Вот документы, которые я нашел. Нажмите на любой для анализа и действий.`;
                             resultMessage.card = { type: 'document_choice', icon: 'FileIcon', title: 'Выберите документ', options: normalizedResults };
                         } else {
-                            resultMessage.text = `Не удалось найти документы по запросу "${args.query}".`;
+                            resultMessage.text = `Не удалось найти документы по запросу "${args.query || 'недавние'}".`;
                         }
                         break;
                     }
@@ -644,94 +660,3 @@ export const callGemini = async ({
                                 const memoryText = memories.map(m => `- ${m.summary} (Ключевые слова: ${m.keywords.join(', ')})`).join('\n');
                                 resultMessage.text = `Я кое-что вспомнил:\n${memoryText}`;
                             } else {
-                                resultMessage.text = "Я не смог ничего вспомнить по этому поводу.";
-                            }
-                        } else {
-                             resultMessage.text = "Не могу ничего вспомнить, Supabase не настроен.";
-                        }
-                        break;
-                    }
-                    default:
-                        resultMessage.text = `Неизвестный вызов функции: ${name}`;
-                }
-            } catch (error) {
-                 console.error(`Error executing tool ${name}:`, error);
-                 let errorMessage = 'Неизвестная ошибка.';
-                 if (error instanceof Error) {
-                     errorMessage = error.message;
-                 } else if (error && error.result && error.result.error) {
-                     // Handle Google API client specific error format
-                     errorMessage = error.result.error.message || JSON.stringify(error.result.error);
-                 } else if (typeof error === 'string') {
-                     errorMessage = error;
-                 } else if (error) {
-                     // Try to stringify, but fallback for circular structures etc.
-                     try {
-                        errorMessage = JSON.stringify(error);
-                     } catch {
-                        errorMessage = String(error);
-                     }
-                 }
-                 resultMessage = { sender: MessageSender.SYSTEM, text: `Произошла ошибка при выполнении действия: ${errorMessage}` };
-            }
-            return resultMessage;
-        }
-
-        const rawText = response.text;
-        const lines = rawText.split('\n');
-        const responseTextLines = [];
-        const suggestedReplies = [];
-        let contextualActions = null;
-
-        const QUICK_REPLY_PREFIX = '[QUICK_REPLY]';
-        const CONTEXT_ACTIONS_PREFIX = '[CONTEXT_ACTIONS]';
-
-        for (const line of lines) {
-            if (line.startsWith(QUICK_REPLY_PREFIX)) {
-                suggestedReplies.push(line.substring(QUICK_REPLY_PREFIX.length).trim());
-            } else if (line.startsWith(CONTEXT_ACTIONS_PREFIX)) {
-                try {
-                    const jsonPart = line.substring(CONTEXT_ACTIONS_PREFIX.length).trim();
-                    contextualActions = JSON.parse(jsonPart);
-                } catch (e) {
-                    console.error("Failed to parse contextual actions:", e);
-                }
-            }
-            else {
-                responseTextLines.push(line);
-            }
-        }
-        
-        return {
-            id: Date.now().toString(),
-            sender: MessageSender.ASSISTANT,
-            text: responseTextLines.join('\n').trim(),
-            suggestedReplies: suggestedReplies.length > 0 ? suggestedReplies : null,
-            contextualActions: contextualActions,
-        };
-
-    } catch (error) {
-        console.error("Gemini API call failed:", error);
-
-        // Check for specific quota exhaustion error
-        if (error.message && (error.message.includes('RESOURCE_EXHAUSTED') || error.message.includes('"code":429'))) {
-            return {
-                id: Date.now().toString(),
-                sender: MessageSender.SYSTEM,
-                text: "**Достигнут дневной лимит бесплатного использования Gemini API.**\n\n" +
-                      "Вы использовали все бесплатные запросы, доступные на сегодня. Чтобы отслеживать использование, перейдите в вашу панель управления Google Cloud:\n\n" +
-                      "*   **[Посмотреть использование квоты](https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas)**\n\n" +
-                      "**Как продолжить работу?**\n" +
-                      "1.  **Подождать:** Ваш лимит автоматически обновится завтра (сброс происходит по тихоокеанскому времени, PST).\n" +
-                      "2.  **Подключить биллинг:** Чтобы снять ограничения бесплатного тарифа, вы можете [подключить платежный аккаунт](https://console.cloud.google.com/billing) к вашему проекту в Google Cloud.\n" +
-                      "3.  **Использовать другой ключ:** Вы можете создать новый проект в Google Cloud, сгенерировать для него новый Gemini API ключ и использовать его в настройках. У нового проекта будет свой собственный бесплатный дневной лимит."
-            };
-        }
-
-        return {
-            id: Date.now().toString(),
-            sender: MessageSender.SYSTEM,
-            text: `Произошла ошибка при обращении к Gemini API: ${error.message}`,
-        };
-    }
-};
