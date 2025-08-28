@@ -513,9 +513,17 @@ if (!window.isSecretaryPlusAppInitialized) {
 ${payload.body}`;
                 break;
             }
-            case 'select_contact':
-                promptToSend = `Для моей задачи я выбираю контакт: ${payload.name} (${payload.email || 'email не указан'}).`;
+            case 'analyze_contact': {
+                const { display_name, email, phone } = payload;
+                promptToSend = `Проанализируй этот контакт и предложи релевантные действия (позвонить, написать, создать встречу).
+
+---
+**ДАННЫЕ КОНТАКТА**
+- **Имя:** ${display_name || 'Не указано'}
+- **Email:** ${email || 'Не указан'}
+- **Телефон:** ${phone || 'Не указан'}`;
                 break;
+            }
             case 'analyze_document':
                 promptToSend = `Я выбрал документ "${payload.name}". Предложи действия, которые можно с ним совершить (например, "отправить по почте", "создать задачу на его основе", "обобщить по названию").`;
                 break;

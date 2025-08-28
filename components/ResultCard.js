@@ -302,10 +302,10 @@ function createContactChoiceCard(card) {
         const email = person.email || null;
         const phone = person.phone || null;
         
-        const payload = JSON.stringify({ name, email });
+        const payload = JSON.stringify(person);
 
         return `
-            <button class="choice-item" data-action="select_contact" data-payload='${payload}'>
+            <button class="choice-item" data-action="analyze_contact" data-payload='${payload}'>
                 <p class="font-semibold text-white">${name}</p>
                 ${email ? `<p class="text-xs text-blue-400"><a href="mailto:${email}" class="hover:underline" onclick="event.stopPropagation()">${email}</a></p>` : ''}
                 ${phone ? `<p class="text-xs text-gray-400"><a href="tel:${phone}" class="hover:underline" onclick="event.stopPropagation()">${phone}</a></p>` : ''}

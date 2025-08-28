@@ -679,7 +679,7 @@ export const callGemini = async ({
             return resultMessage;
         }
 
-        const textResponse = firstCandidate?.content?.parts?.[0]?.text || "Я не смог обработать ваш запрос.";
+        const textResponse = response.text || "Я не смог обработать ваш запрос.";
 
         const contextualActionsRegex = /\[CONTEXT_ACTIONS\]\s*(.*)/s;
         const quickRepliesRegex = /\[QUICK_REPLY\]\s*(.*)/g;

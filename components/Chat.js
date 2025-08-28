@@ -44,7 +44,7 @@ async function handleFileSelect(file) {
             return;
         }
         // Set worker path for pdf.js right before use to avoid race conditions on app load.
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js`;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.mjs`;
 
         const originalPlaceholder = chatInput.placeholder;
         chatInput.placeholder = `Обработка PDF: ${file.name}...`;
