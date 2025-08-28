@@ -182,78 +182,149 @@ body {
     opacity: 1;
 }
 
-/* --- NEW VOICE INPUT STYLES --- */
-#voice-record-button {
-    transition: transform 0.2s ease, background-color 0.2s ease;
+/* --- NEW TELEGRAM-STYLE VOICE INPUT --- */
+
+#input-bar-wrapper {
+  position: relative;
+}
+
+/* Main bar container */
+#input-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  background-color: var(--background-light);
+  border-radius: 1.25rem; /* rounded-xl */
+  padding: 0.5rem;
+  min-height: 52px;
+  transition: all 0.2s ease-in-out;
+}
+
+/* Pulsating effect for the mic button */
+@keyframes pulse-record {
+  0% { box-shadow: 0 0 0 0px rgba(239, 68, 68, 0.7); }
+  100% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
 }
 #voice-record-button.recording-active {
-    transform: scale(1.1);
-    background-color: #ef4444; /* red-500 */
+  transform: scale(1.5);
+  background-color: #ef4444; /* red-500 */
+}
+#voice-record-button.recording-active svg {
+  transform: scale(0.8);
 }
 
-#recording-overlay {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    top: 0;
-    background-color: var(--background-dark);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 1rem;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.2s ease;
+/* The content inside the bar that swaps */
+#input-content-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
 }
 
-#recording-overlay.visible {
-    opacity: 1;
+/* Default view with textarea */
+#compose-view {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  gap: 0.5rem;
 }
 
-#recording-timer {
-    color: #ef4444; /* red-500 */
-    font-weight: 500;
-    font-variant-numeric: tabular-nums;
+/* Recording view (replaces compose view) */
+#recording-view {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 0.5rem;
+  animation: fadeIn 0.2s ease-in-out;
 }
 
-.recording-hint {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: var(--text-secondary);
+#recording-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #ef4444;
+  font-weight: 500;
+}
+#recording-indicator .dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background-color: #ef4444;
+  animation: blink 1.2s infinite;
+}
+#recording-indicator #recording-timer {
+  font-variant-numeric: tabular-nums;
 }
 
-.recording-hint.highlight {
-    color: var(--accent-blue);
-    font-weight: 600;
+#cancel-hint {
+  color: var(--text-secondary);
+  transition: transform 0.2s ease-in-out;
+}
+@keyframes slide-hint {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-5px); }
+}
+#cancel-hint.active {
+  animation: slide-hint 1.5s infinite ease-in-out;
 }
 
-@keyframes slide-left-right {
-    0%, 100% { transform: translateX(0); }
-    50% { transform: translateX(-5px); }
-}
-
-.recording-hint svg {
-    animation: slide-left-right 1.5s ease-in-out infinite;
-}
-
+/* Lock icon that appears above */
 #lock-hint {
-    position: absolute;
-    bottom: 120%; /* Position above the input bar */
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: rgba(0, 0, 0, 0.7);
-    padding: 0.5rem;
-    border-radius: 9999px;
-    opacity: 0;
-    transition: opacity 0.3s ease, transform 0.3s ease;
-    pointer-events: none;
+  position: absolute;
+  bottom: 110%;
+  right: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.3s ease-in-out;
+  pointer-events: none;
 }
 #lock-hint.visible {
-    opacity: 1;
-    transform: translateX(-50%) translateY(-10px);
+  opacity: 1;
+  transform: translateY(0);
 }
+#lock-hint .lock-icon-bg {
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  background-color: rgba(31, 41, 55, 0.9);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  border: 1px solid #4b5563;
+  transition: all 0.2s ease-in-out;
+}
+#lock-hint.is-locking .lock-icon-bg {
+  transform: scale(1.1);
+  background-color: var(--accent-blue);
+  color: white;
+}
+
+/* Locked view styles */
+#input-bar.locked {
+  border-radius: 1.25rem;
+}
+#compose-view.locked #chat-input {
+  padding-left: 2rem;
+}
+#compose-view.locked #recording-indicator-locked {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #ef4444;
+  font-weight: 500;
+}
+
 
 /* --- SETTINGS MODAL TABS --- */
 .service-tab-button {
