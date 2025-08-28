@@ -7,6 +7,7 @@ export class GoogleServiceProvider {
         this.tokenClient = null;
         this._clientId = null;
         this.initPromise = null;
+        this.storageKey = 'google-oauth-token';
     }
 
     // Используем сеттер для сброса состояния при изменении ID
@@ -35,6 +36,18 @@ export class GoogleServiceProvider {
 
             this.gapi.load('client', () => {
                 try {
+                    // Try to load token from storage
+                    const tokenString = localStorage.getItem(this.storageKey);
+                    if (tokenString) {
+                        const token = JSON.parse(tokenString);
+                        // Check for expiration
+                        if (token.expires_at && token.expires_at > Date.now()) {
+                            this.gapi.client.setToken(token);
+                        } else {
+                            localStorage.removeItem(this.storageKey);
+                        }
+                    }
+
                     this.tokenClient = this.google.accounts.oauth2.initTokenClient({
                         client_id: this.clientId,
                         scope: GOOGLE_SCOPES,
@@ -73,7 +86,14 @@ export class GoogleServiceProvider {
                     if (resp.error) {
                         return reject(resp);
                     }
-                    this.gapi.client.setToken(resp);
+                    
+                    const tokenWithExpiry = {
+                        ...resp,
+                        expires_at: Date.now() + (parseInt(resp.expires_in, 10) * 1000)
+                    };
+
+                    this.gapi.client.setToken(tokenWithExpiry);
+                    localStorage.setItem(this.storageKey, JSON.stringify(tokenWithExpiry));
                     resolve();
                 };
                 this.tokenClient.callback = callback;
@@ -92,14 +112,16 @@ export class GoogleServiceProvider {
     async disconnect() {
         await this.initialize();
         const token = this.gapi.client.getToken();
-        if (token) {
-            return new Promise((resolve) => {
-                this.google.accounts.oauth2.revoke(token.access_token, () => {
-                    this.gapi.client.setToken(null);
-                    resolve();
-                });
-            });
+
+        // Clear local state immediately for a responsive UI
+        localStorage.removeItem(this.storageKey);
+        this.gapi.client.setToken(null);
+
+        if (token && token.access_token) {
+            // Fire-and-forget the token revocation on Google's side
+            this.google.accounts.oauth2.revoke(token.access_token, () => {});
         }
+
         return Promise.resolve();
     }
 
