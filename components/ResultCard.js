@@ -96,9 +96,9 @@ function createDocumentProposalCard(card) {
 
 function createContactCard(card) {
     const person = card.person;
-    const name = person.names?.[0]?.displayName || 'Имя не указано';
-    const email = person.emailAddresses?.[0]?.value || null;
-    const phone = person.phoneNumbers?.[0]?.value || null;
+    const name = person.display_name || 'Имя не указано';
+    const email = person.email || null;
+    const phone = person.phone || null;
     
     const payload = JSON.stringify({ name, email });
 
@@ -128,9 +128,9 @@ function createContactCard(card) {
 
 function createDirectActionCard(card) {
     const { person, action } = card;
-    const name = person.names?.[0]?.displayName || 'Имя не указано';
-    const email = person.emailAddresses?.[0]?.value || null;
-    const phone = person.phoneNumbers?.[0]?.value || null;
+    const name = person.display_name || 'Имя не указано';
+    const email = person.email || null;
+    const phone = person.phone || null;
     const iconSVG = Icons[card.icon] || '';
     
     let actionButtonHtml = '';
@@ -171,9 +171,9 @@ function createDirectActionCard(card) {
 function createContactChoiceCard(card) {
     const iconSVG = Icons[card.icon] || '';
     const optionsHtml = card.options.map(person => {
-        const name = person.names?.[0]?.displayName || 'Имя не указано';
-        const email = person.emailAddresses?.[0]?.value || null;
-        const phone = person.phoneNumbers?.[0]?.value || null;
+        const name = person.display_name || 'Имя не указано';
+        const email = person.email || null;
+        const phone = person.phone || null;
         
         const payload = JSON.stringify({ name, email });
 
@@ -200,11 +200,11 @@ function createContactChoiceCard(card) {
 function createDocumentChoiceCard(card) {
     const iconSVG = Icons[card.icon] || '';
     const optionsHtml = card.options.map(doc => {
-        const payload = JSON.stringify({ name: doc.name, url: doc.webViewLink, id: doc.id });
+        const payload = JSON.stringify({ name: doc.name, url: doc.url, id: doc.source_id });
         return `
             <button class="choice-item" data-action="select_document" data-payload='${payload}'>
                  <div class="flex items-center">
-                    <img src="${doc.iconLink}" class="w-4 h-4 mr-2" alt="doc-icon"/>
+                    <img src="${doc.icon_link}" class="w-4 h-4 mr-2" alt="doc-icon"/>
                     <p class="font-semibold text-white truncate">${doc.name}</p>
                 </div>
             </button>

@@ -37,7 +37,7 @@ const tools = {
     },
     {
       name: "find_contacts",
-      description: "Ищет контакты в адресной книге пользователя по имени, фамилии или email.",
+      description: "Ищет контакты в синхронизированной базе данных по имени, фамилии или email.",
       parameters: {
         type: Type.OBJECT,
         properties: {
@@ -51,7 +51,7 @@ const tools = {
     },
     {
       name: "perform_contact_action",
-      description: "Выполняет немедленное действие с контактом, такое как звонок или отправка email, когда не указано конкретное время в будущем.",
+      description: "Выполняет немедленное действие с контактом, такое как звонок или отправка email, когда не указано конкретное время в будущем. Для этого используется поиск по синхронизированной базе.",
       parameters: {
         type: Type.OBJECT,
         properties: {
@@ -70,7 +70,7 @@ const tools = {
     },
     {
       name: "find_documents",
-      description: "Ищет файлы и документы на Google Диске пользователя по названию.",
+      description: "Ищет файлы и документы в синхронизированной базе данных по названию.",
       parameters: {
         type: Type.OBJECT,
         properties: {
@@ -194,30 +194,31 @@ const tools = {
   ],
 };
 
-const systemInstruction = `Ты — «Секретарь+», проактивный личный ИИ-ассистент. Твоя главная цель — не просто выполнить команду, а помочь пользователю создать максимально полную и полезную сущность (событие, задачу и т.д.), предугадывая его потребности.
+const systemInstruction = `Ты — «Секретарь+», проактивный личный ИИ-ассистент, работающий с данными пользователя, синхронизированными в центральную базу.
 
 Принципы работы:
-1.  **Немедленные действия:** Если пользователь просит совершить простое действие с контактом (например, 'позвони Ивану', 'напиши письмо Марии') и НЕ указывает время/дату в будущем, используй \`perform_contact_action\`. Не создавай для этого событие в календаре.
-2.  **Диалог — ключ ко всему:** Всегда веди диалог. Если информации недостаточно, задавай уточняющие вопросы.
-3.  **Проактивность с документами:** Если пользователь упоминает проект, встречу для обсуждения чего-либо или любую другую активность, которая может потребовать документов, **всегда** используй \`find_documents\`. Если документы не найдены, предложи создать новый.
+1.  **Поиск в базе данных:** Для поиска контактов или документов (\`find_contacts\`, \`find_documents\`) ты **всегда** обращаешься к синхронизированной базе данных. Это твой единый источник правды.
+2.  **Немедленные действия:** Если пользователь просит совершить простое действие с контактом (например, 'позвони Ивану', 'напиши письмо Марии') и НЕ указывает время/дату в будущем, используй \`perform_contact_action\`. Для поиска контакта будет использоваться база данных.
+3.  **Диалог — ключ ко всему:** Если информации недостаточно, задавай уточняющие вопросы.
 4.  **Сначала уточнение, потом действие:** Никогда не создавай событие или задачу, если в запросе есть неоднозначные данные (имена людей, названия документов).
-    -   Упомянуто имя ('Иван')? Используй \`find_contacts\`, покажи пользователю варианты в виде карточки выбора. Дождись его выбора, прежде чем продолжать.
-    -   Упомянут документ ('отчет')? Используй \`find_documents\`, покажи пользователю варианты в виде карточки выбора. Дождись его выбора.
+    -   Упомянуто имя ('Иван')? Используй \`find_contacts\`, покажи пользователю варианты из базы в виде карточки выбора. Дождись его выбора.
+    -   Упомянут документ ('отчет')? Используй \`find_documents\`, покажи пользователю варианты из базы в виде карточки выбора. Дождись его выбора.
 5.  **Работа с контактами без Email:** Если пользователь выбирает контакт без email-адреса для создания события, ты должен явно спросить у пользователя этот email. **КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО** придумывать или подставлять несуществующие email-адреса. Если пользователь отвечает, что не знает email, создай событие без участников (с пустым полем \`attendees\`) и в своем ответе сообщи, что пользователь может поделиться ссылкой на встречу вручную.
 6.  **Сбор информации:** Только после того, как все участники, документы и другие детали подтверждены пользователем, вызывай финальную функцию, например, \`create_calendar_event\`.
 7.  **Контекст:** **Критически важно:** Ты должен анализировать ВЕСЬ предыдущий диалог, чтобы понимать текущий контекст. Не отвечай на последний запрос в изоляции. Связывай имена, документы и намерения, упомянутые ранее в разговоре.
 8.  **Дата и время:** Всегда учитывай текущую дату и время при планировании. Сегодняшняя дата: ${new Date().toLocaleDateString('ru-RU')}.
 9.  **Интерактивные ответы:** Если ты задаешь пользователю вопрос, по возможности предлагай 2-4 наиболее вероятных варианта быстрого ответа. Каждый вариант ответа должен быть на новой строке и начинаться с префикса \`[QUICK_REPLY]\`. Например: \n\`На какое время запланировать?\`\n\`[QUICK_REPLY]На 15:00\`\n\`[QUICK_REPLY]На завтра утром\`
 10. **Мультимодальность:** Если пользователь прислал изображение, проанализируй его и используй в ответе. Если к изображению есть текстовый запрос, отвечай на него с учетом картинки.
-11. **Проактивные предложения:** После успешного выполнения основного действия (например, создания встречи), всегда предлагай релевантные последующие шаги. Например, после создания встречи предложи отправить приглашения участникам или создать задачу для подготовки. Используй для этого соответствующие карточки с действиями.
+11. **Проактивные предложения:** После успешного выполнения основного действия (например, создания встречи), всегда предлагай релевантные последующие шаги. Например, после создания встречи предложи отправить приглашения участникам или создать задачу для подготовки.
 12. **Проактивное создание документов:** Если пользователь просит создать документ (например, 'создай документ по проекту альфа') и в истории чата есть релевантная информация, не вызывай \`create_google_doc\` сразу. Вместо этого, используй \`propose_document_with_content\`, передав краткое содержание обсуждения. Дождись подтверждения от пользователя.`;
 
 
 export const callGemini = async (
     prompt,
     history,
-    serviceProvider,
-    isUnsupportedDomain,
+    serviceProvider, // GoogleServiceProvider for actions
+    supabaseService, // SupabaseService for data retrieval
+    isProviderAuthenticated,
     image,
     apiKey
 ) => {
@@ -247,7 +248,7 @@ export const callGemini = async (
         contents.push({ role: 'user', parts: userParts });
     }
 
-    const toolsConfig = (serviceProvider && !isUnsupportedDomain) ? { functionDeclarations: tools.functionDeclarations } : undefined;
+    const toolsConfig = (isProviderAuthenticated) ? { functionDeclarations: tools.functionDeclarations } : undefined;
 
     try {
         const response = await ai.models.generateContent({
@@ -262,7 +263,7 @@ export const callGemini = async (
         const firstCandidate = response.candidates?.[0];
         const functionCall = firstCandidate?.content?.parts?.[0]?.functionCall;
 
-        if (functionCall && serviceProvider) {
+        if (functionCall && serviceProvider && supabaseService) {
             const { name, args } = functionCall;
             let resultMessage = {
                 id: Date.now().toString(),
@@ -319,10 +320,10 @@ export const callGemini = async (
                     break;
                 }
                 case 'find_contacts': {
-                    const results = await serviceProvider.findContacts(args.query);
+                    const results = await supabaseService.searchContacts(args.query);
                     if (results.length === 1) {
-                        const person = results[0].person;
-                        resultMessage.text = `Найден контакт: ${person.names?.[0]?.displayName}. Что вы хотите сделать?`;
+                        const person = results[0];
+                        resultMessage.text = `Найден контакт: ${person.display_name}. Что вы хотите сделать?`;
                         resultMessage.card = {
                             type: 'contact',
                             icon: 'UsersIcon',
@@ -335,7 +336,7 @@ export const callGemini = async (
                             type: 'contact_choice',
                             icon: 'UsersIcon',
                             title: 'Выберите контакт',
-                            options: results.map(r => r.person)
+                            options: results
                         };
                     } else {
                         resultMessage.text = `К сожалению, я не нашел контактов по запросу "${args.query}".`;
@@ -343,11 +344,11 @@ export const callGemini = async (
                     break;
                 }
                 case 'perform_contact_action': {
-                    const results = await serviceProvider.findContacts(args.query);
+                    const results = await supabaseService.searchContacts(args.query);
                      if (results.length === 1) {
-                        const person = results[0].person;
+                        const person = results[0];
                         const actionText = args.action === 'call' ? 'позвонить' : 'написать';
-                        resultMessage.text = `Готовы ${actionText} контакту ${person.names?.[0]?.displayName}.`;
+                        resultMessage.text = `Готовы ${actionText} контакту ${person.display_name}.`;
                         resultMessage.card = {
                             type: 'direct_action_card',
                             icon: args.action === 'call' ? 'PhoneIcon' : 'EmailIcon',
@@ -362,7 +363,7 @@ export const callGemini = async (
                             type: 'contact_choice',
                             icon: 'UsersIcon',
                             title: `Кому ${actionText}?`,
-                            options: results.map(r => r.person)
+                            options: results
                         };
                     } else {
                         resultMessage.text = `К сожалению, я не нашел контактов по запросу "${args.query}".`;
@@ -370,9 +371,9 @@ export const callGemini = async (
                     break;
                 }
                 case 'find_documents': {
-                    const results = await serviceProvider.findDocuments(args.query);
+                    const results = await supabaseService.searchFiles(args.query);
                     if (results.length > 0) {
-                        resultMessage.text = `Вот документы, которые я нашел. Какой из них использовать?`;
+                        resultMessage.text = `Вот документы, которые я нашел в вашей базе. Какой из них использовать?`;
                         resultMessage.card = {
                             type: 'document_choice',
                             icon: 'FileIcon',
@@ -380,12 +381,12 @@ export const callGemini = async (
                             options: results,
                         };
                     } else {
-                        resultMessage.text = `Не удалось найти документы по запросу "${args.query}".`;
+                        resultMessage.text = `Не удалось найти документы по запросу "${args.query}". Убедитесь, что вы синхронизировали файлы в настройках.`;
                         resultMessage.card = {
                             type: 'document_prompt',
                             icon: 'FileIcon',
                             title: 'Документ не найден',
-                            text: 'Хотите создать новый документ?',
+                            text: 'Хотите создать новый документ в Google Drive?',
                             actions: [
                                 { label: 'Создать Google Doc', action: 'create_document_prompt', payload: { type: 'doc', query: args.query } },
                             ]

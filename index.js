@@ -1,6 +1,5 @@
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
-import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
-import { OutlookServiceProvider } from './services/outlook/OutlookServiceProvider.js';
+import { SupabaseService } from './services/supabase/SupabaseService.js';
 import { callGemini } from './services/geminiService.js';
 import { getSettings, saveSettings } from './utils/storage.js';
 import { createSettingsModal } from './components/SettingsModal.js';
@@ -14,23 +13,22 @@ import { MessageSender } from './types.js';
 // --- STATE MANAGEMENT ---
 let state = {
     settings: {
-        googleClientId: '',
+        supabaseUrl: '',
+        supabaseAnonKey: '',
         geminiApiKey: '',
-        activeProviderId: 'google',
     },
     messages: [],
-    isAuthenticated: false,
-    userProfile: null,
+    isSupabaseConnected: false,
+    isGoogleConnected: false,
+    userProfile: null, // From Google
+    supabaseUser: null, // From Supabase
     isLoading: false,
     actionStats: {}, // For tracking function calls
 };
 
-let activeProvider = null;
-const serviceProviders = {
-    google: new GoogleServiceProvider(),
-    apple: new AppleServiceProvider(),
-    outlook: new OutlookServiceProvider(),
-};
+// --- SERVICE INSTANCES ---
+const googleProvider = new GoogleServiceProvider();
+let supabaseService = null;
 
 // --- DOM ELEMENTS ---
 const authContainer = document.getElementById('auth-container');
@@ -45,7 +43,7 @@ const cameraViewContainer = document.getElementById('camera-view-container');
 // --- RENDER FUNCTIONS ---
 function renderAuth() {
     authContainer.innerHTML = '';
-    if (state.isAuthenticated && state.userProfile) {
+    if (state.isGoogleConnected && state.userProfile) {
         const profileElement = document.createElement('div');
         profileElement.className = 'flex items-center space-x-2';
         profileElement.innerHTML = `
@@ -59,7 +57,7 @@ function renderAuth() {
         const loginButton = document.createElement('button');
         loginButton.id = 'login-button';
         loginButton.className = 'px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors';
-        loginButton.textContent = 'Войти';
+        loginButton.textContent = 'Войти через Google';
         authContainer.appendChild(loginButton);
         document.getElementById('login-button').addEventListener('click', handleLogin);
     }
@@ -67,15 +65,11 @@ function renderAuth() {
 
 function renderMainContent() {
     mainContent.innerHTML = '';
-    // Всегда создаем основной интерфейс чата (контейнер и поле ввода)
     const chatContainer = createChatInterface(handleSendMessage);
     mainContent.appendChild(chatContainer);
     
-    // После создания интерфейса чата, находим кнопку камеры и вешаем обработчик
     document.getElementById('camera-button').addEventListener('click', showCameraView);
 
-
-    // Определяем, что показывать в области сообщений: приветствие или историю
     const chatLog = document.getElementById('chat-log');
     if (state.messages.length === 0) {
         chatLog.appendChild(createWelcomeScreen());
@@ -138,12 +132,10 @@ async function handleCardAction(e) {
 
     if (!systemPrompt) return;
 
-    // Add a visual confirmation message for the user
     const userMessage = { sender: MessageSender.USER, text: userPromptText, id: Date.now() };
     state.messages.push(userMessage);
     addMessageToChat(userMessage);
 
-    // Send the system-level prompt to Gemini to continue the flow
     await handleSendMessage(systemPrompt, null, true);
 }
 
@@ -153,17 +145,15 @@ async function handleQuickReply(e) {
 
     const replyText = target.dataset.replyText;
 
-    // Visually update the UI immediately
     const container = target.closest('.quick-replies-container');
     container.querySelectorAll('button').forEach(btn => {
         btn.disabled = true;
         if (btn !== target) {
-            btn.style.opacity = '0.5'; // Fade out other options
+            btn.style.opacity = '0.5';
         }
     });
-    target.classList.add('clicked'); // Highlight the clicked one
+    target.classList.add('clicked');
 
-    // Send the reply as a new message
     await handleSendMessage(replyText);
 }
 
@@ -172,12 +162,11 @@ async function handleSendMessage(prompt, image = null, isSystem = false) {
     if (state.isLoading || (!prompt && !image)) return;
 
     if (!state.settings.geminiApiKey) {
-        const errorMessage = { sender: MessageSender.SYSTEM, text: "Ошибка: Ключ Gemini API не указан. Пожалуйста, добавьте его в настройках (иконка шестеренки в правом верхнем углу)." };
+        const errorMessage = { sender: MessageSender.SYSTEM, text: "Ошибка: Ключ Gemini API не указан. Пожалуйста, добавьте его в настройках." };
         addMessageToChat(errorMessage);
         return;
     }
     
-    // Если это первое сообщение, очистим приветственный экран
     if (state.messages.length === 0) {
         const chatLog = document.getElementById('chat-log');
         if (chatLog) chatLog.innerHTML = '';
@@ -185,7 +174,6 @@ async function handleSendMessage(prompt, image = null, isSystem = false) {
 
     state.isLoading = true;
 
-    // Only add user message to history if it's not a system message
     if (!isSystem) {
       const userMessage = { sender: MessageSender.USER, text: prompt, image, id: Date.now() };
       state.messages.push(userMessage);
@@ -195,17 +183,16 @@ async function handleSendMessage(prompt, image = null, isSystem = false) {
     showLoadingIndicator();
 
     try {
-        const isUnsupportedDomain = window.location.hostname !== 'localhost' && !window.location.hostname.endsWith('github.io');
         const response = await callGemini(
             prompt,
-            state.messages.slice(0, -1), // Send history without the last user message
-            activeProvider,
-            isUnsupportedDomain,
+            state.messages.slice(0, -1),
+            googleProvider,
+            supabaseService,
+            state.isGoogleConnected,
             image,
             state.settings.geminiApiKey
         );
 
-        // Track function call for stats
         if (response.functionCallName) {
             state.actionStats[response.functionCallName] = (state.actionStats[response.functionCallName] || 0) + 1;
         }
@@ -224,14 +211,17 @@ async function handleSendMessage(prompt, image = null, isSystem = false) {
 }
 
 function showSettings() {
-    const isUnsupportedDomain = window.location.hostname !== 'localhost' && !window.location.hostname.endsWith('github.io');
     const modal = createSettingsModal(
-        state.settings, 
-        serviceProviders, 
+        state.settings,
+        {
+            isSupabaseConnected: state.isSupabaseConnected,
+            isGoogleConnected: state.isGoogleConnected,
+            supabaseUser: state.supabaseUser,
+        },
         handleSaveSettings, 
-        hideSettings, 
-        isUnsupportedDomain,
-        handleAuthAndSave
+        hideSettings,
+        googleProvider,
+        supabaseService
     );
     settingsModalContainer.innerHTML = '';
     settingsModalContainer.appendChild(modal);
@@ -257,11 +247,11 @@ function hideStatsModal() {
 
 function showCameraView() {
     const cameraView = createCameraView(
-        (image) => { // onCapture
+        (image) => { 
             handleSendMessage(null, image);
             hideCameraView();
         },
-        () => { // onClose
+        () => {
             hideCameraView();
         }
     );
@@ -272,92 +262,92 @@ function showCameraView() {
 
 function hideCameraView() {
     cameraViewContainer.classList.add('hidden');
-    cameraViewContainer.innerHTML = ''; // Clean up to stop stream etc.
+    cameraViewContainer.innerHTML = '';
 }
 
 
-function handleSaveSettings(newSettings) {
+async function handleSaveSettings(newSettings) {
     state.settings = newSettings;
     saveSettings(newSettings);
     hideSettings();
-    // Re-initialize provider if client ID changed
-    setupActiveProvider();
-    checkAuth();
+    await initializeSupabase(); 
+    // Re-render auth in case connection status changed
+    renderAuth();
 }
-
-async function handleAuthAndSave(newSettings) {
-    state.settings = newSettings;
-    saveSettings(newSettings);
-    setupActiveProvider();
-    hideSettings();
-    // handleLogin will show its own alerts and trigger the auth flow
-    await handleLogin();
-}
-
 
 async function handleLogin() {
-    if (!activeProvider) {
-        alert('Сервис авторизации не настроен.');
-        return;
-    }
-    if (!state.settings.googleClientId && state.settings.activeProviderId === 'google') {
-        alert('Google Client ID не указан в настройках.');
+    if (!supabaseService) {
+        alert('Клиент Supabase не инициализирован. Пожалуйста, проверьте настройки.');
         return;
     }
     try {
-        await activeProvider.authenticate();
-        await checkAuth();
+        await supabaseService.signInWithGoogle();
+        // The onAuthStateChange handler will manage the rest
     } catch (error) {
-        console.error("Authentication failed", error);
-        alert(`Ошибка авторизации: ${error.message || 'попробуйте еще раз.'}`);
+        console.error('Login failed', error);
+        alert(`Ошибка входа: ${error.message}`);
     }
 }
 
 async function handleLogout() {
-    if (activeProvider) {
-        await activeProvider.disconnect();
+    if (supabaseService) {
+        await supabaseService.signOut();
     }
-    state.isAuthenticated = false;
-    state.userProfile = null;
-    renderAuth();
+    // State will be cleared by onAuthStateChange handler
 }
 
-async function checkAuth() {
-    if (activeProvider) {
+async function updateAuthState(session) {
+    if (session) {
+        state.supabaseUser = session.user;
+        state.isGoogleConnected = true;
+        const providerToken = session.provider_token;
+        googleProvider.setAuthToken(providerToken);
         try {
-            const isAuthenticated = await activeProvider.isAuthenticated();
-            state.isAuthenticated = isAuthenticated;
-            if (isAuthenticated) {
-                state.userProfile = await activeProvider.getUserProfile();
-            } else {
-                state.userProfile = null;
-            }
+            state.userProfile = await googleProvider.getUserProfile();
         } catch (error) {
-            console.warn(`Не удалось проверить статус авторизации: ${error.message}`);
-            state.isAuthenticated = false;
-            state.userProfile = null;
+            console.error("Failed to fetch Google user profile:", error);
+            // If token is expired, sign out to force re-login
+            await handleLogout();
+            return;
         }
     } else {
-        state.isAuthenticated = false;
+        state.supabaseUser = null;
+        state.isGoogleConnected = false;
         state.userProfile = null;
+        googleProvider.setAuthToken(null);
     }
     renderAuth();
 }
 
-function setupActiveProvider() {
-    const providerId = state.settings.activeProviderId;
-    if (providerId === 'google') {
-        // This will now use the setter in GoogleServiceProvider to reset initialization
-        serviceProviders.google.clientId = state.settings.googleClientId;
-        activeProvider = serviceProviders.google;
+async function initializeSupabase() {
+    const { supabaseUrl, supabaseAnonKey } = state.settings;
+    if (supabaseUrl && supabaseAnonKey) {
+        if (supabaseService && supabaseService.url === supabaseUrl) {
+            return; // Already initialized with the same URL
+        }
+        supabaseService = new SupabaseService(supabaseUrl, supabaseAnonKey);
+        state.isSupabaseConnected = true;
+        
+        // Listen for auth changes
+        supabaseService.onAuthStateChange((event, session) => {
+            console.log(`Supabase auth event: ${event}`);
+            updateAuthState(session);
+        });
+
+        // Check initial session
+        const session = await supabaseService.getSession();
+        await updateAuthState(session);
+
     } else {
-        activeProvider = serviceProviders[providerId] || null;
+        supabaseService = null;
+        state.isSupabaseConnected = false;
+        await updateAuthState(null); // Clear auth state
     }
 }
 
 
 // --- INITIALIZATION ---
-function init() {
+async function init() {
     settingsButton.innerHTML = SettingsIcon;
     statsButton.innerHTML = ChartBarIcon;
 
@@ -370,8 +360,7 @@ function init() {
     });
 
     state.settings = getSettings();
-    setupActiveProvider();
-    checkAuth();
+    await initializeSupabase();
     render();
 }
 

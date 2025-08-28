@@ -1,9 +1,9 @@
-const SETTINGS_KEY = 'secretary-plus-settings';
+const SETTINGS_KEY = 'secretary-plus-settings-v2';
 
 const defaultSettings = {
-    googleClientId: '',
+    supabaseUrl: '',
+    supabaseAnonKey: '',
     geminiApiKey: '',
-    activeProviderId: 'google',
 };
 
 export function getSettings() {
