@@ -103,7 +103,11 @@ async function handleCardAction(e) {
 
     if (action === 'select_contact') {
         userPromptText = `Выбран контакт: ${payload.name}`;
-        systemPrompt = `Пользователь выбрал контакт: Имя - ${payload.name}, Email - ${payload.email}. Продолжай выполнение первоначального запроса с этой информацией.`;
+        if (payload.email) {
+            systemPrompt = `Пользователь выбрал контакт: Имя - ${payload.name}, Email - ${payload.email}. Продолжай выполнение первоначального запроса с этой информацией.`;
+        } else {
+            systemPrompt = `Пользователь выбрал контакт '${payload.name}', у которого нет email адреса. Спроси у пользователя email для этого контакта, чтобы добавить его на встречу. Предложи вариант создать встречу без участников и просто получить ссылку для ручной отправки.`;
+        }
     } else if (action === 'select_document') {
         userPromptText = `Выбран документ: ${payload.name}`;
         systemPrompt = `Пользователь выбрал документ: Название - "${payload.name}", Ссылка - ${payload.url}. Продолжай выполнение первоначального запроса с этой информацией.`;
