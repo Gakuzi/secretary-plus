@@ -660,3 +660,66 @@ export const callGemini = async ({
                                 const memoryText = memories.map(m => `- ${m.summary} (Ключевые слова: ${m.keywords.join(', ')})`).join('\n');
                                 resultMessage.text = `Я кое-что вспомнил:\n${memoryText}`;
                             } else {
+                                resultMessage.text = `По запросу "${args.query}" я ничего не вспомнил.`;
+                            }
+                        } else {
+                            resultMessage.text = "Не могу ничего вспомнить, Supabase не настроен.";
+                        }
+                        break;
+                    }
+                    default:
+                        resultMessage.text = `Неизвестный инструмент: ${name}`;
+                        break;
+                }
+            } catch (error) {
+                console.error(`Error executing tool ${name}:`, error);
+                resultMessage.sender = MessageSender.SYSTEM;
+                resultMessage.text = `Ошибка при выполнении действия: ${error.message}`;
+            }
+            return resultMessage;
+        }
+
+        const textResponse = firstCandidate?.content?.parts?.[0]?.text || "Я не смог обработать ваш запрос.";
+
+        const contextualActionsRegex = /\[CONTEXT_ACTIONS\]\s*(.*)/s;
+        const quickRepliesRegex = /\[QUICK_REPLY\]\s*(.*)/g;
+
+        let cleanText = textResponse;
+        let contextualActions = null;
+        let suggestedReplies = [];
+
+        const actionsMatch = textResponse.match(contextualActionsRegex);
+        if (actionsMatch && actionsMatch[1]) {
+            try {
+                contextualActions = JSON.parse(actionsMatch[1]);
+                cleanText = cleanText.replace(contextualActionsRegex, '').trim();
+            } catch (e) {
+                console.error("Failed to parse contextual actions JSON:", e);
+            }
+        }
+
+        let replyMatch;
+        while ((replyMatch = quickRepliesRegex.exec(textResponse)) !== null) {
+            suggestedReplies.push(replyMatch[1].trim());
+        }
+        if (suggestedReplies.length > 0) {
+            cleanText = cleanText.replace(quickRepliesRegex, '').trim();
+        }
+
+        return {
+            id: Date.now().toString(),
+            sender: MessageSender.ASSISTANT,
+            text: cleanText,
+            contextualActions: contextualActions,
+            suggestedReplies: suggestedReplies,
+        };
+
+    } catch (error) {
+        console.error("Error calling Gemini API:", error);
+        return {
+            id: Date.now().toString(),
+            sender: MessageSender.SYSTEM,
+            text: `Произошла ошибка при обращении к Gemini: ${error.message}`,
+        };
+    }
+};

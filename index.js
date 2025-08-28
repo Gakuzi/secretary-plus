@@ -516,8 +516,8 @@ ${payload.body}`;
             case 'select_contact':
                 promptToSend = `Для моей задачи я выбираю контакт: ${payload.name} (${payload.email || 'email не указан'}).`;
                 break;
-            case 'select_document':
-                promptToSend = `Я выбираю документ: "${payload.name}".`;
+            case 'analyze_document':
+                promptToSend = `Я выбрал документ "${payload.name}". Предложи действия, которые можно с ним совершить (например, "отправить по почте", "создать задачу на его основе", "обобщить по названию").`;
                 break;
             case 'create_document_prompt':
                 promptToSend = `Да, создать новый документ с названием "${payload.query}".`;

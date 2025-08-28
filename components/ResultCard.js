@@ -331,7 +331,7 @@ function createDocumentChoiceCard(card) {
         const modifiedDate = doc.modified_time ? new Date(doc.modified_time).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
         
         return `
-            <button class="choice-item" data-action="select_document" data-payload='${payload}'>
+            <button class="choice-item" data-action="analyze_document" data-payload='${payload}'>
                 <div class="flex items-center justify-between w-full">
                     <div class="flex items-center min-w-0">
                         <img src="${doc.icon_link}" class="w-4 h-4 mr-2 flex-shrink-0" alt="doc-icon"/>
