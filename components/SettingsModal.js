@@ -49,13 +49,15 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                     <div id="tab-connections" class="settings-tab-content space-y-6">
                        
                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                            ${renderServiceConnectionWithToggle(
-                                'supabase',
-                                'Supabase (База данных и Аутентификация)',
-                                currentSettings.isSupabaseEnabled,
-                                authState.isSupabaseConnected,
-                                null,
-                                `
+                             <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold text-gray-200">База данных и Аутентификация</h3>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="supabase-enabled-toggle" ${currentSettings.isSupabaseEnabled ? 'checked' : ''}>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div id="supabase-settings-block" class="service-content-wrapper space-y-4" ${!currentSettings.isSupabaseEnabled ? 'style="display: none;"' : ''}>
+                                <p class="text-sm text-blue-300 bg-blue-900/50 p-3 rounded-md">Режим Supabase: Аутентификация и данные (контакты, файлы) управляются через Supabase для максимальной производительности и безопасности.</p>
                                 <div class="space-y-2">
                                     <label for="supabase-url" class="block text-sm font-medium text-gray-300">Supabase Project URL</label>
                                     <input type="text" id="supabase-url" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.supabaseUrl || ''}">
@@ -64,32 +66,34 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                     <label for="supabase-anon-key" class="block text-sm font-medium text-gray-300">Supabase Anon Key</label>
                                     <input type="password" id="supabase-anon-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.supabaseAnonKey || ''}">
                                 </div>
-                                <div class="text-sm text-gray-400 mt-3 space-y-1">
-                                    <p>Supabase используется для безопасной аутентификации и хранения данных.</p>
-                                    <a href="./setup-guide.html#supabase-setup" target="_blank" class="text-blue-400 hover:underline font-semibold">
-                                        ➡️ Открыть пошаговую инструкцию по настройке
-                                    </a>
+                                <a href="./setup-guide.html" target="_blank" class="text-blue-400 hover:underline font-semibold text-sm">
+                                    ➡️ Открыть пошаговую инструкцию по настройке Supabase
+                                </a>
+                            </div>
+                            <div id="direct-google-settings-block" class="service-content-wrapper space-y-4" ${currentSettings.isSupabaseEnabled ? 'style="display: none;"' : ''}>
+                                 <p class="text-sm text-yellow-300 bg-yellow-900/50 p-3 rounded-md">Прямой режим Google: Приложение напрямую подключается к Google API. Синхронизация данных недоступна.</p>
+                                 <div class="space-y-2">
+                                    <label for="google-client-id" class="block text-sm font-medium text-gray-300">Google Client ID</label>
+                                    <input type="password" id="google-client-id" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Required when Supabase is disabled" value="${currentSettings.googleClientId || ''}">
+                                     <a href="./setup-guide.html" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline font-semibold text-sm">
+                                        ➡️ Открыть инструкцию по получению Client ID
+                                     </a>
                                 </div>
-                                `
-                            )}
+                            </div>
                         </div>
                         
                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                             ${renderServiceConnectionWithToggle(
-                                'google',
-                                'Google (Календарь, Диск, Контакты)',
-                                currentSettings.isGoogleEnabled,
-                                authState.isGoogleConnected,
-                                authState.userProfile?.email,
-                                `
-                                <div class="space-y-2" id="google-client-id-container" ${currentSettings.isSupabaseEnabled ? 'style="display: none;"' : ''}>
-                                    <label for="google-client-id" class="block text-sm font-medium text-gray-300">Google Client ID</label>
-                                    <input type="password" id="google-client-id" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Required when Supabase is disabled" value="${currentSettings.googleClientId || ''}">
-                                     <p class="text-xs text-gray-400">Необходим для прямого входа, если Supabase отключен. <a href="./setup-guide.html#google-cloud-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как получить?</a></p>
+                             <h3 class="text-lg font-semibold text-gray-200 mb-4">Подключение к Google</h3>
+                             <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-3 h-3 rounded-full ${authState.isGoogleConnected ? 'bg-green-500' : 'bg-gray-500'}"></span>
+                                    <div>
+                                        <p class="font-semibold">Статус: ${authState.isGoogleConnected ? `Подключено` : 'Не подключено'}</p>
+                                        ${authState.isGoogleConnected && authState.userProfile?.email ? `<p class="text-xs text-gray-400">(${authState.userProfile.email})</p>` : ''}
+                                    </div>
                                 </div>
                                 <button id="google-auth-action-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md">${authState.isGoogleConnected ? 'Выйти' : 'Войти через Google'}</button>
-                                `
-                            )}
+                            </div>
                         </div>
 
                     </div>
@@ -137,7 +141,8 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             supabaseAnonKey: modalOverlay.querySelector('#supabase-anon-key').value.trim(),
             geminiApiKey: modalOverlay.querySelector('#gemini-api-key').value.trim(),
             isSupabaseEnabled: modalOverlay.querySelector('#supabase-enabled-toggle').checked,
-            isGoogleEnabled: modalOverlay.querySelector('#google-enabled-toggle').checked,
+            // isGoogleEnabled is deprecated but kept for compatibility, we derive logic from isSupabaseEnabled
+            isGoogleEnabled: true, 
             googleClientId: modalOverlay.querySelector('#google-client-id').value.trim(),
         };
         onSave(newSettings);
@@ -164,23 +169,21 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
         });
     });
     
-    // Logic for toggles to show/hide their content
+    // Logic for Supabase toggle
     const supabaseToggle = modalOverlay.querySelector('#supabase-enabled-toggle');
     supabaseToggle.addEventListener('change', (e) => {
         const isEnabled = e.target.checked;
-        const content = e.target.closest('.p-4').querySelector('.service-content-wrapper');
-        content.style.display = isEnabled ? '' : 'none';
+        modalOverlay.querySelector('#supabase-settings-block').style.display = isEnabled ? '' : 'none';
+        modalOverlay.querySelector('#direct-google-settings-block').style.display = isEnabled ? 'none' : '';
         
-        modalOverlay.querySelector('#google-client-id-container').style.display = isEnabled ? 'none' : '';
         modalOverlay.querySelector('a[data-tab="sync"]').style.display = isEnabled ? '' : 'none';
-        modalOverlay.querySelector('#tab-sync').classList.toggle('hidden', !isEnabled);
-    });
-
-    const googleToggle = modalOverlay.querySelector('#google-enabled-toggle');
-    googleToggle.addEventListener('change', (e) => {
-        const isEnabled = e.target.checked;
-        const content = e.target.closest('.p-4').querySelector('.service-content-wrapper');
-        content.style.display = isEnabled ? '' : 'none';
+        
+        // If sync tab is active and we disable supabase, switch to connections
+        const syncTabButton = modalOverlay.querySelector('a[data-tab="sync"]');
+        if (!isEnabled && syncTabButton.classList.contains('active')) {
+            syncTabButton.classList.remove('active');
+            modalOverlay.querySelector('a[data-tab="connections"]').click();
+        }
     });
 
     // Auth action button

@@ -103,10 +103,12 @@ function startVoiceRecording(e) {
     if (!speechRecognizer || !speechRecognizer.isSupported || voiceState.isRecording) return;
     e.preventDefault();
 
+    const pointerEvent = e.touches ? e.touches[0] : e;
+
     voiceState = {
         isRecording: true, isLocked: false, isCancelled: false,
-        pointerStart: { x: e.clientX, y: e.clientY },
-        currentPos: { x: e.clientX, y: e.clientY },
+        pointerStart: { x: pointerEvent.clientX, y: pointerEvent.clientY },
+        currentPos: { x: pointerEvent.clientX, y: pointerEvent.clientY },
         startTime: Date.now(), timerInterval: null,
     };
     
@@ -125,20 +127,26 @@ function startVoiceRecording(e) {
     updateRecordingTimer();
 
     window.addEventListener('pointermove', handlePointerMove, { passive: false });
-    window.addEventListener('pointerup', finishVoiceRecording);
+    window.addEventListener('pointerup', finishVoiceRecording, { once: true });
+    window.addEventListener('touchend', finishVoiceRecording, { once: true });
+    window.addEventListener('touchmove', handlePointerMove, { passive: false });
 }
 
 function handlePointerMove(e) {
     if (!voiceState.isRecording || voiceState.isLocked) return;
     e.preventDefault();
 
-    voiceState.currentPos = { x: e.clientX, y: e.clientY };
+    const pointerEvent = e.touches ? e.touches[0] : e;
+    voiceState.currentPos = { x: pointerEvent.clientX, y: pointerEvent.clientY };
+
     const deltaX = voiceState.currentPos.x - voiceState.pointerStart.x;
     const deltaY = voiceState.currentPos.y - voiceState.pointerStart.y;
     
     // Animate UI based on drag
     inputBar.style.transform = `translateX(${Math.min(0, deltaX)}px)`;
-    lockHint.style.transform = `translateY(${Math.min(0, deltaY)}px)`;
+    voiceRecordButton.style.transform = `translate(${-Math.min(0, deltaX)}px, ${-Math.min(0, -deltaY)}px) scale(1.5)`;
+    lockHint.style.transform = `translateY(${deltaY}px)`;
+
 
     // Check for cancel
     const isCancelling = deltaX < VOICE_CANCEL_THRESHOLD_X;
@@ -154,7 +162,9 @@ function handlePointerMove(e) {
     const isLocking = deltaY < VOICE_LOCK_THRESHOLD_Y;
     if (isLocking) {
         lockHint.classList.add('is-locking');
-        if (!voiceState.isLocked) lockVoiceRecording();
+        if (!voiceState.isLocked) {
+             lockVoiceRecording(); // This will detach listeners
+        }
     } else {
         lockHint.classList.remove('is-locking');
     }
@@ -164,9 +174,13 @@ function lockVoiceRecording() {
     voiceState.isLocked = true;
     cleanUpPointerEvents();
     
+    // Make sure recognition doesn't stop on its own in locked mode
     speechRecognizer.recognition.onend = () => {
-        if (!voiceState.isLocked) speechRecognizer.onEnd('');
-        speechRecognizer.isListening = false;
+        if (voiceState.isLocked && voiceState.isRecording) {
+            speechRecognizer.recognition.start();
+        } else {
+             speechRecognizer.isListening = false;
+        }
     };
     
     resetVoiceUI(true); // Reset UI but keep state
@@ -179,7 +193,7 @@ function lockVoiceRecording() {
     sendButton.classList.remove('hidden');
     
     cameraButton.innerHTML = TrashIcon;
-    cameraButton.onclick = cancelVoiceRecording;
+    cameraButton.onclick = cancelVoiceRecording; // Reassign click handler
     cameraButton.classList.remove('hidden');
     toggleInputModeButton.classList.add('hidden');
 
@@ -187,7 +201,8 @@ function lockVoiceRecording() {
 }
 
 function finishVoiceRecording() {
-    if (!voiceState.isRecording) return;
+    if (!voiceState.isRecording || voiceState.isLocked) return;
+    
     cleanUpPointerEvents();
     
     if (voiceState.isCancelled) {
@@ -200,6 +215,7 @@ function finishVoiceRecording() {
 
 function cancelVoiceRecording() {
     voiceState.isCancelled = true;
+    voiceState.isRecording = false; // Prevent onEnd from restarting
     speechRecognizer.stop();
     resetVoiceRecording();
 }
@@ -216,7 +232,7 @@ function updateRecordingTimer() {
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
     const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    recordingTimer.textContent = timeString;
+    if(recordingTimer) recordingTimer.textContent = timeString;
     const lockedTimer = document.getElementById('recording-timer-locked');
     if (lockedTimer) lockedTimer.textContent = timeString;
 }
@@ -224,11 +240,14 @@ function updateRecordingTimer() {
 function cleanUpPointerEvents() {
     window.removeEventListener('pointermove', handlePointerMove);
     window.removeEventListener('pointerup', finishVoiceRecording);
+    window.removeEventListener('touchmove', handlePointerMove);
+    window.removeEventListener('touchend', finishVoiceRecording);
 }
 
 function resetVoiceUI(isEnteringLock = false) {
     clearInterval(voiceState.timerInterval);
     inputBar.style.transform = 'translateX(0)';
+    voiceRecordButton.style.transform = 'translate(0, 0) scale(1)';
     inputBar.classList.remove('is-cancelling');
     
     if (!isEnteringLock) {
@@ -238,6 +257,7 @@ function resetVoiceUI(isEnteringLock = false) {
         const lockedIndicator = document.getElementById('recording-indicator-locked');
         if (lockedIndicator) lockedIndicator.remove();
         
+        // Restore original camera button functionality
         cameraButton.innerHTML = CameraIcon;
         cameraButton.onclick = () => fileInput.click();
     }
@@ -332,6 +352,7 @@ export function createChatInterface(onSendMessage, showCameraView) {
     );
     
     voiceRecordButton.addEventListener('pointerdown', startVoiceRecording);
+    voiceRecordButton.addEventListener('touchstart', startVoiceRecording, { passive: false });
     
     updateInputState(); // Initial call to set the correct UI state
     return chatWrapper;

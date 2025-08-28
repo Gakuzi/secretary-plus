@@ -18,10 +18,11 @@
             <nav>
                 <ul class="space-y-2" id="wizard-nav">
                     <li><a href="#introduction" class="nav-link active" data-step="0">Введение</a></li>
-                    <li><a href="#supabase-setup" class="nav-link" data-step="1">1. Настройка Supabase</a></li>
-                    <li><a href="#google-cloud-setup" class="nav-link" data-step="2">2. Настройка Google Cloud</a></li>
-                    <li><a href="#gemini-setup" class="nav-link" data-step="3">3. Настройка Gemini API</a></li>
-                    <li><a href="#final-step" class="nav-link" data-step="4">4. Завершение</a></li>
+                    <li><a href="#auth-choice" class="nav-link" data-step="1">1. Выбор способа</a></li>
+                    <li><a href="#supabase-setup" class="nav-link" data-step="2">2. Настройка Supabase</a></li>
+                    <li><a href="#google-cloud-setup" class="nav-link" data-step="3">3. Настройка Google Cloud</a></li>
+                    <li><a href="#gemini-setup" class="nav-link" data-step="4">4. Настройка Gemini API</a></li>
+                    <li><a href="#final-step" class="nav-link" data-step="5">5. Завершение</a></li>
                 </ul>
             </nav>
         </aside>
@@ -39,23 +40,53 @@
                         <button class="wizard-nav-button next-button" data-next="1">Начать настройку</button>
                     </footer>
                 </section>
+                
+                 <!-- Auth Choice -->
+                <section id="auth-choice" class="wizard-step" style="display: none;">
+                    <h2 class="section-title">1. Выбор способа аутентификации</h2>
+                    <p class="mb-6">Приложение поддерживает два способа подключения к сервисам Google. Выберите один из них. <strong>Рекомендуется использовать Supabase.</strong></p>
+
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div class="choice-card" data-choice="supabase">
+                            <h3 class="choice-title">Supabase (Рекомендуется)</h3>
+                            <p class="choice-description">Использует Supabase для безопасной аутентификации и хранения данных (контакты, файлы). Это обеспечивает лучшую производительность и функциональность, включая синхронизацию.</p>
+                            <ul class="choice-features">
+                                <li>✅ Безопасный вход через Google</li>
+                                <li>✅ Синхронизация контактов и файлов</li>
+                                <li>✅ Быстрый поиск по данным</li>
+                            </ul>
+                        </div>
+                         <div class="choice-card" data-choice="direct">
+                            <h3 class="choice-title">Прямое подключение Google</h3>
+                            <p class="choice-description">Простой способ, подключающий приложение напрямую к Google API без использования базы данных. Функции синхронизации и быстрого поиска по контактам будут недоступны.</p>
+                             <ul class="choice-features">
+                                <li>✅ Простая настройка</li>
+                                <li>❌ Без синхронизации данных</li>
+                                <li>❌ Поиск только по Google Drive</li>
+                            </ul>
+                        </div>
+                    </div>
+                     <footer class="wizard-footer">
+                        <button class="wizard-nav-button back-button" data-back="0">Назад</button>
+                    </footer>
+                </section>
 
                 <!-- Supabase Setup -->
                 <section id="supabase-setup" class="wizard-step" style="display: none;">
-                    <h2 class="section-title">1. Настройка Supabase</h2>
+                    <h2 class="section-title">2. Настройка Supabase</h2>
                     <p class="mb-6">Supabase используется как безопасная база данных и сервис аутентификации. Если вы включите его, пользователи смогут входить через Google, а их контакты и файлы будут синхронизироваться для быстрого доступа.</p>
 
                     <div class="step">
-                        <h3 class="step-title">Шаг 1.1: Создание проекта</h3>
+                        <h3 class="step-title">Шаг 2.1: Создание проекта</h3>
                         <ol>
-                            <li><a href="https://supabase.com/dashboard/projects" target="_blank">Откройте панель управления Supabase</a> и нажмите <strong>"New project"</strong>.</li>
+                            <li><a href="https://supabase.com/dashboard/projects" target="_blank" rel="noopener noreferrer">Откройте панель управления Supabase</a> и нажмите <strong>"New project"</strong>.</li>
                             <li>Придумайте имя проекта, сгенерируйте и сохраните надежный пароль от базы данных.</li>
                             <li>Выберите регион и нажмите <strong>"Create new project"</strong>.</li>
                         </ol>
                     </div>
 
                     <div class="step">
-                        <h3 class="step-title">Шаг 1.2: Выполнение SQL-скрипта</h3>
+                        <h3 class="step-title">Шаг 2.2: Выполнение SQL-скрипта</h3>
                         <ol>
                             <li>В меню проекта выберите <strong>SQL Editor</strong>, затем <strong>"+ New query"</strong>.</li>
                             <li>Скопируйте и вставьте весь SQL-скрипт ниже, затем нажмите <strong>"RUN"</strong>.</li>
@@ -111,9 +142,9 @@ WITH CHECK (auth.uid() = user_id);</code></pre>
                     </div>
 
                     <div class="step">
-                        <h3 class="step-title">Шаг 1.3: Получение ключей Supabase</h3>
+                        <h3 class="step-title">Шаг 2.3: Получение ключей Supabase</h3>
                         <ol>
-                            <li><a href="https://supabase.com/dashboard/project/_/settings/api" target="_blank">Откройте настройки API</a> вашего проекта.</li>
+                             <li>В меню проекта выберите <strong>Project Settings</strong> (значок шестеренки) &gt; <strong>API</strong>.</li>
                             <li>Скопируйте <strong>Project URL</strong> и <strong>anon public key</strong>. Вставьте их в поля ниже и в настройки приложения.</li>
                         </ol>
                         <div class="input-group">
@@ -132,85 +163,89 @@ WITH CHECK (auth.uid() = user_id);</code></pre>
                         </div>
                     </div>
                      <footer class="wizard-footer">
-                        <button class="wizard-nav-button back-button" data-back="0">Назад</button>
-                        <button class="wizard-nav-button next-button" data-next="2">Далее</button>
+                        <button class="wizard-nav-button back-button" data-back="1">Назад</button>
+                        <button class="wizard-nav-button next-button" data-next="3">Далее</button>
                     </footer>
                 </section>
 
                 <!-- Google Cloud Setup -->
                 <section id="google-cloud-setup" class="wizard-step" style="display: none;">
-                    <h2 class="section-title">2. Настройка Google Cloud</h2>
+                    <h2 class="section-title">3. Настройка Google Cloud</h2>
                     <p class="mb-6">Вам нужен проект в Google Cloud, чтобы разрешить приложению доступ к API Календаря, Диска и Контактов.</p>
 
                     <div class="step">
-                        <h3 class="step-title">Шаг 2.1: Проект и экран согласия</h3>
+                        <h3 class="step-title">Шаг 3.1: Проект и экран согласия</h3>
                         <ol>
-                            <li><a href="https://console.cloud.google.com/projectcreate" target="_blank">Создайте новый проект</a> в Google Cloud Console.</li>
-                            <li>Перейдите в <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank"><strong>OAuth consent screen</strong></a>.</li>
-                            <li>Выберите <strong>External</strong> и нажмите "Create". Заполните обязательные поля. На шаге "Test users" добавьте свой Google аккаунт.</li>
-                            <li>После создания экрана согласия, нажмите <strong>"Publish App"</strong>.</li>
+                            <li><a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener noreferrer">Создайте новый проект</a> в Google Cloud Console (или выберите существующий).</li>
+                            <li>Перейдите в <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" rel="noopener noreferrer"><strong>APIs & Services &gt; OAuth consent screen</strong></a>.</li>
+                            <li>Выберите <strong>External</strong> и нажмите "Create". Заполните обязательные поля (имя приложения, email).</li>
+                            <li>На шаге "Scopes" ничего не добавляйте.</li>
+                            <li>На шаге "Test users" добавьте свой Google аккаунт, с которого будете входить в приложение.</li>
+                            <li>Вернитесь на страницу OAuth consent screen и нажмите <strong>"Publish App"</strong>, чтобы приложение стало доступно.</li>
                         </ol>
                     </div>
 
                     <div class="step">
-                        <h3 class="step-title">Шаг 2.2: Включение API</h3>
-                        <ol>
-                            <li>Перейдите в <a href="https://console.cloud.google.com/apis/library" target="_blank"><strong>библиотеку API</strong></a>.</li>
-                            <li>Найдите и включите (Enable) следующие <strong>8 API</strong>:
-                                <ul class="list-disc list-inside mt-2 grid grid-cols-2 gap-x-4">
-                                   <li><a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank">Google Calendar API</a></li>
-                                    <li><a href="https://console.cloud.google.com/apis/library/people.googleapis.com" target="_blank">Google People API</a></li>
-                                    <li><a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank">Google Drive API</a></li>
-                                    <li><a href="https://console.cloud.google.com/apis/library/docs.googleapis.com" target="_blank">Google Docs API</a></li>
-                                    <li><a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank">Google Sheets API</a></li>
-                                    <li><a href="https://console.cloud.google.com/apis/library/tasks.googleapis.com" target="_blank">Google Tasks API</a></li>
-                                    <li><a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank">Gmail API</a></li>
-                                    <li><a href="https://console.cloud.google.com/apis/library/cloudidentity.googleapis.com" target="_blank">Cloud Identity API</a></li>
-                                </ul>
-                            </li>
-                        </ol>
+                        <h3 class="step-title">Шаг 3.2: Включение API</h3>
+                        <p>Перейдите в <a href="https://console.cloud.google.com/apis/library" target="_blank" rel="noopener noreferrer"><strong>библиотеку API</strong></a> и включите (Enable) следующие 8 API:</p>
+                        <ul class="list-disc list-inside mt-2 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
+                           <li><a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noopener noreferrer">Google Calendar API</a></li>
+                            <li><a href="https://console.cloud.google.com/apis/library/people.googleapis.com" target="_blank" rel="noopener noreferrer">Google People API</a></li>
+                            <li><a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener noreferrer">Google Drive API</a></li>
+                            <li><a href="https://console.cloud.google.com/apis/library/docs.googleapis.com" target="_blank" rel="noopener noreferrer">Google Docs API</a></li>
+                            <li><a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener noreferrer">Google Sheets API</a></li>
+                            <li><a href="https://console.cloud.google.com/apis/library/tasks.googleapis.com" target="_blank" rel="noopener noreferrer">Google Tasks API</a></li>
+                            <li><a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noopener noreferrer">Gmail API</a></li>
+                            <li><a href="https://console.cloud.google.com/apis/library/cloudidentity.googleapis.com" target="_blank" rel="noopener noreferrer">Cloud Identity API</a></li>
+                        </ul>
                     </div>
 
                     <div class="step">
-                        <h3 class="step-title">Шаг 2.3: Создание OAuth 2.0 Client ID</h3>
+                        <h3 class="step-title">Шаг 3.3: Создание OAuth 2.0 Client ID</h3>
                         <ol>
-                            <li>Перейдите в <a href="https://console.cloud.google.com/apis/credentials" target="_blank"><strong>Credentials</strong></a>, нажмите <strong>+ CREATE CREDENTIALS &gt; OAuth client ID</strong>.</li>
+                            <li>Перейдите в <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer"><strong>Credentials</strong></a>, нажмите <strong>+ CREATE CREDENTIALS &gt; OAuth client ID</strong>.</li>
                             <li>Выберите тип <strong>Web application</strong>.</li>
-                            <li>Для <strong>входа через Supabase</strong> (рекомендуется):
-                                <ul>
-                                    <li>Скопируйте Redirect URI из настроек Google-провайдера в Supabase.</li>
-                                    <li>Вставьте его в поле <strong>"Authorized redirect URIs"</strong> в Google Cloud.</li>
-                                    <li>Создайте и скопируйте Client ID и Client Secret в Supabase.</li>
-                                </ul>
-                            </li>
-                             <li>Для <strong>прямого входа в Google</strong> (если Supabase отключен):
-                                <ul>
-                                    <li>В <strong>"Authorized JavaScript origins"</strong> добавьте URL, где размещено ваше приложение.</li>
-                                    <li>Создайте и скопируйте только <strong>Client ID</strong>.</li>
-                                </ul>
-                            </li>
                         </ol>
-                         <div class="input-group">
-                            <label for="google-id-input">Google Client ID (для прямого входа)</label>
-                            <div class="input-wrapper">
-                                <input id="google-id-input" type="text" placeholder="Ваш Google Client ID" readonly>
-                                <button class="paste-button" data-paste-target="google-id-input">Вставить</button>
+                        
+                        <div id="google-supabase-instructions" style="display: none;">
+                            <p class="mt-4"><strong>Инструкция для Supabase:</strong></p>
+                            <ol>
+                                <li>В панели Supabase перейдите в <strong>Authentication &gt; Providers &gt; Google</strong>. Скопируйте <strong>Redirect URI</strong>.</li>
+                                <li>Вернитесь в Google Cloud. Вставьте скопированный URI в поле <strong>"Authorized redirect URIs"</strong>.</li>
+                                <li>Нажмите <strong>CREATE</strong>. Скопируйте <strong>Client ID</strong> и <strong>Client Secret</strong>.</li>
+                                <li>Вернитесь в Supabase и вставьте их в соответствующие поля, затем нажмите <strong>Save</strong>.</li>
+                            </ol>
+                        </div>
+                        
+                        <div id="google-direct-instructions" style="display: none;">
+                             <p class="mt-4"><strong>Инструкция для прямого подключения:</strong></p>
+                             <ol>
+                                <li>В поле <strong>"Authorized JavaScript origins"</strong> добавьте URL, где размещено ваше приложение (например, `https://username.github.io`).</li>
+                                 <li>В поле <strong>"Authorized redirect URIs"</strong> также добавьте этот URL.</li>
+                                <li>Нажмите <strong>CREATE</strong>. Скопируйте только <strong>Client ID</strong> и вставьте его в поле ниже.</li>
+                            </ol>
+                            <div class="input-group">
+                                <label for="google-id-input">Google Client ID</label>
+                                <div class="input-wrapper">
+                                    <input id="google-id-input" type="text" placeholder="Ваш Google Client ID" readonly>
+                                    <button class="paste-button" data-paste-target="google-id-input">Вставить</button>
+                                </div>
                             </div>
                         </div>
                     </div>
                      <footer class="wizard-footer">
                         <button class="wizard-nav-button back-button" data-back="1">Назад</button>
-                        <button class="wizard-nav-button next-button" data-next="3">Далее</button>
+                        <button class="wizard-nav-button next-button" data-next="4">Далее</button>
                     </footer>
                 </section>
                 
                 <!-- Gemini Setup -->
                 <section id="gemini-setup" class="wizard-step" style="display: none;">
-                    <h2 class="section-title">3. Настройка Gemini API</h2>
+                    <h2 class="section-title">4. Настройка Gemini API</h2>
                     <p class="mb-6">Gemini — это модель искусственного интеллекта от Google, которая является "мозгом" ассистента. Вам нужен API-ключ для отправки запросов.</p>
                     <div class="step">
                          <ol>
-                            <li><a href="https://aistudio.google.com/app/apikey" target="_blank">Откройте Google AI Studio</a>.</li>
+                            <li><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Откройте Google AI Studio</a>.</li>
                             <li>Нажмите <strong>"Create API key in new project"</strong>.</li>
                             <li>Скопируйте сгенерированный ключ.</li>
                             <li>Вставьте его в поле ниже и в настройки приложения.</li>
@@ -225,18 +260,32 @@ WITH CHECK (auth.uid() = user_id);</code></pre>
                         </div>
                     </div>
                      <footer class="wizard-footer">
-                        <button class="wizard-nav-button back-button" data-back="2">Назад</button>
-                        <button class="wizard-nav-button next-button" data-next="4">Далее</button>
+                        <button class="wizard-nav-button back-button" data-back="3">Назад</button>
+                        <button class="wizard-nav-button next-button" data-next="5">Далее</button>
                     </footer>
                 </section>
                 
                  <!-- Final -->
                 <section id="final-step" class="wizard-step" style="display: none;">
-                    <h2 class="section-title">4. Завершение</h2>
-                    <p>Поздравляем! Вы получили и ввели все необходимые ключи. Теперь откройте настройки приложения «Секретарь+» и вставьте их в соответствующие поля на вкладках «Подключения» и «API Ключи».</p>
-                    <p>После сохранения настроек приложение будет полностью готово к работе. Вы можете войти в свой аккаунт Google и начать использовать ассистента.</p>
+                    <h2 class="section-title">5. Завершение</h2>
+                    <p>Поздравляем! Вы получили все необходимые ключи. Теперь откройте настройки приложения «Секретарь+» и вставьте их в соответствующие поля.</p>
+                    <div id="final-supabase-instructions" style="display: none;">
+                        <ol class="list-decimal list-inside space-y-2 mt-4">
+                            <li>Включите переключатель <strong>"База данных и Аутентификация"</strong>.</li>
+                            <li>Вставьте <strong>Project URL</strong> и <strong>Anon Key</strong> из <a href="#supabase-setup" class="nav-link-inline" data-step="2">Шага 2</a>.</li>
+                            <li>На вкладке "API Ключи" вставьте <strong>Gemini API Key</strong> из <a href="#gemini-setup" class="nav-link-inline" data-step="4">Шага 4</a>.</li>
+                        </ol>
+                    </div>
+                     <div id="final-direct-instructions" style="display: none;">
+                        <ol class="list-decimal list-inside space-y-2 mt-4">
+                            <li>Выключите переключатель <strong>"База данных и Аутентификация"</strong>.</li>
+                            <li>Вставьте <strong>Google Client ID</strong> из <a href="#google-cloud-setup" class="nav-link-inline" data-step="3">Шага 3</a>.</li>
+                             <li>На вкладке "API Ключи" вставьте <strong>Gemini API Key</strong> из <a href="#gemini-setup" class="nav-link-inline" data-step="4">Шага 4</a>.</li>
+                        </ol>
+                    </div>
+                    <p class="mt-4">После сохранения настроек приложение будет полностью готово к работе. Вы можете войти в свой аккаунт Google и начать использовать ассистента.</p>
                      <footer class="wizard-footer">
-                        <button class="wizard-nav-button back-button" data-back="3">Назад</button>
+                        <button class="wizard-nav-button back-button" data-back="4">Назад</button>
                         <button class="wizard-nav-button next-button" onclick="window.close()">Закрыть</button>
                     </footer>
                 </section>

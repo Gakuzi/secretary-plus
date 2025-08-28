@@ -25,6 +25,7 @@ body {
     transition: background-color 0.2s, color 0.2s, border-color 0.2s;
     text-decoration: none;
     border-left: 3px solid transparent;
+    cursor: pointer;
 }
 .nav-link:hover {
     background-color: var(--background-light);
@@ -39,23 +40,30 @@ body {
     color: #34d399; /* emerald-400 */
     border-left-color: #34d399;
 }
+.nav-link.disabled {
+    color: #6b7280; /* gray-500 */
+    pointer-events: none;
+    cursor: default;
+}
 
 
 /* Main content sections */
 .wizard-step {
     padding-top: 1rem;
-    border-top: 1px solid var(--border-color);
+    animation: fadeIn 0.5s ease-in-out;
 }
-.wizard-step:first-child {
-    border-top: none;
-    padding-top: 0;
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
+
 .section-title {
     font-size: 2rem;
     font-weight: 700;
     color: white;
     margin-bottom: 1rem;
     padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
 }
 .step {
     margin-bottom: 2.5rem;
@@ -84,14 +92,18 @@ ol {
 li {
     margin-bottom: 0.75rem;
 }
-a {
+a:not(.nav-link) {
     color: var(--accent-blue);
     text-decoration: none;
     font-weight: 500;
 }
-a:hover {
+a:not(.nav-link):hover {
     text-decoration: underline;
 }
+.nav-link-inline {
+    cursor: pointer;
+}
+
 
 /* Code Blocks */
 .code-block {
@@ -233,4 +245,40 @@ a:hover {
 }
 .paste-button:hover {
     background-color: #4b5563;
+}
+
+/* Choice Cards */
+.choice-card {
+    background-color: var(--background-light);
+    border: 2px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.choice-card:hover {
+    border-color: var(--accent-blue);
+    transform: translateY(-4px);
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+}
+.choice-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+.choice-description {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    min-height: 5em;
+}
+.choice-features {
+    margin-top: 1rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    list-style-type: none;
+    padding-left: 0;
+}
+.choice-features li {
+    margin-bottom: 0.25rem;
 }
