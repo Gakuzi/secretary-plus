@@ -52,6 +52,21 @@ export function createMessageElement(message) {
     contentContainer.appendChild(authorName);
     contentContainer.appendChild(messageBubble);
 
+    if (message.suggestedReplies && message.suggestedReplies.length > 0) {
+        const repliesContainer = document.createElement('div');
+        repliesContainer.className = 'mt-2 flex flex-wrap gap-2 quick-replies-container';
+        
+        message.suggestedReplies.forEach(replyText => {
+            const button = document.createElement('button');
+            button.className = 'quick-reply-button';
+            button.textContent = replyText;
+            button.dataset.replyText = replyText;
+            repliesContainer.appendChild(button);
+        });
+
+        contentContainer.appendChild(repliesContainer);
+    }
+
     wrapper.appendChild(avatar);
     wrapper.appendChild(contentContainer);
     

@@ -133,6 +133,26 @@ async function handleCardAction(e) {
     await handleSendMessage(systemPrompt, null, true);
 }
 
+async function handleQuickReply(e) {
+    const target = e.target.closest('.quick-reply-button');
+    if (!target || target.disabled) return;
+
+    const replyText = target.dataset.replyText;
+
+    // Visually update the UI immediately
+    const container = target.closest('.quick-replies-container');
+    container.querySelectorAll('button').forEach(btn => {
+        btn.disabled = true;
+        if (btn !== target) {
+            btn.style.opacity = '0.5'; // Fade out other options
+        }
+    });
+    target.classList.add('clicked'); // Highlight the clicked one
+
+    // Send the reply as a new message
+    await handleSendMessage(replyText);
+}
+
 
 async function handleSendMessage(prompt, image = null, isSystem = false) {
     if (state.isLoading || (!prompt && !image)) return;
@@ -309,7 +329,10 @@ function init() {
     settingsButton.innerHTML = SettingsIcon;
     settingsButton.addEventListener('click', showSettings);
 
-    mainContent.addEventListener('click', handleCardAction);
+    mainContent.addEventListener('click', (e) => {
+        handleCardAction(e);
+        handleQuickReply(e);
+    });
 
     state.settings = getSettings();
     setupActiveProvider();
