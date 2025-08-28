@@ -4,7 +4,7 @@ import { SpeechRecognizer } from '../utils/speech.js';
 
 // Module-level variables
 let chatLog, chatInput, sendButton, voiceRecordButton, cameraButton, attachButton, fileInput;
-let onSendMessageCallback;
+let onSendMessageCallback, onSystemErrorCallback;
 let speechRecognizer;
 
 // UI state for the new voice input
@@ -39,7 +39,7 @@ async function handleFileSelect(file) {
     } else if (file.type === 'application/pdf') {
         const { pdfjsLib } = window;
         if (!pdfjsLib) {
-            alert('Библиотека для чтения PDF не загружена. Функция недоступна.');
+            onSystemErrorCallback('Библиотека для чтения PDF не загружена. Функция недоступна.');
             console.error("pdf.js library (window.pdfjsLib) not found. PDF functionality will be disabled.");
             return;
         }
@@ -73,14 +73,14 @@ async function handleFileSelect(file) {
             onSendMessageCallback(finalPrompt, null);
         } catch (error) {
             console.error('Error processing PDF:', error);
-            alert(`Не удалось обработать PDF файл: ${error.message}`);
+            onSystemErrorCallback(`Не удалось обработать PDF файл: ${error.message}`);
         } finally {
             chatInput.placeholder = originalPlaceholder;
             chatInput.disabled = false;
             voiceRecordButton.disabled = false;
         }
     } else {
-        alert('Неподдерживаемый тип файла. Пожалуйста, выберите изображение или PDF.');
+        onSystemErrorCallback('Неподдерживаемый тип файла. Пожалуйста, выберите изображение или PDF.');
     }
 }
 
@@ -241,8 +241,9 @@ function updateTimer() {
 
 
 // --- CHAT INTERFACE CREATION ---
-export function createChatInterface(onSendMessage, showCameraView) {
+export function createChatInterface(onSendMessage, showCameraView, onSystemError) {
     onSendMessageCallback = onSendMessage;
+    onSystemErrorCallback = onSystemError;
 
     const chatWrapper = document.createElement('div');
     chatWrapper.className = 'flex flex-col h-full bg-gray-900';
@@ -365,7 +366,7 @@ export function createChatInterface(onSendMessage, showCameraView) {
         (error) => {
             console.error('Speech recognition error:', error);
             if (error !== 'no-speech' && error !== 'aborted') {
-                alert(`Ошибка распознавания речи: ${error}`);
+                onSystemErrorCallback(`распознавания речи: ${error}`);
             }
             stopRecording(true); // Cancel on error
             updateInputUI();

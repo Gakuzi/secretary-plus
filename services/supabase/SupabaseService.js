@@ -19,6 +19,9 @@ function parseGmailDate(dateString) {
 
 export class SupabaseService {
     constructor(supabaseUrl, supabaseAnonKey) {
+        if (!window.supabase) {
+            throw new Error('Клиент Supabase JS не загружен. Проверьте URL скрипта в index.html и подключение к интернету.');
+        }
         if (!supabaseUrl || !supabaseAnonKey) {
             throw new Error('Supabase URL and Anon Key are required.');
         }

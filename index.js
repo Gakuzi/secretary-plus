@@ -81,6 +81,17 @@ if (!window.isSecretaryPlusAppInitialized) {
     const statsModalContainer = document.getElementById('stats-modal-container');
     const cameraViewContainer = document.getElementById('camera-view-container');
 
+    // --- ERROR HANDLING ---
+    /**
+     * Displays a system-level error message to the user in the chat interface.
+     * @param {string} text The error message to display.
+     */
+    function showSystemError(text) {
+        const errorMessage = { sender: MessageSender.SYSTEM, text: `Ошибка: ${text}`, id: Date.now() };
+        // We don't push system errors to history to avoid confusing the AI model.
+        addMessageToChat(errorMessage);
+    }
+
 
     // --- RENDER FUNCTIONS ---
     function renderAuth() {
@@ -104,7 +115,7 @@ if (!window.isSecretaryPlusAppInitialized) {
             const loginButton = document.createElement('button');
             loginButton.id = 'login-button';
             loginButton.className = 'px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors';
-            loginButton.textContent = 'Войти через Google';
+            loginButton.textContent = state.settings.isSupabaseEnabled ? 'Авторизоваться' : 'Войти через Google';
             authContainer.appendChild(loginButton);
             document.getElementById('login-button').addEventListener('click', handleLogin);
             
@@ -123,7 +134,7 @@ if (!window.isSecretaryPlusAppInitialized) {
 
     function renderMainContent() {
         mainContent.innerHTML = '';
-        const chatContainer = createChatInterface(handleSendMessage, showCameraView);
+        const chatContainer = createChatInterface(handleSendMessage, showCameraView, showSystemError);
         mainContent.appendChild(chatContainer);
 
         const chatLog = document.getElementById('chat-log');
@@ -239,6 +250,7 @@ if (!window.isSecretaryPlusAppInitialized) {
                 await updateSupabaseAuthState(session);
             } catch (error) {
                 console.error("Supabase initialization failed:", error);
+                showSystemError(`Не удалось инициализировать Supabase. ${error.message}`);
                 state.isSupabaseConfigured = false;
                 supabaseService = null;
                 serviceProviders.supabase = null;
@@ -308,7 +320,7 @@ if (!window.isSecretaryPlusAppInitialized) {
             updateGoogleDirectAuthState(tokenResponse);
         } else {
             console.error("Google direct auth failed:", tokenResponse);
-            alert("Ошибка входа через Google.");
+            showSystemError("Ошибка входа через Google. Проверьте Client ID и настройки в Google Cloud Console.");
         }
     }
 
@@ -341,13 +353,13 @@ if (!window.isSecretaryPlusAppInitialized) {
     async function handleLogin() {
         if (state.settings.isSupabaseEnabled) {
             if (!supabaseService) {
-                alert('Supabase не настроен. Проверьте настройки.');
+                showSystemError('Supabase не настроен. Проверьте URL и ключ в настройках.');
                 return;
             }
             await supabaseService.signInWithGoogle();
         } else { // Direct Google Login
             if (!state.settings.googleClientId) {
-                 alert('Google Client ID не настроен. Проверьте настройки.');
+                 showSystemError('Google Client ID не настроен. Проверьте настройки.');
                  return;
             }
             await googleProvider.authenticate();
@@ -435,9 +447,7 @@ if (!window.isSecretaryPlusAppInitialized) {
             }
         } catch (error) {
             console.error("Error calling Gemini:", error);
-            const errorMessage = { sender: MessageSender.SYSTEM, text: `Произошла ошибка: ${error.message}` };
-            state.messages.push(errorMessage);
-            addMessageToChat(errorMessage);
+            showSystemError(`Произошла ошибка: ${error.message}`);
         } finally {
             state.isLoading = false;
             hideLoadingIndicator();
@@ -449,8 +459,7 @@ if (!window.isSecretaryPlusAppInitialized) {
         if (state.isLoading || (!prompt && !image)) return;
 
         if (!state.settings.geminiApiKey) {
-            const errorMessage = { sender: MessageSender.SYSTEM, text: "Ошибка: Ключ Gemini API не указан. Пожалуйста, добавьте его в настройках." };
-            addMessageToChat(errorMessage);
+            showSystemError("Ключ Gemini API не указан. Пожалуйста, добавьте его в настройках.");
             return;
         }
         
@@ -802,9 +811,9 @@ ${payload.body}`;
                 }
             }
         });
-
-        await initializeAppServices();
-        render();
+        
+        render(); // Render UI first to ensure error display area exists
+        await initializeAppServices(); // Then initialize services which might produce errors
     }
 
     document.addEventListener('DOMContentLoaded', init);

@@ -45,7 +45,8 @@ export function createHelpModal(onClose, settings, analyzeErrorFn) {
                                 <label for="error-input-area" class="block text-sm font-medium text-gray-300">Сообщение об ошибке:</label>
                                 <textarea id="error-input-area" class="w-full h-32 bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition font-mono text-sm" placeholder="Например: Could not find the 'created_time' column of 'files' in the schema cache"></textarea>
                             </div>
-                            <button id="analyze-error-button" class="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded-md font-semibold transition-colors">
+                            <div id="error-validation-message" class="text-red-400 text-sm mt-2 h-5"></div>
+                            <button id="analyze-error-button" class="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded-md font-semibold transition-colors">
                                 Проанализировать
                             </button>
                         </div>
@@ -108,15 +109,18 @@ export function createHelpModal(onClose, settings, analyzeErrorFn) {
     const analyzeButton = modalOverlay.querySelector('#analyze-error-button');
     const errorInput = modalOverlay.querySelector('#error-input-area');
     const resultContainer = modalOverlay.querySelector('#error-analysis-result');
+    const validationMessage = modalOverlay.querySelector('#error-validation-message');
     
     analyzeButton.addEventListener('click', async () => {
+        validationMessage.textContent = ''; // Clear previous messages
         const errorMessage = errorInput.value.trim();
+
         if (!errorMessage) {
-            alert("Пожалуйста, вставьте сообщение об ошибке.");
+            validationMessage.textContent = "Пожалуйста, вставьте сообщение об ошибке.";
             return;
         }
         if (!settings.geminiApiKey) {
-            alert("Ключ Gemini API не настроен. Пожалуйста, добавьте его в настройках.");
+            validationMessage.textContent = "Ключ Gemini API не настроен. Добавьте его в настройках.";
             return;
         }
 

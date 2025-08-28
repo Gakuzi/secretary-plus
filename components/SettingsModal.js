@@ -98,6 +98,10 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
 
     const isSupabaseConfigured = !!(currentSettings.supabaseUrl && currentSettings.supabaseAnonKey);
     const isDirectGoogleConfigured = !!currentSettings.googleClientId;
+    
+    const authButtonText = authState.isGoogleConnected 
+        ? 'Выйти' 
+        : (currentSettings.isSupabaseEnabled ? 'Авторизоваться' : 'Войти через Google');
 
     modalOverlay.innerHTML = `
         <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col m-4" id="settings-content">
@@ -190,7 +194,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                         ${authState.isGoogleConnected && authState.userProfile?.email ? `<p class="text-xs text-gray-400">(${authState.userProfile.email})</p>` : ''}
                                     </div>
                                 </div>
-                                <button id="google-auth-action-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors">${authState.isGoogleConnected ? 'Выйти' : 'Войти через Google'}</button>
+                                <button id="google-auth-action-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors">${authButtonText}</button>
                             </div>
                              <p class="text-xs text-yellow-400 mt-3" id="login-warning" ${!authState.isGoogleConnected ? '' : 'style="display: none;"'}>
                                 Ассистент не будет работать корректно до тех пор, пока вы не войдете в аккаунт.
@@ -368,7 +372,8 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             const apiKey = currentSettings.geminiApiKey;
 
             if (!apiKey) {
-                alert("Ошибка: Ключ Gemini API не указан в настройках. Анализ невозможен.");
+                // Find a way to show a non-alert message here
+                console.error("Gemini API key is missing.");
                 return;
             }
             
