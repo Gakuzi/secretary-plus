@@ -298,11 +298,16 @@ function createDocumentChoiceCard(card) {
     const iconSVG = Icons[card.icon] || '';
     const optionsHtml = card.options.map(doc => {
         const payload = JSON.stringify({ name: doc.name, url: doc.url, id: doc.source_id });
+        const modifiedDate = doc.modified_time ? new Date(doc.modified_time).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+        
         return `
             <button class="choice-item" data-action="select_document" data-payload='${payload}'>
-                 <div class="flex items-center">
-                    <img src="${doc.icon_link}" class="w-4 h-4 mr-2" alt="doc-icon"/>
-                    <p class="font-semibold text-white truncate">${doc.name}</p>
+                <div class="flex items-center justify-between w-full">
+                    <div class="flex items-center min-w-0">
+                        <img src="${doc.icon_link}" class="w-4 h-4 mr-2 flex-shrink-0" alt="doc-icon"/>
+                        <p class="font-semibold text-white truncate">${doc.name}</p>
+                    </div>
+                    ${modifiedDate ? `<span class="text-xs text-gray-400 flex-shrink-0 ml-2">${modifiedDate}</span>` : ''}
                 </div>
             </button>
         `;

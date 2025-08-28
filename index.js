@@ -1,7 +1,5 @@
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
-import { YandexServiceProvider } from './services/yandex/YandexServiceProvider.js';
-import { OutlookServiceProvider } from './services/outlook/OutlookServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
 import { callGemini } from './services/geminiService.js';
 import { getSettings, saveSettings } from './utils/storage.js';
@@ -35,15 +33,11 @@ let state = {
 // --- SERVICE INSTANCES ---
 const googleProvider = new GoogleServiceProvider();
 const appleProvider = new AppleServiceProvider();
-const yandexProvider = new YandexServiceProvider();
-const outlookProvider = new OutlookServiceProvider();
 let supabaseService = null;
 
 const serviceProviders = {
     google: googleProvider,
     apple: appleProvider,
-    yandex: yandexProvider,
-    outlook: outlookProvider,
     supabase: null, // Will be populated with supabaseService instance
 };
 

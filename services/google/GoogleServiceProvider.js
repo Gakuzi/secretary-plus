@@ -200,7 +200,7 @@ export class GoogleServiceProvider {
         do {
             const response = await this.gapi.client.drive.files.list({
                 q: `trashed = false and 'me' in owners`,
-                fields: 'nextPageToken, files(id, name, webViewLink, iconLink, mimeType)',
+                fields: 'nextPageToken, files(id, name, webViewLink, iconLink, mimeType, createdTime, modifiedTime, viewedByMeTime, size, owners(displayName))',
                 spaces: 'drive',
                 pageSize: 1000,
                 pageToken: pageToken,
@@ -220,7 +220,7 @@ export class GoogleServiceProvider {
 
         const response = await this.gapi.client.drive.files.list({
             q: `name contains '${query}' and trashed = false`,
-            fields: 'files(id, name, webViewLink, iconLink, mimeType)',
+            fields: 'files(id, name, webViewLink, iconLink, mimeType, modifiedTime)',
             spaces: 'drive',
             pageSize: 10,
         });

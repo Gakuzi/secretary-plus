@@ -84,6 +84,11 @@ export class SupabaseService {
             mime_type: f.mimeType,
             url: f.webViewLink,
             icon_link: f.iconLink,
+            created_time: f.createdTime,
+            modified_time: f.modifiedTime,
+            viewed_by_me_time: f.viewedByMeTime,
+            size: f.size ? parseInt(f.size, 10) : null,
+            owner: f.owners?.[0]?.displayName || null,
         }));
         
         // Supabase has a limit on how many rows can be inserted at once, so we do it in chunks.
@@ -107,7 +112,7 @@ export class SupabaseService {
 
     // --- Data Retrieval ---
     
-    async searchContacts(query) {
+    async findContacts(query) {
         const { data, error } = await this.client
             .from('contacts')
             .select('*')
@@ -118,11 +123,12 @@ export class SupabaseService {
         return data;
     }
     
-    async searchFiles(query) {
+    async findDocuments(query) {
          const { data, error } = await this.client
             .from('files')
             .select('*')
             .ilike('name', `%${query}%`) // Case-insensitive search
+            .order('modified_time', { ascending: false, nullsFirst: false })
             .limit(10);
             
         if (error) throw error;

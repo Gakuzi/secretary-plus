@@ -107,7 +107,7 @@ CREATE TABLE public.contacts (
   UNIQUE(user_id, source, source_id)
 );
 
--- 2. Создаем таблицу для файлов
+-- 2. Создаем таблицу для файлов с расширенными полями
 CREATE TABLE public.files (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -117,6 +117,11 @@ CREATE TABLE public.files (
   mime_type TEXT,
   url TEXT,
   icon_link TEXT,
+  created_time TIMESTAMPTZ,
+  modified_time TIMESTAMPTZ,
+  viewed_by_me_time TIMESTAMPTZ,
+  size BIGINT,
+  owner TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(user_id, source, source_id)

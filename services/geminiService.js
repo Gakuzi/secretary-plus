@@ -459,8 +459,25 @@ export const callGemini = async ({
                     }
                     case 'find_documents': {
                         const provider = getProvider('files');
-                        const results = await provider.findDocuments(args.query);
-                        const normalizedResults = results.map(doc => ({ name: doc.name, url: doc.url || doc.webViewLink, icon_link: doc.icon_link || doc.iconLink, source_id: doc.source_id || doc.id }));
+                        let results = await provider.findDocuments(args.query);
+
+                        // HYBRID SEARCH: If the primary search (e.g., Supabase) finds nothing,
+                        // perform a live search on Google Drive as a fallback.
+                        if (results.length === 0 && provider.getId() === 'supabase') {
+                            const googleProvider = serviceProviders.google;
+                            if (googleProvider && await googleProvider.isAuthenticated()) {
+                                 results = await googleProvider.findDocuments(args.query);
+                            }
+                        }
+
+                        const normalizedResults = results.map(doc => ({
+                            name: doc.name,
+                            url: doc.url || doc.webViewLink,
+                            icon_link: doc.icon_link || doc.iconLink,
+                            source_id: doc.source_id || doc.id,
+                            modified_time: doc.modified_time || doc.modifiedTime,
+                        }));
+                        
                         if (normalizedResults.length > 0) {
                             resultMessage.text = `Вот документы, которые я нашел. Какой из них использовать?`;
                             resultMessage.card = { type: 'document_choice', icon: 'FileIcon', title: 'Выберите документ', options: normalizedResults };
@@ -474,6 +491,21 @@ export const callGemini = async ({
                         const result = await provider.createNote(args);
                         resultMessage.text = `Заметка "${result.title || 'Без названия'}" успешно создана в ${provider.getName()}.`;
                         resultMessage.card = createNoteCard(result, provider.getName());
+                        break;
+                    }
+                    case 'find_notes': {
+                        const provider = getProvider('notes');
+                        const results = await provider.findNotes(args.query);
+                        if (results && results.length > 0) {
+                            const noteSummaries = results.map(note => {
+                                const title = note.title ? `**${note.title}**` : '*Заметка без названия*';
+                                const snippet = note.content ? note.content.substring(0, 150) + '...' : '';
+                                return `${title}\n${snippet}`;
+                            }).join('\n\n---\n\n');
+                            resultMessage.text = `Вот заметки, которые я нашел по запросу "${args.query}":\n\n${noteSummaries}`;
+                        } else {
+                            resultMessage.text = `Не удалось найти заметки по запросу "${args.query}".`;
+                        }
                         break;
                     }
                      case 'create_google_doc':

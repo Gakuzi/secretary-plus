@@ -1,9 +1,9 @@
 import { createMessageElement } from './Message.js';
-import { MicrophoneIcon, SendIcon, CameraIcon, LockIcon, TrashIcon } from './icons/Icons.js';
+import { MicrophoneIcon, SendIcon, CameraIcon, LockIcon, TrashIcon, AttachmentIcon } from './icons/Icons.js';
 import { SpeechRecognizer } from '../utils/speech.js';
 
 // Module-level variables
-let chatLog, chatInput, sendButton, voiceRecordButton, cameraButton, fileInput;
+let chatLog, chatInput, sendButton, voiceRecordButton, cameraButton, attachButton, fileInput;
 let onSendMessageCallback;
 let speechRecognizer;
 
@@ -212,17 +212,20 @@ export function createChatInterface(onSendMessage, showCameraView) {
         </div>
 
         <div id="input-bar-wrapper" class="p-2 sm:p-4 border-t border-gray-700">
-            <div id="input-bar" class="flex items-end gap-2">
+            <div id="input-bar" class="flex items-end gap-2 bg-gray-800 rounded-xl p-2">
                 <button id="cancel-recording-button" class="p-2.5 rounded-full hover:bg-gray-700 text-red-500 hidden flex-shrink-0">${TrashIcon}</button>
-                <div class="flex-1 relative flex items-end bg-gray-800 rounded-xl px-2">
-                    <button id="camera-button" class="p-2.5 rounded-full hover:bg-gray-700/50 flex-shrink-0 self-center">${CameraIcon}</button>
-                    <input type="file" id="file-input" class="hidden" accept="image/*">
-                    <textarea id="chat-input" placeholder="Сообщение..." rows="1"></textarea>
-                    <div id="locked-recording-indicator" class="hidden items-center gap-2 text-red-500 font-mono font-semibold p-2.5">
-                        <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
-                        <span class="recording-timer">0:00</span>
-                    </div>
+                
+                <button id="camera-button" class="p-2.5 rounded-full hover:bg-gray-700 flex-shrink-0 self-center">${CameraIcon}</button>
+                <button id="attach-button" class="p-2.5 rounded-full hover:bg-gray-700 flex-shrink-0 self-center">${AttachmentIcon}</button>
+                <input type="file" id="file-input" class="hidden" accept="image/*">
+
+                <textarea id="chat-input" placeholder="Сообщение..." rows="1"></textarea>
+                
+                <div id="locked-recording-indicator" class="hidden items-center gap-2 text-red-500 font-mono font-semibold p-2.5">
+                    <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
+                    <span class="recording-timer">0:00</span>
                 </div>
+
                 <button id="send-button" class="p-2.5 rounded-full bg-blue-600 hover:bg-blue-700 self-center flex-shrink-0 hidden">${SendIcon}</button>
                 <button id="voice-record-button" class="p-2.5 rounded-full bg-blue-600 hover:bg-blue-700 self-center flex-shrink-0">${MicrophoneIcon}</button>
             </div>
@@ -235,6 +238,7 @@ export function createChatInterface(onSendMessage, showCameraView) {
     sendButton = chatWrapper.querySelector('#send-button');
     voiceRecordButton = chatWrapper.querySelector('#voice-record-button');
     cameraButton = chatWrapper.querySelector('#camera-button');
+    attachButton = chatWrapper.querySelector('#attach-button');
     fileInput = chatWrapper.querySelector('#file-input');
     const cancelRecordingButton = chatWrapper.querySelector('#cancel-recording-button');
     
@@ -243,7 +247,8 @@ export function createChatInterface(onSendMessage, showCameraView) {
     chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessageHandler(); } });
     chatInput.addEventListener('input', updateInputUI);
     
-    cameraButton.addEventListener('click', () => fileInput.click()); 
+    cameraButton.addEventListener('click', showCameraView); 
+    attachButton.addEventListener('click', () => fileInput.click()); 
     fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleImageFile(e.target.files[0]); });
 
     voiceRecordButton.addEventListener('pointerdown', pointerDown);
