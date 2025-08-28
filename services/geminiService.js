@@ -396,7 +396,7 @@ export const callGemini = async ({
                         const result = await provider.createEvent(args);
 
                         if (provider.getId() === 'apple') {
-                            resultMessage.text = `Событие "${args.title}" готово для добавления в ваш календарь.`;
+                            resultMessage.text = `Событие «${args.title}» готово. Нажмите кнопку ниже, чтобы скачать файл (.ics) и добавить его в ваш Apple Календарь.`;
                             resultMessage.card = {
                                 type: 'event',
                                 icon: 'CalendarIcon',

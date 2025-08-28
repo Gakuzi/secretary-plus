@@ -226,8 +226,8 @@ export function createChatInterface(onSendMessage, showCameraView) {
                     <span class="recording-timer">0:00</span>
                 </div>
 
-                <button id="send-button" class="p-2.5 rounded-full bg-blue-600 hover:bg-blue-700 self-center flex-shrink-0 hidden">${SendIcon}</button>
-                <button id="voice-record-button" class="p-2.5 rounded-full bg-blue-600 hover:bg-blue-700 self-center flex-shrink-0">${MicrophoneIcon}</button>
+                <button id="send-button" class="p-3.5 rounded-full bg-blue-600 hover:bg-blue-700 self-center flex-shrink-0 hidden">${SendIcon}</button>
+                <button id="voice-record-button" class="p-3.5 rounded-full bg-blue-600 hover:bg-blue-700 self-center flex-shrink-0">${MicrophoneIcon}</button>
             </div>
         </div>
     `;

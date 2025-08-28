@@ -334,56 +334,48 @@ async function handleCardAction(e) {
     const action = target.dataset.action;
     const payload = JSON.parse(target.dataset.payload);
 
-    let userPromptText = '';
-    let systemPrompt = '';
+    let promptToSend = '';
 
-    if (action === 'select_contact') {
-        userPromptText = `Выбран контакт: ${payload.name}`;
-        if (payload.email) {
-            systemPrompt = `Пользователь выбрал контакт: Имя - ${payload.name}, Email - ${payload.email}. Продолжай выполнение первоначального запроса с этой информацией.`;
-        } else {
-            systemPrompt = `Пользователь выбрал контакт '${payload.name}', у которого нет email адреса. Спроси у пользователя email для этого контакта, чтобы добавить его на встречу. Предложи вариант создать встречу без участников и просто получить ссылку для ручной отправки.`;
-        }
-    } else if (action === 'select_document') {
-        userPromptText = `Выбран документ: ${payload.name}`;
-        systemPrompt = `Пользователь выбрал документ: Название - "${payload.name}", Ссылка - ${payload.url}. Продолжай выполнение первоначального запроса с этой информацией.`;
-    } else if (action === 'create_document_prompt') {
-        userPromptText = `Да, создать новый документ с названием "${payload.query}"`;
-        systemPrompt = `Пользователь согласился создать новый документ. Вызови функцию create_google_doc с названием "${payload.query}".`;
-    } else if (action === 'create_meet_with') {
-        userPromptText = `Создать видеовстречу с ${payload.name}`;
-        systemPrompt = `Создай видеовстречу с ${payload.name} (${payload.email}) на ближайшее удобное время. Установи продолжительность 30 минут.`;
-    } else if (action === 'send_meeting_link') {
-        userPromptText = 'Да, отправить ссылку участникам.';
-        systemPrompt = `Пользователь хочет отправить приглашение на встречу. Вызови функцию send_email с этими данными: ${JSON.stringify(payload)}`;
-    } else if (action === 'create_prep_task') {
-        userPromptText = 'Да, создать задачу для подготовки.';
-        systemPrompt = `Пользователь хочет создать задачу для подготовки к встрече. Вызови функцию create_task с этими данными: ${JSON.stringify(payload)}`;
-    } else if (action === 'create_doc_with_content') {
-        userPromptText = `Да, создать документ "${payload.title}" с предложенным содержанием.`;
-        systemPrompt = `Пользователь согласился создать документ с содержанием. Вызови функцию create_google_doc_with_content с этими данными: ${JSON.stringify(payload)}`;
-    } else if (action === 'create_empty_doc') {
-        userPromptText = `Нет, создать пустой документ "${payload.title}".`;
-        systemPrompt = `Пользователь решил создать пустой документ. Вызови функцию create_google_doc с названием "${payload.title}".`;
-    } else if (action === 'download_ics') {
-        const link = document.createElement('a');
-        link.href = `data:text/calendar;charset=utf-8;base64,${payload.data}`;
-        link.download = payload.filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        return; // This is a client-side action, no need to call the bot
+    switch (action) {
+        case 'select_contact':
+            promptToSend = `Для моей задачи я выбираю контакт: ${payload.name} (${payload.email || 'email не указан'}).`;
+            break;
+        case 'select_document':
+            promptToSend = `Я выбираю документ: "${payload.name}".`;
+            break;
+        case 'create_document_prompt':
+            promptToSend = `Да, создать новый документ с названием "${payload.query}".`;
+            break;
+        case 'create_meet_with':
+            promptToSend = `Создай видеовстречу с ${payload.name} (${payload.email}) на ближайшее удобное время, продолжительностью 30 минут.`;
+            break;
+        case 'send_meeting_link':
+            // This prompt tells the model to execute the action it just proposed.
+            promptToSend = `Да, отправь ссылку участникам встречи.`;
+            break;
+        case 'create_prep_task':
+            // Same here, confirming the proposed action.
+            promptToSend = `Да, создай задачу для подготовки к встрече.`;
+            break;
+        case 'create_doc_with_content':
+            promptToSend = `Да, создай документ "${payload.title}" с предложенным тобой содержанием.`;
+            break;
+        case 'create_empty_doc':
+            promptToSend = `Нет, просто создай пустой документ с названием "${payload.title}".`;
+            break;
+        case 'download_ics':
+            const link = document.createElement('a');
+            link.href = `data:text/calendar;charset=utf-8;base64,${payload.data}`;
+            link.download = payload.filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            return; // Client-side action, no bot call needed.
     }
 
-    if (!systemPrompt) return;
-
-    // Add a user-facing message to show their action was registered
-    const userMessage = { sender: MessageSender.USER, text: userPromptText, id: Date.now() };
-    state.messages.push(userMessage);
-    addMessageToChat(userMessage);
-
-    // Call the bot with the internal system prompt
-    await processBotResponse(systemPrompt);
+    if (promptToSend) {
+        await handleSendMessage(promptToSend);
+    }
 }
 
 async function handleQuickReply(e) {
