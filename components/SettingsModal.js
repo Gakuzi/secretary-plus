@@ -126,7 +126,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
                              <h3 class="text-lg font-semibold text-gray-200">Подключение аккаунта Google</h3>
                              <p class="text-sm text-gray-400 mt-1 mb-4">
-                                Для работы ассистента необходимо войти в аккаунт Google. Все ваши настройки будут безопасно сохранены в облаке.
+                                Для работы ассистента необходимо войти в аккаунт Google. Все ваши настройки будут безопасно сохранены в облаке при использовании Supabase.
                              </p>
                              <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-3">
@@ -138,9 +138,30 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                 </div>
                                 <button id="google-auth-action-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors">${authButtonText}</button>
                             </div>
-                             <p class="text-xs text-yellow-400 mt-3" id="login-warning" ${!authState.isGoogleConnected ? '' : 'style="display: none;"'}>
-                                Ассистент не будет работать корректно до тех пор, пока вы не войдете в аккаунт.
-                            </p>
+                        </div>
+
+                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                            <h3 class="text-lg font-semibold text-gray-200">Режим подключения</h3>
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="font-semibold text-gray-200">Использовать Supabase (Рекомендуется)</h4>
+                                    <p class="text-sm text-gray-400">Включает синхронизацию данных и быстрый поиск.</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="supabase-enabled-toggle" ${currentSettings.isSupabaseEnabled ? 'checked' : ''}>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="direct-google-settings-block" class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4" style="display: none;">
+                            <h3 class="text-lg font-semibold text-gray-200">Резервное подключение</h3>
+                            <p class="text-sm text-gray-400">Эти настройки используются, если Supabase отключен или недоступен. Синхронизация данных в этом режиме не работает.</p>
+                            <div class="space-y-2 mt-2">
+                                <label for="google-client-id" class="block text-sm font-medium text-gray-300">Google Client ID</label>
+                                <input type="text" id="google-client-id" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Ваш Client ID из Google Cloud" value="${currentSettings.googleClientId || ''}">
+                                <p class="text-xs text-gray-400 mt-1"><a href="./setup-guide.html#google-cloud-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как получить Client ID?</a></p>
+                            </div>
                         </div>
 
                          <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
@@ -263,6 +284,8 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     modalOverlay.querySelector('#save-settings').addEventListener('click', () => {
         const newSettings = {
             geminiApiKey: modalOverlay.querySelector('#gemini-api-key').value.trim(),
+            googleClientId: modalOverlay.querySelector('#google-client-id').value.trim(),
+            isSupabaseEnabled: modalOverlay.querySelector('#supabase-enabled-toggle').checked,
             isProxyEnabled: modalOverlay.querySelector('#proxy-enabled-toggle').checked,
             geminiProxyUrl: modalOverlay.querySelector('#gemini-proxy-url').value.trim(),
             timezone: modalOverlay.querySelector('#timezone-select').value,
@@ -386,6 +409,23 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     proxyToggle.addEventListener('change', (e) => {
         proxyUrlBlock.style.display = e.target.checked ? 'block' : 'none';
     });
+    
+    // Logic for Supabase toggle
+    const supabaseToggle = modalOverlay.querySelector('#supabase-enabled-toggle');
+    const directGoogleBlock = modalOverlay.querySelector('#direct-google-settings-block');
+    const syncTabButton = modalOverlay.querySelector('a[href="#sync"]');
+    
+    const updateConnectionUI = (isSupabase) => {
+        directGoogleBlock.style.display = isSupabase ? 'none' : 'block';
+        if (syncTabButton) {
+            syncTabButton.style.display = isSupabase ? 'block' : 'none';
+        }
+    };
+    updateConnectionUI(currentSettings.isSupabaseEnabled);
+    supabaseToggle.addEventListener('change', (e) => {
+        updateConnectionUI(e.target.checked);
+    });
+
 
 
     // Auth action button

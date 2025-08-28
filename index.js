@@ -9,7 +9,7 @@ import { createHelpModal } from './components/HelpModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
-import { SettingsIcon, ChartBarIcon, SupabaseIcon, NewChatIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
+import { SettingsIcon, ChartBarIcon, SupabaseIcon, GoogleIcon, NewChatIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './constants.js';
 
@@ -101,7 +101,9 @@ if (!window.isSecretaryPlusAppInitialized) {
     function renderAuth() {
         authContainer.innerHTML = '';
         if (state.isGoogleConnected && state.userProfile) {
-            const connectionIcon = `<div class="w-6 h-6 text-green-400" title="Подключено через Supabase">${SupabaseIcon}</div>`;
+            const connectionIcon = state.supabaseUser 
+                ? `<div class="w-6 h-6 text-green-400" title="Подключено через Supabase">${SupabaseIcon}</div>`
+                : `<div class="w-6 h-6" title="Прямое подключение к Google">${GoogleIcon}</div>`;
             
             let proxyRingClass = '';
             let proxyIndicatorTitle = '';
@@ -150,15 +152,17 @@ if (!window.isSecretaryPlusAppInitialized) {
             loginButton.id = 'login-button';
             loginButton.className = 'px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors';
             loginButton.textContent = 'Войти через Google';
-            authContainer.appendChild(loginButton);
-            document.getElementById('login-button').addEventListener('click', handleLogin);
             
-            if (!state.isSupabaseReady) {
-                 loginButton.disabled = true;
-                 loginButton.classList.replace('bg-blue-600', 'bg-gray-600');
-                 loginButton.classList.remove('hover:bg-blue-700');
-                 loginButton.title = 'Подключение к базе данных... Пожалуйста, подождите.';
+            const loginContainer = document.createElement('div');
+            loginContainer.className = 'flex flex-col items-start';
+            loginContainer.appendChild(loginButton);
+
+            if (state.settings.isSupabaseEnabled && !state.isSupabaseReady) {
+                loginContainer.innerHTML += `<p class="text-xs text-yellow-400 mt-1">Supabase недоступен. Будет использовано резервное подключение.</p>`;
             }
+
+            authContainer.appendChild(loginContainer);
+            document.getElementById('login-button').addEventListener('click', handleLogin);
         }
     }
 
@@ -235,8 +239,8 @@ if (!window.isSecretaryPlusAppInitialized) {
             console.log("Sync already in progress. Skipping.");
             return;
         }
-        if (!state.isGoogleConnected || !supabaseService) {
-            console.log("Cannot sync: Not connected to Google or Supabase.");
+        if (!state.isGoogleConnected || !state.isSupabaseReady || !supabaseService) {
+            console.log("Cannot sync: Not connected to Google or Supabase is disabled/unavailable.");
             return;
         }
 
@@ -274,7 +278,7 @@ if (!window.isSecretaryPlusAppInitialized) {
 
     function startAutoSync() {
         if (syncInterval) clearInterval(syncInterval);
-        if (!state.settings.enableAutoSync) return;
+        if (!state.settings.enableAutoSync || !state.isSupabaseReady) return;
 
         // Run once on start, then set interval
         setTimeout(runAllSyncs, 2000); // Run after 2 seconds to not block initial load
@@ -295,10 +299,9 @@ if (!window.isSecretaryPlusAppInitialized) {
 
     async function initializeSupabase() {
         if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('YOUR_SUPABASE_URL')) {
-            showSystemError("Учетные данные Supabase не настроены в коде. Приложение не может подключиться к базе данных.");
+            console.warn("Supabase credentials are not configured in constants.js. Skipping Supabase initialization.");
             state.isSupabaseReady = false;
-            renderAuth(); // Update login button to be disabled
-            return;
+            return; // Don't throw, just exit gracefully
         }
         
         try {
@@ -317,7 +320,7 @@ if (!window.isSecretaryPlusAppInitialized) {
 
         } catch (error) {
             console.error("Supabase initialization failed:", error);
-            showSystemError(`Не удалось инициализировать Supabase. ${error.message}`);
+            showSystemError(`Не удалось подключиться к Supabase. Функции синхронизации будут недоступны.`);
             state.isSupabaseReady = false;
             supabaseService = null;
             serviceProviders.supabase = null;
@@ -351,6 +354,7 @@ if (!window.isSecretaryPlusAppInitialized) {
 
                 // Re-apply critical settings from the potentially new settings object
                 googleProvider.setTimezone(state.settings.timezone);
+                await googleProvider.initClient(state.settings.googleClientId, handleGoogleTokenResponse);
                 
                 state.userProfile = await googleProvider.getUserProfile();
                 state.isGoogleConnected = true;
@@ -359,11 +363,8 @@ if (!window.isSecretaryPlusAppInitialized) {
 
             } catch (error) {
                 console.error("Failed to fetch Google user profile or settings via Supabase:", error);
-                // DO NOT LOG OUT. This prevents a login loop on transient errors (e.g. network issue).
-                // The user's Supabase session is still valid.
-                showSystemError(`Не удалось получить профиль Google после аутентификации. Попробуйте обновить страницу или войти снова. Ошибка: ${error.message}`);
-                state.isGoogleConnected = false;
-                state.userProfile = null;
+                showSystemError(`Не удалось получить профиль Google после аутентификации. Ошибка: ${error.message}`);
+                await handleLogout(); // Log out on critical failure to avoid inconsistent state
             }
         } else {
             // User is logged out
@@ -387,9 +388,48 @@ if (!window.isSecretaryPlusAppInitialized) {
             renderMainContent();
         }
     }
+    
+    // Callback for direct Google Sign-In (when Supabase is disabled/failed)
+    async function handleGoogleTokenResponse(tokenResponse) {
+        if (tokenResponse.error) {
+            console.error("Direct Google Auth Error:", tokenResponse.error);
+            showSystemError(`Ошибка авторизации Google: ${tokenResponse.error_description || tokenResponse.error}`);
+            return;
+        }
+        
+        // This is called when NOT using Supabase. So we set state directly.
+        googleProvider.setAuthToken(tokenResponse.access_token);
+        state.isGoogleConnected = true;
+        try {
+            state.userProfile = await googleProvider.getUserProfile();
+            // In direct mode, we don't sync settings or stats from a DB.
+            state.actionStats = {}; // No stats in direct mode.
+        } catch (error) {
+            console.error("Failed to fetch Google user profile directly:", error);
+            showSystemError(`Не удалось получить профиль Google: ${error.message}`);
+            state.isGoogleConnected = false;
+            state.userProfile = null;
+        }
+        
+        renderAuth();
+        setupEmailPolling();
+        checkProxyStatus(true);
+        if (state.messages.length === 0) {
+            renderMainContent();
+        }
+    }
+
 
     async function initializeAppServices() {
-        await initializeSupabase();
+        if (state.settings.isSupabaseEnabled) {
+            await initializeSupabase();
+        } else {
+            state.isSupabaseReady = false;
+            console.log("Supabase is disabled in settings. Running in direct Google mode.");
+        }
+        
+        // Initialize Google client for direct auth fallback, regardless of Supabase status.
+        await googleProvider.initClient(state.settings.googleClientId, handleGoogleTokenResponse);
         googleProvider.setTimezone(state.settings.timezone);
         renderAuth();
     }
@@ -397,23 +437,44 @@ if (!window.isSecretaryPlusAppInitialized) {
     // --- EVENT HANDLERS & LOGIC ---
 
     async function handleLogin() {
-        if (!supabaseService) {
-            showSystemError('Supabase не настроен. Проверьте учетные данные в коде приложения.');
-            return;
+        if (state.isSupabaseReady) {
+            await supabaseService.signInWithGoogle();
+        } else {
+             if (!state.settings.googleClientId) {
+                showSystemError('Резервное подключение не настроено. Пожалуйста, укажите Google Client ID в настройках.');
+                showSettings();
+                return;
+            }
+            try {
+                await googleProvider.authenticate();
+            } catch (error) {
+                showSystemError(error.message);
+                showSettings();
+            }
         }
-        await supabaseService.signInWithGoogle();
     }
 
     async function handleLogout() {
-        if (supabaseService) {
+        if (state.supabaseUser) { // Logged in via Supabase
             await supabaseService.signOut();
+        } else { // Logged in directly
+            await googleProvider.disconnect();
+            // Manually reset state since there's no authStateChange event
+            state.isGoogleConnected = false;
+            state.userProfile = null;
+            state.actionStats = {};
+            state.supabaseUser = null;
+            renderAuth();
+            if (state.messages.length === 0) {
+                renderMainContent();
+            }
         }
     }
 
     async function handleSaveSettings(newSettings) {
         const oldSettings = { ...state.settings };
         state.settings = newSettings;
-        saveSettings(newSettings); // Always save to local storage
+        saveSettings(newSettings);
 
         // If logged into Supabase, save to the database as well
         if (state.supabaseUser && supabaseService) {
@@ -428,19 +489,29 @@ if (!window.isSecretaryPlusAppInitialized) {
 
         hideSettings();
         
-        // Re-apply timezone immediately
+        // Re-apply settings immediately
         googleProvider.setTimezone(newSettings.timezone);
-
-        // Start or stop auto-sync based on new settings
-        if (newSettings.enableAutoSync && !oldSettings.enableAutoSync) {
-            startAutoSync();
-        } else if (!newSettings.enableAutoSync && oldSettings.enableAutoSync) {
-            stopAutoSync();
+        await googleProvider.initClient(newSettings.googleClientId, handleGoogleTokenResponse);
+        
+        // Handle changes that require restarting services
+        if (newSettings.enableAutoSync !== oldSettings.enableAutoSync) {
+            newSettings.enableAutoSync ? startAutoSync() : stopAutoSync();
+        }
+        if (newSettings.enableEmailPolling !== oldSettings.enableEmailPolling) {
+            setupEmailPolling();
         }
 
         // Re-check proxy status if relevant settings changed
         if (newSettings.geminiProxyUrl !== oldSettings.geminiProxyUrl || newSettings.isProxyEnabled !== oldSettings.isProxyEnabled || newSettings.geminiApiKey !== oldSettings.geminiApiKey) {
             checkProxyStatus(true);
+        }
+        
+        // If Supabase mode was toggled, reload the app to re-initialize correctly
+        if (newSettings.isSupabaseEnabled !== oldSettings.isSupabaseEnabled) {
+            // Show a message before reloading
+            const app = document.getElementById('app');
+            app.innerHTML = `<div class="flex items-center justify-center h-full text-lg">Переключение режима подключения, перезагрузка...</div>`;
+            setTimeout(() => window.location.reload(), 1500);
         }
     }
     
@@ -481,8 +552,8 @@ if (!window.isSecretaryPlusAppInitialized) {
             if (response.functionCallName) {
                 // Update local state for immediate UI feedback
                 state.actionStats[response.functionCallName] = (state.actionStats[response.functionCallName] || 0) + 1;
-                // Persist the stat change to the database in the background
-                if (supabaseService) {
+                // Persist the stat change to the database in the background if available
+                if (supabaseService && state.isSupabaseReady) {
                     await supabaseService.incrementActionStat(response.functionCallName);
                 }
             }

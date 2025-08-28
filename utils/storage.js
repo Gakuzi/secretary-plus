@@ -3,6 +3,8 @@ const SYNC_STATUS_KEY = 'secretary-plus-sync-status-v1';
 
 const defaultSettings = {
     geminiApiKey: '',
+    googleClientId: '', // For direct Google auth fallback
+    isSupabaseEnabled: true, // Master switch for Supabase
     isProxyEnabled: false, // For enabling/disabling proxy usage
     geminiProxyUrl: '', // URL for Gemini API proxy
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -37,6 +39,8 @@ export function saveSettings(settings) {
         // Create a clean settings object to save, removing legacy fields
         const settingsToSave = {
             geminiApiKey: settings.geminiApiKey,
+            googleClientId: settings.googleClientId,
+            isSupabaseEnabled: settings.isSupabaseEnabled,
             isProxyEnabled: settings.isProxyEnabled,
             geminiProxyUrl: settings.geminiProxyUrl,
             timezone: settings.timezone,

@@ -136,12 +136,11 @@ export class GoogleServiceProvider {
     }
 
     authenticate() {
-        // Direct authentication flow
-        if (this.gsiClient) {
-            this.gsiClient.requestAccessToken();
-            return Promise.resolve(); // The actual result is handled by the callback
+        if (!this.gsiClient) {
+            return Promise.reject(new Error("Google Client ID не настроен. Проверьте настройки."));
         }
-        return Promise.reject(new Error("Authentication should be handled via Supabase or Google Client must be initialized."));
+        this.gsiClient.requestAccessToken();
+        return Promise.resolve();
     }
 
     disconnect() {
