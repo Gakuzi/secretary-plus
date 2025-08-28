@@ -616,6 +616,10 @@ export const callGemini = async ({
                         } else {
                             resultMessage.text = `Не удалось найти заметки по запросу "${args.query}".`;
                         }
+                        resultMessage.contextualActions = [
+                             { label: 'Создать новую заметку', prompt: 'Создай новую заметку', icon: 'FileIcon' },
+                             { label: `Искать в ${provider.getName()} еще`, prompt: `Найди в ${provider.getName()} заметки о проекте`, icon: 'FileIcon' }
+                        ];
                         break;
                     }
                      case 'create_google_doc':
@@ -654,6 +658,10 @@ export const callGemini = async ({
                         const provider = serviceProviders.google;
                         const result = await provider.updateTask(args);
                         resultMessage.text = `Задача "${result.title}" была успешно обновлена.`;
+                        resultMessage.contextualActions = [
+                             { label: 'Показать все задачи', prompt: 'Покажи все мои задачи', icon: 'CheckSquareIcon' },
+                             { label: 'Создать еще задачу', prompt: 'Создай еще одну задачу', icon: 'CheckSquareIcon' }
+                        ];
                         break;
                     }
                     case 'send_email': {

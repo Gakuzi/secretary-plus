@@ -271,7 +271,6 @@ if (!window.isSecretaryPlusAppInitialized) {
     }
 
     async function updateSupabaseAuthState(session) {
-        const wasConnected = state.isGoogleConnected;
         if (session) {
             state.supabaseUser = session.user;
             const providerToken = session.provider_token;
@@ -295,14 +294,14 @@ if (!window.isSecretaryPlusAppInitialized) {
         renderAuth();
         setupEmailPolling();
 
-        // If connection state changed and there are no messages, re-render the welcome screen.
-        if (wasConnected !== state.isGoogleConnected && state.messages.length === 0) {
+        // Always re-render main content on auth change if no messages exist
+        // to correctly show/hide welcome prompts.
+        if (state.messages.length === 0) {
             renderMainContent();
         }
     }
 
     async function updateGoogleDirectAuthState(token) {
-        const wasConnected = state.isGoogleConnected;
         if (token) {
             googleProvider.setAuthToken(token.access_token);
             try {
@@ -321,8 +320,9 @@ if (!window.isSecretaryPlusAppInitialized) {
          renderAuth();
          setupEmailPolling();
 
-        // If connection state changed and there are no messages, re-render the welcome screen.
-        if (wasConnected !== state.isGoogleConnected && state.messages.length === 0) {
+        // Always re-render main content on auth change if no messages exist
+        // to correctly show/hide welcome prompts.
+        if (state.messages.length === 0) {
             renderMainContent();
         }
     }
