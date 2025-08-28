@@ -1,6 +1,11 @@
 import { createMessageElement } from './Message.js';
 import { MicrophoneIcon, SendIcon, CameraIcon, LockIcon, TrashIcon, AttachmentIcon } from './icons/Icons.js';
 import { SpeechRecognizer } from '../utils/speech.js';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Set worker path for pdf.js
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs`;
+
 
 // Module-level variables
 let chatLog, chatInput, sendButton, voiceRecordButton, cameraButton, attachButton, fileInput;
@@ -15,26 +20,66 @@ let startY = 0; // For tracking vertical drag to lock
 let tapTimeout = null;
 const TAP_DURATION = 250; // ms to differentiate tap from hold
 
-// --- File Drop & Image Handling ---
+// --- File Drop & File Handling ---
 function handleDragOver(e) { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add('drag-over'); }
 function handleDragLeave(e) { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove('drag-over'); }
 function handleDrop(e) {
     handleDragLeave(e);
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) handleImageFile(file);
+    if (file) handleFileSelect(file);
 }
-function handleImageFile(file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const base64 = e.target.result.split(',')[1];
-        const image = { mimeType: file.type, base64 };
-        const prompt = chatInput.value.trim();
-        onSendMessageCallback(prompt, image);
-        chatInput.value = '';
-        updateInputUI();
-    };
-    reader.readAsDataURL(file);
+
+async function handleFileSelect(file) {
+    if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const base64 = e.target.result.split(',')[1];
+            const image = { mimeType: file.type, base64 };
+            const prompt = chatInput.value.trim();
+            onSendMessageCallback(prompt, image);
+            chatInput.value = '';
+            updateInputUI();
+        };
+        reader.readAsDataURL(file);
+    } else if (file.type === 'application/pdf') {
+        const originalPlaceholder = chatInput.placeholder;
+        chatInput.placeholder = `Обработка PDF: ${file.name}...`;
+        chatInput.disabled = true;
+        voiceRecordButton.disabled = true;
+        
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const loadingTask = pdfjsLib.getDocument(arrayBuffer);
+            const pdf = await loadingTask.promise;
+            let fullText = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                fullText += textContent.items.map(item => item.str).join(' ') + '\n';
+            }
+            
+            const userPrompt = chatInput.value.trim();
+            chatInput.value = '';
+            updateInputUI();
+            
+            const finalPrompt = userPrompt 
+              ? `${userPrompt}\n\nКонтекст из файла "${file.name}":\n\n${fullText.trim()}`
+              : `Я загрузил файл "${file.name}". Проанализируй его и кратко изложи суть. Вот его содержимое:\n\n${fullText.trim()}`;
+            
+            onSendMessageCallback(finalPrompt, null);
+        } catch (error) {
+            console.error('Error processing PDF:', error);
+            alert(`Не удалось обработать PDF файл: ${error.message}`);
+        } finally {
+            chatInput.placeholder = originalPlaceholder;
+            chatInput.disabled = false;
+            voiceRecordButton.disabled = false;
+        }
+    } else {
+        alert('Неподдерживаемый тип файла. Пожалуйста, выберите изображение или PDF.');
+    }
 }
+
 
 // --- Message Sending Logic ---
 const sendMessageHandler = () => {
@@ -55,7 +100,7 @@ function updateInputUI() {
     
     // Auto-resize textarea
     chatInput.style.height = 'auto';
-    chatInput.style.height = `${Math.min(chatInput.scrollHeight, 128)}px`;
+    chatInput.style.height = `${chatInput.scrollHeight}px`;
 
     // Toggle between voice and send button
     if (hasText) {
@@ -138,7 +183,7 @@ function lockRecording() {
     document.getElementById('recording-indicator-panel').classList.add('hidden');
     document.body.classList.remove('recording-active');
 
-    document.getElementById('left-actions').classList.add('hidden');
+    document.getElementById('left-input-actions').classList.add('hidden');
     document.getElementById('cancel-recording-button').classList.remove('hidden');
     document.getElementById('input-bar').classList.add('recording-locked');
     document.getElementById('locked-recording-indicator').classList.remove('hidden');
@@ -167,7 +212,7 @@ function stopRecording(isCancel) {
     document.body.classList.remove('recording-active');
     document.getElementById('recording-indicator-panel').classList.add('hidden');
     
-    document.getElementById('left-actions').classList.remove('hidden');
+    document.getElementById('left-input-actions').classList.remove('hidden');
     document.getElementById('cancel-recording-button').classList.add('hidden');
     document.getElementById('input-bar').classList.remove('recording-locked');
     document.getElementById('locked-recording-indicator').classList.add('hidden');
@@ -226,24 +271,26 @@ export function createChatInterface(onSendMessage, showCameraView) {
                     <!-- Buttons will be rendered here by renderContextualActions -->
                 </div>
             </div>
-            <div class="flex items-end w-full gap-2">
-                <div id="left-actions" class="flex items-center gap-1">
-                    <button id="camera-button" class="w-11 h-11 flex items-center justify-center rounded-full hover:bg-gray-700 flex-shrink-0">${CameraIcon}</button>
-                    <button id="attach-button" class="w-11 h-11 flex items-center justify-center rounded-full hover:bg-gray-700 flex-shrink-0">${AttachmentIcon}</button>
-                    <input type="file" id="file-input" class="hidden" accept="image/*">
+            <div id="input-bar" class="flex items-end w-full gap-2 bg-gray-800 rounded-2xl p-2 border border-gray-700">
+                <div id="left-input-actions" class="flex items-center self-end flex-shrink-0">
+                     <button id="camera-button" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-700">${CameraIcon}</button>
+                     <button id="attach-button" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-700">${AttachmentIcon}</button>
+                     <input type="file" id="file-input" class="hidden" accept="image/*,application/pdf">
                 </div>
-                <button id="cancel-recording-button" class="hidden w-11 h-11 flex items-center justify-center rounded-full hover:bg-gray-700 text-red-500 flex-shrink-0">${TrashIcon}</button>
+                <button id="cancel-recording-button" class="hidden w-10 h-10 items-center justify-center rounded-full hover:bg-gray-700 text-red-500 flex-shrink-0 self-end">${TrashIcon}</button>
                 
-                <div id="input-bar" class="flex-1 relative flex items-center bg-gray-800 rounded-3xl border border-gray-700">
-                    <div id="locked-recording-indicator" class="hidden absolute left-4 items-center gap-2 text-red-500 font-mono font-semibold">
+                <div class="flex-1 relative flex items-end">
+                    <div id="locked-recording-indicator" class="hidden absolute left-2 bottom-2 items-center gap-2 text-red-500 font-mono font-semibold">
                         <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
                         <span class="recording-timer">0:00</span>
                     </div>
-                    <textarea id="chat-input" placeholder="Сообщение..." rows="1" class="w-full px-4 py-3 bg-transparent border-none outline-none text-gray-100 text-base resize-none"></textarea>
+                    <textarea id="chat-input" placeholder="Сообщение..." rows="1" class="w-full bg-transparent border-none outline-none text-gray-100 text-base resize-none py-2 px-2"></textarea>
                 </div>
 
-                <button id="send-button" class="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 flex-shrink-0 hidden items-center justify-center">${SendIcon}</button>
-                <button id="voice-record-button" class="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 flex-shrink-0 flex items-center justify-center">${MicrophoneIcon}</button>
+                <div class="flex items-center self-end flex-shrink-0">
+                    <button id="send-button" class="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 hidden items-center justify-center">${SendIcon}</button>
+                    <button id="voice-record-button" class="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 flex items-center justify-center">${MicrophoneIcon}</button>
+                </div>
             </div>
         </div>
     `;
@@ -264,7 +311,7 @@ export function createChatInterface(onSendMessage, showCameraView) {
     
     cameraButton.addEventListener('click', showCameraView); 
     attachButton.addEventListener('click', () => fileInput.click()); 
-    fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleImageFile(e.target.files[0]); });
+    fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleFileSelect(e.target.files[0]); });
 
     voiceRecordButton.addEventListener('pointerdown', pointerDown);
     chatWrapper.querySelector('#cancel-recording-button').addEventListener('click', () => stopRecording(true));

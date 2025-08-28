@@ -206,39 +206,33 @@ body {
     opacity: 1;
 }
 
-/* --- Welcome Screen Action Cards --- */
-.welcome-action-card {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background-color: var(--background-light);
+/* --- Welcome Screen Prompt Buttons --- */
+.welcome-prompt-button {
+  padding: 0.625rem 1.25rem; /* 10px 20px */
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background-color: transparent;
   border: 1px solid var(--border-color);
-  border-radius: 0.75rem;
+  border-radius: 9999px; /* rounded-full */
   cursor: pointer;
-  transition: background-color 0.2s, border-color 0.2s, transform 0.2s;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s, transform 0.1s;
 }
-.welcome-action-card:hover {
-  background-color: #374151; /* gray-700 */
-  border-color: #4b5563; /* gray-600 */
-  transform: translateY(-2px);
-}
-.welcome-action-icon {
-  flex-shrink: 0;
-  width: 3rem; /* 48px */
-  height: 3rem; /* 48px */
-  border-radius: 0.5rem; /* 8px */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.welcome-action-icon svg {
-  width: 1.5rem; /* 24px */
-  height: 1.5rem; /* 24px */
+
+.welcome-prompt-button:hover {
+    background-color: var(--background-light);
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
+    transform: translateY(-2px);
 }
 
 
-/* --- NEW VOICE INPUT SYSTEM --- */
+/* --- NEW CHAT INPUT SYSTEM --- */
+
+#input-bar-wrapper {
+  max-height: 40vh;
+  overflow-y: auto;
+}
 
 #input-bar {
   transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
@@ -248,7 +242,6 @@ body {
   border-color: var(--accent-blue);
   box-shadow: 0 0 0 1px var(--accent-blue);
 }
-
 
 #chat-input {
     box-sizing: border-box;
@@ -260,8 +253,7 @@ body {
     font-size: 1rem;
     line-height: 1.5rem;
     resize: none;
-    max-height: 128px; /* ~5 lines */
-    min-height: 24px; /* Matches line-height to prevent jump */
+    overflow-y: hidden; /* Prevent internal scrollbar */
     transition: opacity 0.2s, transform 0.2s;
 }
 
@@ -276,7 +268,7 @@ body.recording-active #voice-record-button {
   background-color: #ef4444; /* red-500 */
 }
 body.recording-active #chat-input,
-body.recording-active #camera-button {
+body.recording-active #left-input-actions {
     opacity: 0;
     pointer-events: none;
 }
@@ -297,7 +289,7 @@ body.recording-active {
 }
 
 /* When recording is locked */
-#input-bar.recording-locked #camera-button {
+#input-bar.recording-locked #left-input-actions {
     display: none;
 }
 #input-bar.recording-locked #cancel-recording-button {

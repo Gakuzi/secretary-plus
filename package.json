@@ -9,7 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/genai": "latest"
+    "@google/genai": "latest",
+    "pdfjs-dist": "4.4.168"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
