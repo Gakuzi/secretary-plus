@@ -103,33 +103,43 @@ if (!window.isSecretaryPlusAppInitialized) {
                 ? `<div class="w-6 h-6 text-green-400" title="Подключено через Supabase">${SupabaseIcon}</div>`
                 : `<div class="w-6 h-6" title="Подключено напрямую к Google">${GoogleIcon}</div>`;
             
-            let proxyIndicatorHtml = '';
-            if (state.settings.isProxyEnabled && state.settings.geminiProxyUrl) {
-                let indicatorClass = 'bg-gray-400';
-                let indicatorTitle = 'Статус прокси неизвестен.';
-                switch (state.proxyStatus) {
-                    case 'ok':
-                        indicatorClass = 'bg-green-500';
-                        indicatorTitle = 'Прокси-сервер активен и работает корректно.';
-                        break;
-                    case 'testing':
-                        indicatorClass = 'bg-yellow-400 animate-pulse';
-                        indicatorTitle = 'Идет проверка прокси-сервера...';
-                        break;
-                    case 'error':
-                        indicatorClass = 'bg-red-500';
-                        indicatorTitle = 'Ошибка подключения к прокси. Проверьте URL и статус сервера в настройках.';
-                        break;
+            let proxyRingClass = '';
+            let proxyIndicatorTitle = '';
+            if (state.settings.isProxyEnabled) {
+                 if (state.settings.geminiProxyUrl) {
+                    switch (state.proxyStatus) {
+                        case 'ok':
+                            proxyRingClass = 'ring-2 ring-green-500';
+                            proxyIndicatorTitle = 'Прокси-сервер активен и работает корректно.';
+                            break;
+                        case 'testing':
+                            proxyRingClass = 'ring-2 ring-yellow-400 animate-pulse';
+                            proxyIndicatorTitle = 'Идет проверка прокси-сервера...';
+                            break;
+                        case 'error':
+                            proxyRingClass = 'ring-2 ring-red-500';
+                            proxyIndicatorTitle = 'Ошибка подключения к прокси. Проверьте URL и статус сервера в настройках.';
+                            break;
+                        case 'unknown':
+                        default:
+                            proxyRingClass = 'ring-2 ring-gray-400';
+                            proxyIndicatorTitle = 'Статус прокси неизвестен.';
+                            break;
+                    }
+                } else {
+                    proxyRingClass = 'ring-2 ring-red-500';
+                    proxyIndicatorTitle = 'Прокси включен, но URL не указан в настройках.';
                 }
-                proxyIndicatorHtml = `<div class="w-3 h-3 rounded-full ${indicatorClass}" title="${indicatorTitle}"></div>`;
             }
+
 
             const profileElement = document.createElement('div');
             profileElement.className = 'flex items-center space-x-2';
             profileElement.innerHTML = `
                 ${connectionIcon}
-                ${proxyIndicatorHtml}
-                <img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full">
+                <div class="relative" title="${proxyIndicatorTitle}">
+                    <img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full ${proxyRingClass} ring-offset-2 ring-offset-gray-800">
+                </div>
                 <span class="text-sm font-medium hidden sm:block">${state.userProfile.name}</span>
                 <button id="logout-button" class="px-3 py-1 text-sm bg-red-600 hover:bg-red-700 rounded-md transition-colors">Выйти</button>
             `;
@@ -360,8 +370,12 @@ if (!window.isSecretaryPlusAppInitialized) {
                 startAutoSync();
             } catch (error) {
                 console.error("Failed to fetch Google user profile or settings via Supabase:", error);
-                await handleLogout();
-                return;
+                // DO NOT LOG OUT. This prevents a login loop on transient errors (e.g. network issue).
+                // The user's Supabase session is still valid.
+                showSystemError(`Не удалось получить профиль Google после аутентификации. Попробуйте обновить страницу или войти снова. Ошибка: ${error.message}`);
+                state.isGoogleConnected = false;
+                state.userProfile = null;
+                // The function continues and calls renderAuth() below, which will show the login button again.
             }
         } else {
             state.supabaseUser = null;
@@ -375,6 +389,7 @@ if (!window.isSecretaryPlusAppInitialized) {
         }
         renderAuth();
         setupEmailPolling();
+        checkProxyStatus(true); // Check proxy on auth change
 
         // Always re-render main content on auth change if no messages exist
         // to correctly show/hide welcome prompts.
@@ -391,8 +406,10 @@ if (!window.isSecretaryPlusAppInitialized) {
                 state.isGoogleConnected = true;
             } catch (error) {
                 console.error("Failed to fetch Google user profile directly:", error);
-                await handleLogout();
-                return;
+                // DO NOT LOG OUT. This prevents a login loop.
+                showSystemError(`Не удалось получить профиль Google после аутентификации. Попробуйте обновить страницу или войти снова. Ошибка: ${error.message}`);
+                state.isGoogleConnected = false;
+                state.userProfile = null;
             }
         } else {
              state.isGoogleConnected = false;
@@ -401,6 +418,7 @@ if (!window.isSecretaryPlusAppInitialized) {
         }
          renderAuth();
          setupEmailPolling();
+         checkProxyStatus(true); // Check proxy on auth change
 
         // Always re-render main content on auth change if no messages exist
         // to correctly show/hide welcome prompts.
@@ -437,6 +455,7 @@ if (!window.isSecretaryPlusAppInitialized) {
         // Fallback if no auth method is configured but was previously logged in
         if (!state.isGoogleConnected) {
             await updateSupabaseAuthState(null);
+            await updateGoogleDirectAuthState(null);
         }
 
         renderAuth();
@@ -850,6 +869,7 @@ ${payload.body}`;
                 proxyUrl: state.settings.geminiProxyUrl
             });
         };
+
         const modal = createHelpModal(hideHelpModal, state.settings, handleAnalyzeError);
         helpModalContainer.innerHTML = '';
         helpModalContainer.appendChild(modal);
@@ -860,8 +880,8 @@ ${payload.body}`;
         helpModalContainer.classList.add('hidden');
         helpModalContainer.innerHTML = '';
     }
-
-    function showStatsModal() {
+    
+     function showStatsModal() {
         const modal = createStatsModal(state.actionStats, hideStatsModal);
         statsModalContainer.innerHTML = '';
         statsModalContainer.appendChild(modal);
@@ -874,15 +894,11 @@ ${payload.body}`;
     }
 
     function showCameraView() {
-        const cameraView = createCameraView(
-            (image) => { 
-                handleSendMessage(null, image);
-                hideCameraView();
-            },
-            () => {
-                hideCameraView();
-            }
-        );
+        const onCapture = (image) => {
+            const prompt = document.getElementById('chat-input')?.value.trim() || 'Что на этом изображении?';
+            handleSendMessage(prompt, image);
+        };
+        const cameraView = createCameraView(onCapture, hideCameraView);
         cameraViewContainer.innerHTML = '';
         cameraViewContainer.appendChild(cameraView);
         cameraViewContainer.classList.remove('hidden');
@@ -893,13 +909,8 @@ ${payload.body}`;
         cameraViewContainer.innerHTML = '';
     }
 
-    // --- APP START ---
-    async function init() {
-        // Add mobile class for adaptive UI
-        if (isMobile()) {
-            document.body.classList.add('is-mobile');
-        }
-
+    // --- INITIALIZATION ---
+    async function main() {
         settingsButton.innerHTML = SettingsIcon;
         helpButton.innerHTML = QuestionMarkCircleIcon;
         statsButton.innerHTML = ChartBarIcon;
@@ -909,36 +920,33 @@ ${payload.body}`;
         helpButton.addEventListener('click', showHelpModal);
         statsButton.addEventListener('click', showStatsModal);
         newChatButton.addEventListener('click', handleNewChat);
+        
+        document.body.addEventListener('click', handleCardAction);
+        document.body.addEventListener('click', handleQuickReply);
+        document.body.addEventListener('click', handleActionPrompt);
 
+        // Handle clicks on welcome prompts, delegating from the main content area
         mainContent.addEventListener('click', (e) => {
-            handleCardAction(e);
-            handleQuickReply(e);
-            handleActionPrompt(e);
-            
-            const settingsButtonFromWelcome = e.target.closest('#open-settings-from-welcome');
-            if (settingsButtonFromWelcome) {
-                showSettings();
-                return;
-            }
-
-            const welcomeActionButton = e.target.closest('.welcome-prompt-button');
-            if (welcomeActionButton) {
-                const action = welcomeActionButton.dataset.action;
-                const payload = welcomeActionButton.dataset.payload ? JSON.parse(welcomeActionButton.dataset.payload) : {};
-
-                if (action === 'welcome_prompt' && payload.prompt) {
+            const target = e.target.closest('[data-action="welcome_prompt"]');
+            if (target) {
+                const payload = JSON.parse(target.dataset.payload);
+                if (payload.prompt) {
                     handleSendMessage(payload.prompt);
-                } else if (action === 'show_stats') {
-                    showStatsModal();
                 }
             }
+            const settingsTarget = e.target.closest('#open-settings-from-welcome');
+            if (settingsTarget) {
+                showSettings();
+            }
         });
-        
-        render(); // Render UI first to ensure error display area exists
-        await initializeAppServices(); // Then initialize services which might produce errors
-        checkProxyStatus(); // Check proxy status on load
+
+        await initializeAppServices();
+        render(); // Initial render
+        checkProxyStatus(); // Initial proxy check
     }
 
-    document.addEventListener('DOMContentLoaded', init);
-
-} // end of initialization guard
+    main().catch(error => {
+        console.error("An unhandled error occurred during app initialization:", error);
+        showSystemError(`Критическая ошибка при запуске: ${error.message}. Попробуйте обновить страницу.`);
+    });
+}
