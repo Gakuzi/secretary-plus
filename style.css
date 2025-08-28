@@ -218,6 +218,7 @@ body {
 /* --- NEW VOICE INPUT SYSTEM --- */
 
 #chat-input {
+    box-sizing: border-box;
     flex: 1;
     background: transparent;
     border: none;
