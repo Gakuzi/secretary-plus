@@ -4,10 +4,11 @@ import { OutlookServiceProvider } from './services/outlook/OutlookServiceProvide
 import { callGemini } from './services/geminiService.js';
 import { getSettings, saveSettings } from './utils/storage.js';
 import { createSettingsModal } from './components/SettingsModal.js';
+import { createStatsModal } from './components/StatsModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
-import { SettingsIcon } from './components/icons/Icons.js';
+import { SettingsIcon, ChartBarIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 
 // --- STATE MANAGEMENT ---
@@ -21,6 +22,7 @@ let state = {
     isAuthenticated: false,
     userProfile: null,
     isLoading: false,
+    actionStats: {}, // For tracking function calls
 };
 
 let activeProvider = null;
@@ -34,7 +36,9 @@ const serviceProviders = {
 const authContainer = document.getElementById('auth-container');
 const mainContent = document.getElementById('main-content');
 const settingsButton = document.getElementById('settings-button');
+const statsButton = document.getElementById('stats-button');
 const settingsModalContainer = document.getElementById('settings-modal-container');
+const statsModalContainer = document.getElementById('stats-modal-container');
 const cameraViewContainer = document.getElementById('camera-view-container');
 
 
@@ -200,6 +204,12 @@ async function handleSendMessage(prompt, image = null, isSystem = false) {
             image,
             state.settings.geminiApiKey
         );
+
+        // Track function call for stats
+        if (response.functionCallName) {
+            state.actionStats[response.functionCallName] = (state.actionStats[response.functionCallName] || 0) + 1;
+        }
+
         state.messages.push(response);
         addMessageToChat(response);
     } catch (error) {
@@ -231,6 +241,18 @@ function showSettings() {
 function hideSettings() {
     settingsModalContainer.classList.add('hidden');
     settingsModalContainer.innerHTML = '';
+}
+
+function showStatsModal() {
+    const modal = createStatsModal(state.actionStats, hideStatsModal);
+    statsModalContainer.innerHTML = '';
+    statsModalContainer.appendChild(modal);
+    statsModalContainer.classList.remove('hidden');
+}
+
+function hideStatsModal() {
+    statsModalContainer.classList.add('hidden');
+    statsModalContainer.innerHTML = '';
 }
 
 function showCameraView() {
@@ -337,7 +359,10 @@ function setupActiveProvider() {
 // --- INITIALIZATION ---
 function init() {
     settingsButton.innerHTML = SettingsIcon;
+    statsButton.innerHTML = ChartBarIcon;
+
     settingsButton.addEventListener('click', showSettings);
+    statsButton.addEventListener('click', showStatsModal);
 
     mainContent.addEventListener('click', (e) => {
         handleCardAction(e);

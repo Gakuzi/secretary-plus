@@ -13,6 +13,8 @@
     <!-- Google API -->
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- ES Module Import Map -->
     <script type="importmap">
     {
@@ -32,7 +34,10 @@
         <div class="flex justify-center">
             <h1 class="text-xl font-bold text-center">Секретарь+</h1>
         </div>
-        <div class="flex justify-end">
+        <div id="header-actions" class="flex justify-end items-center space-x-2">
+            <button id="stats-button" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Открыть статистику">
+              <!-- Stats Icon SVG will be injected here -->
+            </button>
             <button id="settings-button" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Открыть настройки">
               <!-- Settings Icon SVG will be injected here -->
             </button>
@@ -49,6 +54,9 @@
 
       <!-- Settings Modal (hidden by default) -->
       <div id="settings-modal-container" class="hidden"></div>
+      
+      <!-- Stats Modal (hidden by default) -->
+      <div id="stats-modal-container" class="hidden"></div>
     </div>
 
     <!-- Main app script -->

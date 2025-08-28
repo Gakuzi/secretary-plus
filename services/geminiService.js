@@ -269,6 +269,7 @@ export const callGemini = async (
                 sender: MessageSender.ASSISTANT,
                 text: '',
                 card: null,
+                functionCallName: name, // Add function name for stats tracking
             };
 
             switch (name) {
