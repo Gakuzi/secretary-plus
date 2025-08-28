@@ -95,7 +95,7 @@
                         <div class="code-block">
                             <pre><code id="sql-script-content">-- =================================================================
 --  Скрипт настройки базы данных "Секретарь+"
---  Версия: 1.5.0
+--  Версия: 1.6.0
 --  Этот скрипт является идемпотентным. Его можно безопасно 
 --  запускать несколько раз для создания или обновления схемы.
 -- =================================================================
@@ -253,8 +253,15 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- 9. Таблица настроек пользователя (user_settings)
+CREATE TABLE IF NOT EXISTS public.user_settings (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  settings JSONB NOT NULL
+);
 
--- 9. Включение Row Level Security (RLS) для всех таблиц
+
+-- 10. Включение Row Level Security (RLS) для всех таблиц
 ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
@@ -263,9 +270,10 @@ ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_memory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.emails ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.action_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
 
 
--- 10. Создание политик безопасности (удаляем старые, если они есть, чтобы избежать ошибок)
+-- 11. Создание политик безопасности (удаляем старые, если они есть, чтобы избежать ошибок)
 DROP POLICY IF EXISTS "Allow users to manage their own contacts" ON public.contacts;
 CREATE POLICY "Allow users to manage their own contacts" ON public.contacts FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
@@ -290,8 +298,11 @@ CREATE POLICY "Allow users to manage their own emails" ON public.emails FOR ALL 
 DROP POLICY IF EXISTS "Allow users to manage their own stats" ON public.action_stats;
 CREATE POLICY "Allow users to manage their own stats" ON public.action_stats FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can manage their own settings" ON public.user_settings;
+CREATE POLICY "Users can manage their own settings" ON public.user_settings FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
--- 11. RPC-функция для атомарного инкремента статистики
+
+-- 12. RPC-функции
 CREATE OR REPLACE FUNCTION increment_stat(fn_name TEXT)
 RETURNS void
 LANGUAGE plpgsql
@@ -301,6 +312,18 @@ BEGIN
   VALUES (auth.uid(), fn_name, 1)
   ON CONFLICT (user_id, function_name)
   DO UPDATE SET call_count = action_stats.call_count + 1;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION upsert_user_settings(new_settings JSONB)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  INSERT INTO public.user_settings (user_id, settings)
+  VALUES (auth.uid(), new_settings)
+  ON CONFLICT (user_id)
+  DO UPDATE SET settings = EXCLUDED.settings, updated_at = now();
 END;
 $$;
 </code></pre>

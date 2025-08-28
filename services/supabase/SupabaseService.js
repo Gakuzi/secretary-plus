@@ -392,4 +392,28 @@ export class SupabaseService {
             // Do not throw, this is a non-critical background task.
         }
     }
+    
+    // --- User Settings ---
+    async getUserSettings() {
+        const { data, error } = await this.client
+            .from('user_settings')
+            .select('settings')
+            .single();
+        
+        // PGRST116: Supabase error for "No rows found"
+        if (error && error.code !== 'PGRST116') {
+            console.error('Error fetching user settings:', error);
+            throw error;
+        }
+
+        return data ? data.settings : null;
+    }
+
+    async saveUserSettings(settingsObject) {
+        const { error } = await this.client.rpc('upsert_user_settings', { new_settings: settingsObject });
+        if (error) {
+            console.error('Error saving user settings:', error);
+            throw error;
+        }
+    }
 }

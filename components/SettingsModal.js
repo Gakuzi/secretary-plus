@@ -160,6 +160,9 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                 <label for="supabase-anon-key" class="block text-sm font-medium text-gray-300">Supabase Anon Key</label>
                                 <input type="password" id="supabase-anon-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.supabaseAnonKey || ''}">
                             </div>
+                            <p class="text-xs text-green-400 text-center" id="settings-sync-status" style="display: none;">
+                                Ваши настройки API ключей и сервисов надежно сохраняются в облаке.
+                            </p>
                         </div>
                         
                         <div id="direct-google-settings-block" class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4" ${currentSettings.isSupabaseEnabled ? 'style="display: none;"' : ''}>
@@ -470,6 +473,12 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                 onLogin();
              }
         });
+    }
+
+    // Show settings cloud sync status
+    const settingsSyncStatus = modalOverlay.querySelector('#settings-sync-status');
+    if (currentSettings.isSupabaseEnabled && authState.isGoogleConnected) {
+        settingsSyncStatus.style.display = 'block';
     }
 
     // Sync Tab Logic

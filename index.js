@@ -276,12 +276,31 @@ if (!window.isSecretaryPlusAppInitialized) {
             const providerToken = session.provider_token;
             googleProvider.setAuthToken(providerToken);
             try {
+                // Load settings from DB and merge with local
+                const dbSettings = await supabaseService.getUserSettings();
+                if (dbSettings) {
+                    console.log("Loaded settings from Supabase.");
+                    const localSettings = getSettings();
+                    const mergedSettings = {
+                        ...localSettings,
+                        ...dbSettings,
+                        serviceMap: {
+                            ...localSettings.serviceMap,
+                            ...(dbSettings.serviceMap || {})
+                        }
+                    };
+                    state.settings = mergedSettings;
+                    saveSettings(state.settings); // Update local cache
+                    // Re-apply critical settings
+                    googleProvider.setTimezone(state.settings.timezone);
+                }
+                
                 state.userProfile = await googleProvider.getUserProfile();
                 state.isGoogleConnected = true;
                 state.actionStats = await supabaseService.getActionStats(); // Load stats on login
                 startAutoSync();
             } catch (error) {
-                console.error("Failed to fetch Google user profile via Supabase:", error);
+                console.error("Failed to fetch Google user profile or settings via Supabase:", error);
                 await handleLogout();
                 return;
             }
@@ -292,6 +311,8 @@ if (!window.isSecretaryPlusAppInitialized) {
             state.actionStats = {}; // Clear stats on logout
             googleProvider.setAuthToken(null);
             stopAutoSync();
+            // On logout, revert to whatever is in local storage.
+            state.settings = getSettings();
         }
         renderAuth();
         setupEmailPolling();
@@ -392,7 +413,19 @@ if (!window.isSecretaryPlusAppInitialized) {
     async function handleSaveSettings(newSettings) {
         const oldSettings = { ...state.settings };
         state.settings = newSettings;
-        saveSettings(newSettings);
+        saveSettings(newSettings); // Always save to local storage
+
+        // If logged into Supabase, save to the database as well
+        if (state.supabaseUser && supabaseService) {
+            try {
+                await supabaseService.saveUserSettings(newSettings);
+                console.log("Settings saved to Supabase.");
+            } catch (error) {
+                console.error("Failed to save settings to Supabase:", error);
+                showSystemError(`Не удалось сохранить настройки в облако: ${error.message}`);
+            }
+        }
+
         hideSettings();
         await initializeAppServices();
 
