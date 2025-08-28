@@ -240,6 +240,11 @@ body {
 
 /* --- NEW VOICE INPUT SYSTEM --- */
 
+#input-bar {
+  /* Fix for the UI jump bug */
+  min-height: 56px; /* Corresponds to h-14 in Tailwind */
+}
+
 #chat-input {
     box-sizing: border-box;
     flex: 1;

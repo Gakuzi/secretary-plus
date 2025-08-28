@@ -396,14 +396,15 @@ export const callGemini = async ({
                         const result = await provider.createEvent(args);
 
                         if (provider.getId() === 'apple') {
-                            resultMessage.text = `Событие «${args.title}» готово. Нажмите кнопку ниже, чтобы скачать файл (.ics) и добавить его в ваш Apple Календарь.`;
+                            resultMessage.text = `Событие «${args.title}» готово для вашего Apple Календаря. Нажмите кнопку ниже, чтобы скачать файл (.ics) и добавить его.`;
                             resultMessage.card = {
                                 type: 'event',
                                 icon: 'CalendarIcon',
-                                title: `Событие: ${args.title}`,
+                                title: `Событие для Apple: ${args.title}`,
                                 details: {
                                     'Время': new Date(args.startTime).toLocaleString('ru-RU'),
-                                    'Сервис': provider.getName()
+                                    'Метод': 'Экспорт в .ics файл',
+                                    'Почему так?': 'Это самый безопасный способ для веб-приложений без серверной части. Он не требует доступа к вашему Apple ID.'
                                 },
                                 actions: [{
                                     label: 'Скачать .ics файл',
