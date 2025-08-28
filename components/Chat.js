@@ -387,20 +387,29 @@ export function hideLoadingIndicator() {
 }
 
 const defaultActions = [
-    { label: 'Что в календаре?', prompt: 'Что у меня сегодня в календаре?' },
-    { label: 'Мои задачи', prompt: 'Покажи мои задачи' },
-    { label: 'Найти контакт', prompt: 'Найди контакт Иван' },
-    { label: 'Найти документ', prompt: 'Найди документ "план"' },
+    { label: 'Что дальше по плану?', prompt: 'Что у меня дальше по плану в календаре?' },
+    { label: 'Какие у меня задачи?', prompt: 'Покажи мои активные задачи.' },
+    { label: 'Написать письмо', prompt: 'Напиши письмо моему коллеге о статусе проекта.' },
+    { label: 'Создать заметку', prompt: 'Создай быструю заметку: ' },
 ];
 
 export function renderContextualActions(actions) {
     const frame = document.getElementById('contextual-actions-frame');
     const container = document.getElementById('action-bar-container');
     if (!container || !frame) return;
-    
-    const actionsToRender = actions || defaultActions;
 
-    if (actionsToRender.length > 0) {
+    let actionsToRender;
+
+    if (actions === undefined) {
+        // If no actions are specified at all (e.g., after a simple text response from AI)
+        actionsToRender = defaultActions;
+    } else {
+        // If actions are specified (e.g. from AI response, or null for welcome screen), respect that.
+        // This means `null` or `[]` will result in hiding the bar.
+        actionsToRender = actions;
+    }
+    
+    if (actionsToRender && actionsToRender.length > 0) {
         container.innerHTML = actionsToRender.map(action => {
             return `
                 <button class="action-bar-button" data-action-prompt="${action.prompt}">
@@ -411,5 +420,6 @@ export function renderContextualActions(actions) {
         frame.style.display = 'block';
     } else {
         frame.style.display = 'none';
+        container.innerHTML = '';
     }
 }
