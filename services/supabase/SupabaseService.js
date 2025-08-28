@@ -1,3 +1,22 @@
+// Helper function to safely parse date strings from Gmail API
+function parseGmailDate(dateString) {
+    if (!dateString) return null;
+    try {
+        const date = new Date(dateString);
+        // Check if the parsed date is valid
+        if (isNaN(date.getTime())) {
+            // Attempt to parse more complex date formats if needed,
+            // but for now, returning null is the safest option.
+            console.warn(`Could not parse invalid date string: ${dateString}`);
+            return null;
+        }
+        return date.toISOString();
+    } catch (e) {
+        console.error(`Error parsing date string: ${dateString}`, e);
+        return null;
+    }
+}
+
 export class SupabaseService {
     constructor(supabaseUrl, supabaseAnonKey) {
         if (!supabaseUrl || !supabaseAnonKey) {
@@ -164,7 +183,7 @@ export class SupabaseService {
             subject: e.subject,
             sender: e.from,
             snippet: e.snippet,
-            received_at: e.date ? new Date(e.date) : null,
+            received_at: parseGmailDate(e.date),
         }));
 
         const { error } = await this.client

@@ -398,10 +398,9 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     
     const forceSyncButton = modalOverlay.querySelector('#force-sync-button');
     if (forceSyncButton) {
-        if (isSyncing) {
-            forceSyncButton.disabled = true;
-            forceSyncButton.textContent = 'Синхронизация...';
-        }
+        // Corrected logic: Button is disabled only if not connected or actively syncing.
+        // It is independent of the auto-sync toggle.
+        forceSyncButton.disabled = !authState.isGoogleConnected || isSyncing;
         forceSyncButton.addEventListener('click', onForceSync);
     }
 
