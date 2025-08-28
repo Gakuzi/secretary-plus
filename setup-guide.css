@@ -164,6 +164,14 @@ a:not(.nav-link):hover {
     color: var(--text-primary);
 }
 
+.note.warning {
+    background-color: rgba(234, 179, 8, 0.1);
+    border-left-color: #eab308; /* yellow-500 */
+}
+.note.warning p {
+    color: #fde68a; /* yellow-200 */
+}
+
 /* Wizard Navigation Footer */
 .wizard-footer {
     margin-top: 2rem;

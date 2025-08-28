@@ -222,6 +222,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                 <button id="sync-tasks-button" ${!authState.isGoogleConnected ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">Синхронизировать Google Задачи</button>
                                 <button id="sync-contacts-button" ${!authState.isGoogleConnected ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">Синхронизировать контакты Google</button>
                                 <button id="sync-files-button" ${!authState.isGoogleConnected ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">Синхронизировать файлы Google Drive</button>
+                                <button id="sync-emails-button" ${!authState.isGoogleConnected ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">Синхронизировать Email</button>
                             </div>
                             ${!authState.isGoogleConnected ? '<p class="text-xs text-yellow-400 text-center">Для синхронизации необходимо войти в аккаунт Google.</p>' : ''}
                         </div>
@@ -342,6 +343,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     const syncTasksBtn = modalOverlay.querySelector('#sync-tasks-button');
     const syncContactsBtn = modalOverlay.querySelector('#sync-contacts-button');
     const syncFilesBtn = modalOverlay.querySelector('#sync-files-button');
+    const syncEmailsBtn = modalOverlay.querySelector('#sync-emails-button');
     const syncStatusDiv = modalOverlay.querySelector('#sync-status');
 
     const handleSync = async (button, syncFunction, providerFunction, entityName, entityNamePlural) => {
@@ -358,7 +360,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             syncStatusDiv.innerHTML = `<p class="text-red-400">Ошибка синхронизации: ${error.message}</p>`;
         } finally {
             button.disabled = false;
-            button.textContent = `Синхронизировать ${entityNamePlural} Google`;
+            button.textContent = `Синхронизировать ${entityNamePlural}`;
         }
     };
 
@@ -390,6 +392,13 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             () => googleProvider.getAllFiles(),
             'файл',
             'файлы'
+        ));
+        syncEmailsBtn.addEventListener('click', () => handleSync(
+            syncEmailsBtn,
+            (items) => supabaseService.syncEmails(items),
+            () => googleProvider.getRecentEmails({ max_results: 1000 }),
+            'письмо',
+            'письма'
         ));
     }
 

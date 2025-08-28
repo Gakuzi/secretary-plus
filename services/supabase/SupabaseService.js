@@ -154,6 +154,28 @@ export class SupabaseService {
         return { synced: formattedTasks.length };
     }
 
+    async syncEmails(googleEmails) {
+        const user = (await this.getSession())?.user;
+        if (!user) throw new Error("User not authenticated.");
+
+        const formattedEmails = googleEmails.map(e => ({
+            user_id: user.id,
+            source_id: e.id,
+            subject: e.subject,
+            sender: e.from,
+            snippet: e.snippet,
+            received_at: e.date ? new Date(e.date) : null,
+        }));
+
+        const { error } = await this.client
+            .from('emails')
+            .upsert(formattedEmails, { onConflict: 'user_id,source_id', ignoreDuplicates: false });
+
+        if (error) throw error;
+        return { synced: formattedEmails.length };
+    }
+
+
     // --- Data Retrieval (from local cache) ---
     
     async getCalendarEvents({ time_min, time_max, max_results = 10 }) {

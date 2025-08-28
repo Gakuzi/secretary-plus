@@ -92,8 +92,10 @@
                             <li>Скопируйте и вставьте весь SQL-скрипт ниже, затем нажмите <strong>"RUN"</strong>.</li>
                         </ol>
                         <div class="code-block">
-                            <pre><code id="sql-script-content">-- 1. Создаем таблицу для контактов
-CREATE TABLE public.contacts (
+                            <pre><code id="sql-script-content">-- Этот скрипт является идемпотентным, его можно безопасно запускать несколько раз.
+
+-- 1. Создаем таблицу для контактов, если она не существует
+CREATE TABLE IF NOT EXISTS public.contacts (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   source TEXT NOT NULL,
@@ -107,8 +109,8 @@ CREATE TABLE public.contacts (
   UNIQUE(user_id, source, source_id)
 );
 
--- 2. Создаем таблицу для файлов с расширенными полями
-CREATE TABLE public.files (
+-- 2. Создаем таблицу для файлов, если она не существует
+CREATE TABLE IF NOT EXISTS public.files (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   source TEXT NOT NULL,
@@ -127,8 +129,8 @@ CREATE TABLE public.files (
   UNIQUE(user_id, source, source_id)
 );
 
--- 3. Создаем таблицу для заметок
-CREATE TABLE public.notes (
+-- 3. Создаем таблицу для заметок, если она не существует
+CREATE TABLE IF NOT EXISTS public.notes (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   title TEXT,
@@ -137,8 +139,8 @@ CREATE TABLE public.notes (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 4. Создаем таблицу для событий календаря (кеш)
-CREATE TABLE public.calendar_events (
+-- 4. Создаем таблицу для событий календаря, если она не существует
+CREATE TABLE IF NOT EXISTS public.calendar_events (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
     source_id TEXT NOT NULL,
@@ -152,8 +154,8 @@ CREATE TABLE public.calendar_events (
     UNIQUE(user_id, source_id)
 );
 
--- 5. Создаем таблицу для задач (кеш)
-CREATE TABLE public.tasks (
+-- 5. Создаем таблицу для задач, если она не существует
+CREATE TABLE IF NOT EXISTS public.tasks (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
     source_id TEXT NOT NULL,
@@ -165,8 +167,8 @@ CREATE TABLE public.tasks (
     UNIQUE(user_id, source_id)
 );
 
--- 6. Создаем таблицу для долговременной памяти чата
-CREATE TABLE public.chat_memory (
+-- 6. Создаем таблицу для долговременной памяти чата, если она не существует
+CREATE TABLE IF NOT EXISTS public.chat_memory (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
     summary TEXT NOT NULL,
@@ -174,30 +176,61 @@ CREATE TABLE public.chat_memory (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- 7. Новое: Создаем таблицу для метаданных email, если она не существует
+CREATE TABLE IF NOT EXISTS public.emails (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    source_id TEXT NOT NULL,
+    subject TEXT,
+    sender TEXT,
+    snippet TEXT,
+    received_at TIMESTAMPTZ,
+    synced_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(user_id, source_id)
+);
 
--- 7. Включаем Row Level Security (RLS) для всех таблиц
+-- 8. Включаем Row Level Security (RLS) для всех таблиц
+-- Эти команды безопасны для повторного выполнения
 ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.calendar_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_memory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.emails ENABLE ROW LEVEL SECURITY;
 
 
--- 8. Создаем политики безопасности
+-- 9. Создаем политики безопасности (удаляем старые, если они есть, чтобы избежать ошибок)
+DROP POLICY IF EXISTS "Allow users to manage their own contacts" ON public.contacts;
 CREATE POLICY "Allow users to manage their own contacts" ON public.contacts FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to manage their own files" ON public.files;
 CREATE POLICY "Allow users to manage their own files" ON public.files FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to manage their own notes" ON public.notes;
 CREATE POLICY "Allow users to manage their own notes" ON public.notes FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to manage their own calendar events" ON public.calendar_events;
 CREATE POLICY "Allow users to manage their own calendar events" ON public.calendar_events FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to manage their own tasks" ON public.tasks;
 CREATE POLICY "Allow users to manage their own tasks" ON public.tasks FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to manage their own chat memory" ON public.chat_memory;
 CREATE POLICY "Allow users to manage their own chat memory" ON public.chat_memory FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to manage their own emails" ON public.emails;
+CREATE POLICY "Allow users to manage their own emails" ON public.emails FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 </code></pre>
                             <button class="copy-button" data-copy-target="sql-script-content">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
                                 <span class="copy-text">Копировать</span>
                             </button>
                         </div>
-                        <p class="note"><strong>Почему это важно?</strong> Этот скрипт включает <strong>Row Level Security (RLS)</strong> — критически важную функцию, которая гарантирует, что каждый пользователь видит только свои данные.</p>
+                        <div class="note warning">
+                            <h4 class="font-bold text-lg mb-2">Устранение неполадок</h4>
+                            <p>Если вы видите ошибку `relation "..." already exists` или `Could not find the table '...'`, это означает, что база данных настроена не до конца. <strong>Решение простое:</strong> скопируйте и выполните обновленный скрипт выше еще раз. Он специально сделан безопасным для повторного запуска и исправит все недостающие элементы.</p>
+                        </div>
                     </div>
 
                     <div class="step">

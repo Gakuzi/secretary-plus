@@ -613,7 +613,7 @@ if (!window.isSecretaryPlusAppInitialized) {
                 return;
             }
 
-            const welcomeActionButton = e.target.closest('.welcome-action-card');
+            const welcomeActionButton = e.target.closest('.welcome-prompt-button');
             if (welcomeActionButton) {
                 const action = welcomeActionButton.dataset.action;
                 const payload = welcomeActionButton.dataset.payload ? JSON.parse(welcomeActionButton.dataset.payload) : {};
