@@ -21,7 +21,7 @@ function isMobile() {
 let state = {
     settings: getSettings(),
     messages: [],
-    isSupabaseConnected: false,
+    isSupabaseConfigured: false,
     isGoogleConnected: false,
     userProfile: null,
     supabaseUser: null,
@@ -106,7 +106,7 @@ async function initializeSupabase() {
                 return; 
             }
             supabaseService = new SupabaseService(supabaseUrl, supabaseAnonKey);
-            state.isSupabaseConnected = true;
+            state.isSupabaseConfigured = true;
 
             supabaseService.onAuthStateChange((event, session) => {
                 console.log(`Supabase auth event: ${event}`);
@@ -117,12 +117,12 @@ async function initializeSupabase() {
             await updateSupabaseAuthState(session);
         } catch (error) {
             console.error("Supabase initialization failed:", error);
-            state.isSupabaseConnected = false;
+            state.isSupabaseConfigured = false;
             supabaseService = null;
         }
     } else {
         supabaseService = null;
-        state.isSupabaseConnected = false;
+        state.isSupabaseConfigured = false;
         if (state.isGoogleConnected && state.settings.isSupabaseEnabled) {
              await updateSupabaseAuthState(null); // Clear auth if Supabase was logged in but now disabled/unconfigured
         }
@@ -186,7 +186,7 @@ function handleGoogleDirectAuthResponse(tokenResponse) {
 
 async function initializeAppServices() {
     // Reset state before re-initialization
-    state.isSupabaseConnected = false;
+    state.isSupabaseConfigured = false;
     state.isGoogleConnected = false;
     supabaseService = null;
 
@@ -368,7 +368,7 @@ function showSettings() {
     const modal = createSettingsModal(
         state.settings,
         {
-            isSupabaseConnected: state.isSupabaseConnected,
+            isSupabaseConfigured: state.isSupabaseConfigured,
             isGoogleConnected: state.isGoogleConnected,
             userProfile: state.userProfile,
         },
