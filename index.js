@@ -134,7 +134,8 @@ async function handleSendMessage(prompt, image = null) {
 }
 
 function showSettings() {
-    const modal = createSettingsModal(state.settings, serviceProviders, handleSaveSettings, hideSettings);
+    const isUnsupportedDomain = window.location.hostname !== 'localhost' && !window.location.hostname.endsWith('github.io');
+    const modal = createSettingsModal(state.settings, serviceProviders, handleSaveSettings, hideSettings, isUnsupportedDomain);
     settingsModalContainer.innerHTML = '';
     settingsModalContainer.appendChild(modal);
     settingsModalContainer.classList.remove('hidden');
