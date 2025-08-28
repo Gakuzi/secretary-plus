@@ -7,7 +7,7 @@ import { createStatsModal } from './components/StatsModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
-import { SettingsIcon, ChartBarIcon } from './components/icons/Icons.js';
+import { SettingsIcon, ChartBarIcon, SupabaseIcon, GoogleIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 
 // --- UTILITY ---
@@ -47,9 +47,14 @@ const cameraViewContainer = document.getElementById('camera-view-container');
 function renderAuth() {
     authContainer.innerHTML = '';
     if (state.isGoogleConnected && state.userProfile) {
+        const connectionIcon = state.settings.isSupabaseEnabled
+            ? `<div class="w-6 h-6 text-green-400" title="Подключено через Supabase">${SupabaseIcon}</div>`
+            : `<div class="w-6 h-6" title="Подключено напрямую к Google">${GoogleIcon}</div>`;
+
         const profileElement = document.createElement('div');
         profileElement.className = 'flex items-center space-x-2';
         profileElement.innerHTML = `
+            ${connectionIcon}
             <img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full">
             <span class="text-sm font-medium hidden sm:block">${state.userProfile.name}</span>
             <button id="logout-button" class="px-3 py-1 text-sm bg-red-600 hover:bg-red-700 rounded-md transition-colors">Выйти</button>
@@ -79,13 +84,15 @@ function renderAuth() {
 
 function renderMainContent() {
     mainContent.innerHTML = '';
-    // Pass showCameraView as a callback to createChatInterface
     const chatContainer = createChatInterface(handleSendMessage, showCameraView);
     mainContent.appendChild(chatContainer);
 
     const chatLog = document.getElementById('chat-log');
     if (state.messages.length === 0) {
-        chatLog.appendChild(createWelcomeScreen());
+        chatLog.appendChild(createWelcomeScreen({
+            isGoogleConnected: state.isGoogleConnected,
+            isSupabaseEnabled: state.settings.isSupabaseEnabled,
+        }));
     } else {
         state.messages.forEach(msg => addMessageToChat(msg));
     }
@@ -437,6 +444,11 @@ async function init() {
     mainContent.addEventListener('click', (e) => {
         handleCardAction(e);
         handleQuickReply(e);
+        
+        const settingsButtonFromWelcome = e.target.closest('#open-settings-from-welcome');
+        if (settingsButtonFromWelcome) {
+            showSettings();
+        }
     });
 
     await initializeAppServices();
