@@ -1,14 +1,15 @@
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
-import { callGemini } from './services/geminiService.js';
+import { callGemini, analyzeGenericErrorWithGemini } from './services/geminiService.js';
 import { getSettings, saveSettings, getSyncStatus, saveSyncStatus } from './utils/storage.js';
 import { createSettingsModal } from './components/SettingsModal.js';
 import { createStatsModal } from './components/StatsModal.js';
+import { createHelpModal } from './components/HelpModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
-import { SettingsIcon, ChartBarIcon, SupabaseIcon, GoogleIcon, NewChatIcon } from './components/icons/Icons.js';
+import { SettingsIcon, ChartBarIcon, SupabaseIcon, GoogleIcon, NewChatIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 
 // Add a guard to prevent the script from running multiple times
@@ -21,6 +22,21 @@ if (!window.isSecretaryPlusAppInitialized) {
         // Simple check for mobile user agents
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     }
+    
+    // Provides context to the AI for generic error analysis
+    const APP_STRUCTURE_CONTEXT = `
+    - index.html: Главный HTML-файл.
+    - index.js: Основная логика приложения, управление состоянием, обработчики событий.
+    - services/geminiService.js: Обрабатывает все вызовы к Gemini API для чата и анализа.
+    - services/google/GoogleServiceProvider.js: Управляет всеми взаимодействиями с Google API (Календарь, Диск, Gmail и т.д.).
+    - services/supabase/SupabaseService.js: Управляет всеми взаимодействиями с базой данных Supabase (аутентификация, синхронизация данных, запросы).
+    - components/Chat.js: Рендерит интерфейс чата и панель ввода.
+    - components/Message.js: Рендерит отдельные сообщения в чате.
+    - components/ResultCard.js: Рендерит интерактивные карточки в сообщениях чата.
+    - components/SettingsModal.js: Рендерит UI настроек.
+    - components/HelpModal.js: Рендерит UI 'Центра помощи' с ИИ-анализом ошибок.
+    - setup-guide.html: Содержит SQL-скрипт для настройки базы данных Supabase. Ошибка типа 'column does not exist' часто означает, что пользователю нужно повторно запустить скрипт из этого файла.
+    `;
 
 
     // --- STATE MANAGEMENT ---
@@ -57,9 +73,11 @@ if (!window.isSecretaryPlusAppInitialized) {
     const authContainer = document.getElementById('auth-container');
     const mainContent = document.getElementById('main-content');
     const settingsButton = document.getElementById('settings-button');
+    const helpButton = document.getElementById('help-button');
     const statsButton = document.getElementById('stats-button');
     const newChatButton = document.getElementById('new-chat-button');
     const settingsModalContainer = document.getElementById('settings-modal-container');
+    const helpModalContainer = document.getElementById('help-modal-container');
     const statsModalContainer = document.getElementById('stats-modal-container');
     const cameraViewContainer = document.getElementById('camera-view-container');
 
@@ -691,6 +709,25 @@ ${payload.body}`;
         settingsModalContainer.innerHTML = '';
     }
 
+    function showHelpModal() {
+        const handleAnalyzeError = (errorMessage) => {
+            return analyzeGenericErrorWithGemini({
+                errorMessage,
+                appStructure: APP_STRUCTURE_CONTEXT,
+                apiKey: state.settings.geminiApiKey,
+            });
+        };
+        const modal = createHelpModal(hideHelpModal, state.settings, handleAnalyzeError);
+        helpModalContainer.innerHTML = '';
+        helpModalContainer.appendChild(modal);
+        helpModalContainer.classList.remove('hidden');
+    }
+
+    function hideHelpModal() {
+        helpModalContainer.classList.add('hidden');
+        helpModalContainer.innerHTML = '';
+    }
+
     function showStatsModal() {
         const modal = createStatsModal(state.actionStats, hideStatsModal);
         statsModalContainer.innerHTML = '';
@@ -731,10 +768,12 @@ ${payload.body}`;
         }
 
         settingsButton.innerHTML = SettingsIcon;
+        helpButton.innerHTML = QuestionMarkCircleIcon;
         statsButton.innerHTML = ChartBarIcon;
         newChatButton.innerHTML = NewChatIcon;
 
         settingsButton.addEventListener('click', showSettings);
+        helpButton.addEventListener('click', showHelpModal);
         statsButton.addEventListener('click', showStatsModal);
         newChatButton.addEventListener('click', handleNewChat);
 

@@ -35,7 +35,7 @@
                 <section id="introduction" class="wizard-step">
                     <h2 class="section-title">Введение</h2>
                     <p>Добро пожаловать в руководство по настройке «Секретарь+»! Это приложение использует несколько внешних сервисов Google для своей работы. Следуйте этой инструкции шаг за шагом, чтобы получить все необходимые ключи и настроить приложение.</p>
-                    <p>На каждом шаге вы можете вставлять полученные ключи в поля ниже, чтобы не потерять их. Эти данные никуда не отправляются и хранятся только на этой странице.</p>
+                    <p>После выполнения всех шагов вы получите набор ключей, которые нужно будет ввести в самом приложении.</p>
                      <footer class="wizard-footer">
                         <button class="wizard-nav-button next-button" data-next="1">Начать настройку</button>
                     </footer>
@@ -237,22 +237,8 @@ CREATE POLICY "Allow users to manage their own emails" ON public.emails FOR ALL 
                         <h3 class="step-title">Шаг 2.3: Получение ключей Supabase</h3>
                         <ol>
                              <li>В меню проекта выберите <strong>Project Settings</strong> (значок шестеренки) &gt; <strong>API</strong>.</li>
-                            <li>Скопируйте <strong>Project URL</strong> и <strong>anon public key</strong>. Вставьте их в поля ниже и в настройки приложения.</li>
+                            <li>Скопируйте <strong>Project URL</strong> и <strong>anon public key</strong>. Их нужно будет вставить в настройки приложения.</li>
                         </ol>
-                        <div class="input-group">
-                            <label for="supabase-url-input">Project URL</label>
-                            <div class="input-wrapper">
-                                <input id="supabase-url-input" type="text" placeholder="https://<id>.supabase.co" readonly>
-                                <button class="paste-button" data-paste-target="supabase-url-input">Вставить</button>
-                            </div>
-                        </div>
-                        <div class="input-group">
-                            <label for="supabase-key-input">Anon Public Key</label>
-                            <div class="input-wrapper">
-                                <input id="supabase-key-input" type="text" placeholder="Ваш anon public key" readonly>
-                                <button class="paste-button" data-paste-target="supabase-key-input">Вставить</button>
-                            </div>
-                        </div>
                     </div>
                      <footer class="wizard-footer">
                         <button class="wizard-nav-button back-button" data-back="1">Назад</button>
@@ -314,15 +300,8 @@ CREATE POLICY "Allow users to manage their own emails" ON public.emails FOR ALL 
                              <ol>
                                 <li>В поле <strong>"Authorized JavaScript origins"</strong> добавьте URL, где размещено ваше приложение (например, `https://username.github.io`).</li>
                                  <li>В поле <strong>"Authorized redirect URIs"</strong> также добавьте этот URL.</li>
-                                <li>Нажмите <strong>CREATE</strong>. Скопируйте только <strong>Client ID</strong> и вставьте его в поле ниже.</li>
+                                <li>Нажмите <strong>CREATE</strong>. Скопируйте только <strong>Client ID</strong> и сохраните его для вставки в настройки приложения.</li>
                             </ol>
-                            <div class="input-group">
-                                <label for="google-id-input">Google Client ID</label>
-                                <div class="input-wrapper">
-                                    <input id="google-id-input" type="text" placeholder="Ваш Google Client ID" readonly>
-                                    <button class="paste-button" data-paste-target="google-id-input">Вставить</button>
-                                </div>
-                            </div>
                         </div>
                     </div>
                      <footer class="wizard-footer">
@@ -339,17 +318,9 @@ CREATE POLICY "Allow users to manage their own emails" ON public.emails FOR ALL 
                          <ol>
                             <li><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Откройте Google AI Studio</a>.</li>
                             <li>Нажмите <strong>"Create API key in new project"</strong>.</li>
-                            <li>Скопируйте сгенерированный ключ.</li>
-                            <li>Вставьте его в поле ниже и в настройки приложения.</li>
+                            <li>Скопируйте сгенерированный ключ и сохраните его.</li>
                         </ol>
-                        <p class="note">Ваш ключ хранится только локально в вашем браузере и никуда не передается.</p>
-                         <div class="input-group">
-                            <label for="gemini-key-input">Gemini API Key</label>
-                            <div class="input-wrapper">
-                                <input id="gemini-key-input" type="text" placeholder="Ваш Gemini API Key" readonly>
-                                <button class="paste-button" data-paste-target="gemini-key-input">Вставить</button>
-                            </div>
-                        </div>
+                        <p class="note">Ваш ключ будет храниться только локально в вашем браузере и никуда не передается.</p>
                     </div>
                      <footer class="wizard-footer">
                         <button class="wizard-nav-button back-button" data-back="3">Назад</button>

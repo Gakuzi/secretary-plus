@@ -679,14 +679,8 @@ export const callGemini = async ({
             return resultMessage;
         }
 
-        // Manually build the text response from all parts for robustness,
-        // ensuring contextual actions are not missed.
-        const rawText = firstCandidate?.content?.parts
-            ?.map(part => part.text ?? '')
-            .join('') || '';
-
-        // Use the raw text, with a fallback if it's empty.
-        const textResponse = rawText.trim() || "Я не смог обработать ваш запрос.";
+        // Use the recommended .text accessor to get the model's text response.
+        const textResponse = (response.text || '').trim() || "Я не смог обработать ваш запрос.";
 
         const contextualActionsRegex = /\[CONTEXT_ACTIONS\]\s*(.*)/s;
         const quickRepliesRegex = /\[QUICK_REPLY\]\s*(.*)/g;
@@ -732,7 +726,7 @@ export const callGemini = async ({
 };
 
 
-export const analyzeErrorWithGemini = async ({ errorMessage, context, apiKey }) => {
+export const analyzeSyncErrorWithGemini = async ({ errorMessage, context, apiKey }) => {
     if (!apiKey) {
         throw new Error("Ключ Gemini API не предоставлен.");
     }
@@ -763,6 +757,45 @@ ${errorMessage}
         return response.text;
     } catch (error) {
         console.error("Error calling Gemini for error analysis:", error);
+        return `### Ошибка при анализе\nНе удалось связаться с Gemini для анализа ошибки. Пожалуйста, проверьте свой API ключ и подключение к интернету.\n\n**Исходная ошибка:**\n\`\`\`\n${errorMessage}\n\`\`\``;
+    }
+};
+
+export const analyzeGenericErrorWithGemini = async ({ errorMessage, appStructure, apiKey }) => {
+    if (!apiKey) {
+        throw new Error("Ключ Gemini API не предоставлен.");
+    }
+    const ai = new GoogleGenAI({ apiKey });
+
+    const systemInstruction = `Ты — элитный Full-Stack инженер, отлаживающий веб-приложение "Секретарь+". Пользователь столкнулся с ошибкой.
+Твоя задача:
+1.  **Проанализируй** техническое сообщение об ошибке, которое предоставит пользователь.
+2.  **Учитывай структуру приложения**, чтобы дать максимально точный совет.
+3.  **Объясни** простыми, понятными словами, что означает эта ошибка.
+4.  **Предложи** конкретное, пошаговое решение проблемы. Если решение требует действий в другом сервисе (например, Supabase, Google Cloud) или редактирования кода/настроек, дай четкие инструкции. Ссылайся на конкретные файлы, если это возможно.
+5.  Ответ должен быть в формате **Markdown** на русском языке. Используй заголовки, списки и выделение для лучшей читаемости.
+
+**Структура приложения для контекста:**
+${appStructure}`;
+
+    const prompt = `Пользователь получил следующую ошибку. Проанализируй её и предложи решение.
+
+**Сообщение об ошибке:**
+\`\`\`
+${errorMessage}
+\`\`\``;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            config: {
+                systemInstruction: systemInstruction,
+            },
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Error calling Gemini for generic error analysis:", error);
         return `### Ошибка при анализе\nНе удалось связаться с Gemini для анализа ошибки. Пожалуйста, проверьте свой API ключ и подключение к интернету.\n\n**Исходная ошибка:**\n\`\`\`\n${errorMessage}\n\`\`\``;
     }
 };

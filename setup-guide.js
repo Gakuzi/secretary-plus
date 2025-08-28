@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
 
-    // --- PASTE & COPY ---
+    // --- COPY ---
     const copyButtons = document.querySelectorAll('.copy-button');
     copyButtons.forEach(button => {
         button.addEventListener('click', () => {
@@ -110,27 +110,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         button.style.color = '';
                     }, 2000);
                 });
-        });
-    });
-
-    const pasteButtons = document.querySelectorAll('.paste-button');
-    pasteButtons.forEach(button => {
-        button.addEventListener('click', async () => {
-            const targetId = button.dataset.pasteTarget;
-            const targetInput = document.getElementById(targetId);
-            if (!targetInput) return;
-
-            try {
-                const text = await navigator.clipboard.readText();
-                targetInput.value = text;
-                button.textContent = 'Вставлено!';
-                setTimeout(() => {
-                    button.textContent = 'Вставить';
-                }, 2000);
-            } catch (err) {
-                console.error('Failed to read clipboard contents: ', err);
-                alert('Не удалось прочитать буфер обмена.');
-            }
         });
     });
     
