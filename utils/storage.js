@@ -7,6 +7,7 @@ const defaultSettings = {
     isSupabaseEnabled: true,
     isGoogleEnabled: true,
     googleClientId: '',
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     serviceMap: {
         calendar: 'google',
         contacts: 'google',
@@ -20,7 +21,7 @@ export function getSettings() {
         const savedSettings = localStorage.getItem(SETTINGS_KEY);
         if (savedSettings) {
             const parsed = JSON.parse(savedSettings);
-            // Ensure serviceMap exists and has all keys
+            // Ensure serviceMap and timezone exist and have all keys
             const serviceMap = { ...defaultSettings.serviceMap, ...(parsed.serviceMap || {}) };
             return { ...defaultSettings, ...parsed, serviceMap };
         }

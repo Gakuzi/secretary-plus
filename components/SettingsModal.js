@@ -5,7 +5,7 @@ const SERVICE_DEFINITIONS = {
         label: 'Календарь',
         providers: [
             { id: 'google', name: 'Google Calendar' },
-            { id: 'apple', name: 'Apple iCloud (скоро)', disabled: true },
+            { id: 'apple', name: 'Apple Calendar (.ics)', disabled: false },
         ]
     },
     contacts: {
@@ -65,6 +65,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                 <aside class="w-48 border-r border-gray-700 p-4">
                     <nav class="flex flex-col space-y-2">
                         <a href="#connections" class="settings-tab-button active text-left" data-tab="connections">Подключения</a>
+                        <a href="#general" class="settings-tab-button" data-tab="general">Общие</a>
                         <a href="#service-map" class="settings-tab-button" data-tab="service-map">Назначение сервисов</a>
                         <a href="#api-keys" class="settings-tab-button" data-tab="api-keys">API Ключи</a>
                         <a href="#sync" class="settings-tab-button" data-tab="sync" ${!currentSettings.isSupabaseEnabled ? 'style="display: none;"' : ''}>Синхронизация</a>
@@ -149,7 +150,20 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                 Ассистент не будет работать корректно до тех пор, пока вы не войдете в аккаунт.
                             </p>
                         </div>
+                    </div>
 
+                    <!-- General Tab -->
+                    <div id="tab-general" class="settings-tab-content hidden">
+                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                             <h3 class="text-lg font-semibold text-gray-200">Часовой пояс</h3>
+                             <p class="text-sm text-gray-400 mt-1 mb-4">Выберите ваш основной часовой пояс. Ассистент будет использовать его для корректной интерпретации времени.</p>
+                             <div class="flex items-center justify-between">
+                                <label for="timezone-select" class="font-medium text-gray-300">Ваш часовой пояс</label>
+                                <select id="timezone-select" class="bg-gray-700 border border-gray-600 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-sm w-full max-w-xs">
+                                    <!-- Options populated by JS -->
+                                </select>
+                             </div>
+                        </div>
                     </div>
 
                     <!-- Service Map Tab -->
@@ -208,6 +222,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             isSupabaseEnabled: modalOverlay.querySelector('#supabase-enabled-toggle').checked,
             isGoogleEnabled: true, 
             googleClientId: modalOverlay.querySelector('#google-client-id').value.trim(),
+            timezone: modalOverlay.querySelector('#timezone-select').value,
             serviceMap: {
                 calendar: modalOverlay.querySelector('#calendar-provider-select').value,
                 contacts: modalOverlay.querySelector('#contacts-provider-select').value,
@@ -239,6 +254,20 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
         });
     });
     
+    // Populate Timezone selector
+    const timezoneSelect = modalOverlay.querySelector('#timezone-select');
+    if (timezoneSelect && 'supportedValuesOf' in Intl) {
+        const timezones = Intl.supportedValuesOf('timeZone');
+        timezoneSelect.innerHTML = timezones.map(tz =>
+            `<option value="${tz}" ${currentSettings.timezone === tz ? 'selected' : ''}>${tz.replace(/_/g, ' ')}</option>`
+        ).join('');
+    } else if (timezoneSelect) {
+        // Fallback for older browsers
+        timezoneSelect.innerHTML = `<option value="${currentSettings.timezone}">${currentSettings.timezone}</option>`;
+        timezoneSelect.disabled = true;
+    }
+
+
     // Logic for Supabase toggle
     const supabaseToggle = modalOverlay.querySelector('#supabase-enabled-toggle');
     supabaseToggle.addEventListener('change', (e) => {

@@ -8,6 +8,7 @@ export class GoogleServiceProvider {
         this.loadGapiPromise = null;
         this.gsiClient = null;
         this.clientId = null;
+        this.userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     }
 
     // --- Initialization ---
@@ -53,6 +54,10 @@ export class GoogleServiceProvider {
         if (this.isGapiLoaded && token) {
             this.gapi.client.setToken({ access_token: token });
         }
+    }
+
+    setTimezone(timezone) {
+        this.userTimezone = timezone;
     }
 
     // --- Authentication ---
@@ -123,11 +128,11 @@ export class GoogleServiceProvider {
             description: details.description,
             start: {
                 dateTime: details.startTime,
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                timeZone: this.userTimezone,
             },
             end: {
                 dateTime: details.endTime,
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                timeZone: this.userTimezone,
             },
             attendees: details.attendees?.map(email => ({ email })),
             conferenceData: {

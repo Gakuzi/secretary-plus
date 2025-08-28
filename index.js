@@ -222,6 +222,9 @@ async function initializeAppServices() {
         await initializeGoogleDirect();
     }
     
+    // Set user-defined timezone for Google services
+    googleProvider.setTimezone(state.settings.timezone);
+
     // Fallback if no auth method is configured but was previously logged in
     if (!state.isGoogleConnected) {
         await updateSupabaseAuthState(null);
@@ -281,6 +284,7 @@ async function processBotResponse(prompt, image = null) {
             history: state.messages.slice(0, -1),
             serviceProviders,
             serviceMap: state.settings.serviceMap,
+            timezone: state.settings.timezone,
             isGoogleConnected: state.isGoogleConnected,
             image,
             apiKey: state.settings.geminiApiKey
@@ -367,6 +371,14 @@ async function handleCardAction(e) {
     } else if (action === 'create_empty_doc') {
         userPromptText = `Нет, создать пустой документ "${payload.title}".`;
         systemPrompt = `Пользователь решил создать пустой документ. Вызови функцию create_google_doc с названием "${payload.title}".`;
+    } else if (action === 'download_ics') {
+        const link = document.createElement('a');
+        link.href = `data:text/calendar;charset=utf-8;base64,${payload.data}`;
+        link.download = payload.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return; // This is a client-side action, no need to call the bot
     }
 
     if (!systemPrompt) return;

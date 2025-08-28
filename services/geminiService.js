@@ -264,7 +264,7 @@ const baseTools = [
 ];
 
 
-const getSystemInstruction = (serviceMap) => {
+const getSystemInstruction = (serviceMap, timezone) => {
     return `Ты — «Секретарь+», проактивный личный ИИ-ассистент. Ты строго следуешь настройкам пользователя по выбору сервисов.
 
 Принципы работы:
@@ -280,7 +280,7 @@ const getSystemInstruction = (serviceMap) => {
 6.  **Сначала уточнение, потом действие:** Никогда не создавай событие или задачу, если в запросе есть неоднозначные данные (имена людей, названия документов). Сначала найди, покажи пользователю варианты, дождись его выбора.
 7.  **Работа с контактами:** Если пользователь выбирает контакт без email для создания события, ты должен явно спросить у пользователя этот email.
 8.  **Контекст:** Ты должен анализировать ВЕСЬ предыдущий диалог, чтобы понимать текущий контекст.
-9.  **Дата и время:** Всегда учитывай текущую дату: ${new Date().toLocaleDateString('ru-RU')}.
+9.  **Дата и время:** Всегда учитывай текущую дату: ${new Date().toLocaleDateString('ru-RU')} и часовой пояс пользователя: ${timezone}. Используй этот часовой пояс для интерпретации всех запросов, связанных со временем, таких как "завтра в 9 утра" или "через 2 часа".
 10. **Проактивные предложения:** После успешного выполнения основного действия (например, создания встречи), всегда предлагай релевантные последующие шаги.
 11. **Интерактивные ответы:** Если ты задаешь пользователю вопрос, по возможности предлагай 2-4 наиболее вероятных варианта быстрого ответа в формате \`[QUICK_REPLY] Текст ответа\`.
 `;
@@ -292,6 +292,7 @@ export const callGemini = async ({
     history,
     serviceProviders,
     serviceMap,
+    timezone,
     isGoogleConnected,
     image,
     apiKey
@@ -329,7 +330,7 @@ export const callGemini = async ({
             model: GEMINI_MODEL,
             contents,
             config: {
-                systemInstruction: getSystemInstruction(serviceMap),
+                systemInstruction: getSystemInstruction(serviceMap, timezone),
                 tools: toolsConfig ? [toolsConfig] : undefined,
             },
         });
@@ -393,24 +394,43 @@ export const callGemini = async ({
                     case 'create_calendar_event': {
                         const provider = getProvider('calendar');
                         const result = await provider.createEvent(args);
-                        const attendeesEmails = result.attendees?.map(a => a.email) || [];
-                        const eventActions = [
-                            { label: 'Открыть в Календаре', url: result.htmlLink }
-                        ];
-                        if (attendeesEmails.length > 0 && result.hangoutLink) {
+
+                        if (provider.getId() === 'apple') {
+                            resultMessage.text = `Событие "${args.title}" готово для добавления в ваш календарь.`;
+                            resultMessage.card = {
+                                type: 'event',
+                                icon: 'CalendarIcon',
+                                title: `Событие: ${args.title}`,
+                                details: {
+                                    'Время': new Date(args.startTime).toLocaleString('ru-RU'),
+                                    'Сервис': provider.getName()
+                                },
+                                actions: [{
+                                    label: 'Скачать .ics файл',
+                                    action: 'download_ics',
+                                    payload: { data: result.icsData, filename: result.filename }
+                                }]
+                            };
+                        } else {
+                            const attendeesEmails = result.attendees?.map(a => a.email) || [];
+                            const eventActions = [
+                                { label: 'Открыть в Календаре', url: result.htmlLink }
+                            ];
+                            if (attendeesEmails.length > 0 && result.hangoutLink) {
+                                eventActions.push({
+                                    label: 'Отправить ссылку участникам',
+                                    action: 'send_meeting_link',
+                                    payload: { to: attendeesEmails, subject: `Приглашение на встречу: ${result.summary}`, body: `Присоединяйтесь к встрече "${result.summary}": <a href="${result.hangoutLink}">${result.hangoutLink}</a>` }
+                                });
+                            }
                             eventActions.push({
-                                label: 'Отправить ссылку участникам',
-                                action: 'send_meeting_link',
-                                payload: { to: attendeesEmails, subject: `Приглашение на встречу: ${result.summary}`, body: `Присоединяйтесь к встрече "${result.summary}": <a href="${result.hangoutLink}">${result.hangoutLink}</a>` }
+                                label: 'Создать задачу "Подготовиться"',
+                                action: 'create_prep_task',
+                                payload: { title: `Подготовиться к встрече: "${result.summary}"`, notes: `Встреча запланирована на ${new Date(result.start.dateTime).toLocaleString('ru-RU')}.` }
                             });
+                            resultMessage.text = `Событие "${result.summary}" успешно создано! Что дальше?`;
+                            resultMessage.card = { type: 'event', icon: 'CalendarIcon', title: result.summary, details: { 'Время': new Date(result.start.dateTime).toLocaleString('ru-RU'), 'Участники': attendeesEmails.join(', ') || 'Нет', 'Видеовстреча': result.hangoutLink ? `<a href="${result.hangoutLink}" target="_blank" class="text-blue-400 hover:underline">Присоединиться</a>` : 'Нет', }, actions: eventActions, shareableLink: result.hangoutLink, shareText: `Присоединяйтесь к встрече "${result.summary}": ${result.hangoutLink}`};
                         }
-                        eventActions.push({
-                            label: 'Создать задачу "Подготовиться"',
-                            action: 'create_prep_task',
-                            payload: { title: `Подготовиться к встрече: "${result.summary}"`, notes: `Встреча запланирована на ${new Date(result.start.dateTime).toLocaleString('ru-RU')}.` }
-                        });
-                        resultMessage.text = `Событие "${result.summary}" успешно создано! Что дальше?`;
-                        resultMessage.card = { type: 'event', icon: 'CalendarIcon', title: result.summary, details: { 'Время': new Date(result.start.dateTime).toLocaleString('ru-RU'), 'Участники': attendeesEmails.join(', ') || 'Нет', 'Видеовстреча': result.hangoutLink ? `<a href="${result.hangoutLink}" target="_blank" class="text-blue-400 hover:underline">Присоединиться</a>` : 'Нет', }, actions: eventActions, shareableLink: result.hangoutLink, shareText: `Присоединяйтесь к встрече "${result.summary}": ${result.hangoutLink}`};
                         break;
                     }
                     case 'find_contacts':
