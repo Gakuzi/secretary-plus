@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Инструкция по настройке Секретарь+</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="setup-guide.css">
+</head>
+<body class="bg-gray-900 text-gray-200 font-sans">
+    <div class="flex min-h-screen">
+        <!-- Sidebar Navigation -->
+        <aside class="w-64 bg-gray-800 p-6 border-r border-gray-700 fixed top-0 left-0 h-full">
+            <h1 class="text-xl font-bold text-white mb-8">Гайд по настройке</h1>
+            <nav>
+                <ul class="space-y-2">
+                    <li><a href="#introduction" class="nav-link">Введение</a></li>
+                    <li><a href="#supabase-setup" class="nav-link">1. Настройка Supabase</a></li>
+                    <li><a href="#google-cloud-setup" class="nav-link">2. Настройка Google Cloud</a></li>
+                    <li><a href="#gemini-setup" class="nav-link">3. Настройка Gemini API</a></li>
+                    <li><a href="#final-step" class="nav-link">4. Завершение</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="ml-64 p-8 md:p-12 w-full">
+            <div class="max-w-4xl mx-auto space-y-12">
+                
+                <!-- Introduction -->
+                <section id="introduction" class="guide-section">
+                    <h2 class="section-title">Введение</h2>
+                    <p>Добро пожаловать в руководство по настройке «Секретарь+»! Это приложение использует несколько внешних сервисов Google для своей работы. Следуйте этой инструкции шаг за шагом, чтобы получить все необходимые ключи и настроить приложение.</p>
+                </section>
+
+                <!-- Supabase Setup -->
+                <section id="supabase-setup" class="guide-section">
+                    <h2 class="section-title">1. Настройка Supabase</h2>
+                    <p class="mb-6">Supabase используется как безопасная база данных и сервис аутентификации. Если вы включите его, пользователи смогут входить через Google, а их контакты и файлы будут синхронизироваться для быстрого доступа.</p>
+
+                    <div class="step">
+                        <h3 class="step-title">Шаг 1.1: Создание проекта</h3>
+                        <ol>
+                            <li>Перейдите на <a href="https://supabase.com/" target="_blank">supabase.com</a> и создайте аккаунт или войдите.</li>
+                            <li>Нажмите <strong>"New project"</strong>, выберите организацию.</li>
+                            <li>Придумайте имя проекта, сгенерируйте и сохраните надежный пароль от базы данных.</li>
+                            <li>Выберите регион и нажмите <strong>"Create new project"</strong>.</li>
+                        </ol>
+                    </div>
+
+                    <div class="step">
+                        <h3 class="step-title">Шаг 1.2: Создание таблиц и политик безопасности</h3>
+                        <ol>
+                            <li>В меню проекта выберите <strong>SQL Editor</strong>, затем <strong>"New query"</strong>.</li>
+                            <li>Скопируйте и вставьте весь SQL-скрипт ниже, затем нажмите <strong>"RUN"</strong>.</li>
+                        </ol>
+                        <div class="code-block">
+                            <pre><code id="sql-script-content">-- Создание таблиц и политик RLS... (полный скрипт)
+CREATE TABLE public.contacts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  source TEXT NOT NULL,
+  source_id TEXT,
+  display_name TEXT,
+  email TEXT,
+  phone TEXT,
+  avatar_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, source, source_id)
+);
+CREATE TABLE public.files (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  source TEXT NOT NULL,
+  source_id TEXT,
+  name TEXT NOT NULL,
+  mime_type TEXT,
+  url TEXT,
+  icon_link TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, source, source_id)
+);
+ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.files ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow users to manage their own contacts"
+ON public.contacts FOR ALL
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Allow users to manage their own files"
+ON public.files FOR ALL
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);</code></pre>
+                            <button class="copy-button" data-copy-target="sql-script-content">
+                                <!-- Copy Icon SVG -->
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                                <span class="copy-text">Копировать</span>
+                            </button>
+                        </div>
+                        <p class="note"><strong>Почему это важно?</strong> Этот скрипт не только создает таблицы, но и включает <strong>Row Level Security (RLS)</strong> — критически важную функцию, которая гарантирует, что каждый пользователь видит только свои данные.</p>
+                    </div>
+
+                    <div class="step">
+                        <h3 class="step-title">Шаг 1.3: Получение ключей Supabase</h3>
+                        <ol>
+                            <li>В меню проекта выберите <strong>Project Settings</strong> (иконка шестеренки), затем <strong>API</strong>.</li>
+                            <li>Скопируйте <strong>Project URL</strong> и <strong>anon public key</strong>.</li>
+                            <li>Вставьте их в соответствующие поля на вкладке "Подключения" в настройках приложения.</li>
+                        </ol>
+                    </div>
+                </section>
+
+                <!-- Google Cloud Setup -->
+                <section id="google-cloud-setup" class="guide-section">
+                    <h2 class="section-title">2. Настройка Google Cloud</h2>
+                    <p class="mb-6">Вам нужен проект в Google Cloud, чтобы разрешить приложению доступ к API Календаря, Диска и Контактов от имени пользователя.</p>
+
+                    <div class="step">
+                        <h3 class="step-title">Шаг 2.1: Создание проекта и экрана согласия</h3>
+                        <ol>
+                            <li>Перейдите в <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> и создайте новый проект.</li>
+                            <li>Перейдите в <strong>APIs & Services &gt; OAuth consent screen</strong>.</li>
+                            <li>Выберите <strong>External</strong> и нажмите "Create". Заполните обязательные поля (имя приложения, email). На остальных шагах можно нажимать "Save and Continue".</li>
+                        </ol>
+                    </div>
+
+                    <div class="step">
+                        <h3 class="step-title">Шаг 2.2: Включение API</h3>
+                        <ol>
+                            <li>Перейдите в <strong>APIs & Services &gt; Library</strong>.</li>
+                            <li>Найдите и включите (Enable) следующие API:
+                                <ul>
+                                    <li>- Google Calendar API</li>
+                                    <li>- Google People API</li>
+                                    <li>- Google Drive API</li>
+                                </ul>
+                            </li>
+                        </ol>
+                    </div>
+
+                    <div class="step">
+                        <h3 class="step-title">Шаг 2.3: Создание OAuth 2.0 Client ID</h3>
+                        <p class="note">Этот шаг нужно выполнить для того способа аутентификации, который вы выбрали в приложении.</p>
+                        
+                        <h4 class="sub-step-title">Вариант А: Для входа через Supabase (рекомендуется)</h4>
+                        <ol>
+                            <li>Вернитесь в ваш проект Supabase: <strong>Authentication &gt; Providers &gt; Google</strong>. Скопируйте значение из поля <strong>Redirect URI</strong>. Оно выглядит так: <code class="code-inline">https://&lt;ID&gt;.supabase.co/auth/v1/callback</code>.</li>
+                            <li>В Google Cloud Console перейдите в <strong>APIs & Services &gt; Credentials</strong>.</li>
+                            <li>Нажмите <strong>+ CREATE CREDENTIALS &gt; OAuth client ID</strong>.</li>
+                            <li>Выберите тип приложения <strong>Web application</strong>.</li>
+                            <li>В <strong>Authorized redirect URIs</strong> добавьте URI, который вы скопировали из Supabase.</li>
+                            <li>Нажмите "Create". Скопируйте <strong>Client ID</strong> и <strong>Client Secret</strong>.</li>
+                            <li>Вернитесь в Supabase и вставьте их в соответствующие поля в настройках Google провайдера. Включите провайдер и сохраните.</li>
+                        </ol>
+                        
+                        <h4 class="sub-step-title">Вариант Б: Для прямого входа в Google (если Supabase отключен)</h4>
+                        <ol>
+                            <li>Выполните пункты 2-4 из "Варианта А".</li>
+                            <li>В <strong>Authorized JavaScript origins</strong> добавьте URL, где размещено ваше приложение (например, URL от GitHub Pages).</li>
+                            <li>Нажмите "Create". Скопируйте только <strong>Client ID</strong>.</li>
+                            <li>Вставьте этот Client ID в поле "Google Client ID" на вкладке "Подключения" в настройках приложения.</li>
+                        </ol>
+                    </div>
+                </section>
+                
+                <!-- Gemini Setup -->
+                <section id="gemini-setup" class="guide-section">
+                    <h2 class="section-title">3. Настройка Gemini API</h2>
+                    <p class="mb-6">Gemini — это модель искусственного интеллекта от Google, которая является "мозгом" ассистента. Вам нужен API-ключ для отправки запросов.</p>
+                    <div class="step">
+                         <ol>
+                            <li>Перейдите в <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.</li>
+                            <li>Нажмите <strong>"Create API key in new project"</strong>.</li>
+                            <li>Скопируйте сгенерированный ключ.</li>
+                            <li>Вставьте его в поле "Gemini API Key" на вкладке "API Ключи" в настройках приложения.</li>
+                        </ol>
+                        <p class="note">Ваш ключ хранится только локально в вашем браузере и никуда не передается.</p>
+                    </div>
+                </section>
+                
+                 <!-- Final -->
+                <section id="final-step" class="guide-section">
+                    <h2 class="section-title">4. Завершение</h2>
+                    <p>Поздравляем! Вы получили и ввели все необходимые ключи. Нажмите кнопку "Сохранить и закрыть" в настройках.</p>
+                    <p>Теперь приложение полностью готово к работе. Вы можете войти в свой аккаунт Google и начать использовать ассистента.</p>
+                </section>
+
+            </div>
+        </main>
+    </div>
+    <script src="setup-guide.js"></script>
+</body>
+</html>

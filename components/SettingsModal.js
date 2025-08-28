@@ -65,8 +65,8 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                     <input type="password" id="supabase-anon-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.supabaseAnonKey || ''}">
                                 </div>
                                 <div class="text-sm text-gray-400 mt-3 space-y-1">
-                                    <p>Supabase используется для безопасной аутентификации и хранения синхронизированных данных.</p>
-                                    <a href="./SUPABASE_SETUP.md" target="_blank" class="text-blue-400 hover:underline font-semibold">
+                                    <p>Supabase используется для безопасной аутентификации и хранения данных.</p>
+                                    <a href="./setup-guide.html#supabase-setup" target="_blank" class="text-blue-400 hover:underline font-semibold">
                                         ➡️ Открыть пошаговую инструкцию по настройке
                                     </a>
                                 </div>
@@ -85,7 +85,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                 <div class="space-y-2" id="google-client-id-container" ${currentSettings.isSupabaseEnabled ? 'style="display: none;"' : ''}>
                                     <label for="google-client-id" class="block text-sm font-medium text-gray-300">Google Client ID</label>
                                     <input type="password" id="google-client-id" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Required when Supabase is disabled" value="${currentSettings.googleClientId || ''}">
-                                     <p class="text-xs text-gray-400">Необходим для прямого входа, если Supabase отключен. Получите его в <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Google Cloud Console</a>.</p>
+                                     <p class="text-xs text-gray-400">Необходим для прямого входа, если Supabase отключен. <a href="./setup-guide.html#google-cloud-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как получить?</a></p>
                                 </div>
                                 <button id="google-auth-action-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md">${authState.isGoogleConnected ? 'Выйти' : 'Войти через Google'}</button>
                                 `
@@ -102,7 +102,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                 <label for="gemini-api-key" class="block text-sm font-medium text-gray-300">Gemini API Key</label>
                                 <input type="password" id="gemini-api-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.geminiApiKey || ''}">
                             </div>
-                            <p class="text-xs text-gray-400 mt-1">Ваш ключ хранится локально в браузере. Получить ключ можно в <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Google AI Studio</a>.</p>
+                            <p class="text-xs text-gray-400 mt-1">Ваш ключ хранится локально в браузере. <a href="./setup-guide.html#gemini-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как получить ключ?</a></p>
                         </div>
                     </div>
 
