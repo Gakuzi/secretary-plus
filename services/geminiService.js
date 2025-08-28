@@ -265,24 +265,24 @@ const baseTools = [
 
 
 const getSystemInstruction = (serviceMap, timezone) => {
-    return `Ты — «Секретарь+», проактивный личный ИИ-ассистент. Ты строго следуешь настройкам пользователя по выбору сервисов.
+    return `Ты — «Секретарь+», проактивный личный ИИ-ассистент. Твоя главная цель — предугадывать потребности пользователя и действовать на опережение.
 
 Принципы работы:
-1.  **Выбор сервиса:** Ты ВСЕГДА проверяешь, какой сервис пользователь выбрал для каждой задачи (календарь, контакты, заметки, файлы).
+1.  **Проактивность - твой главный приоритет.** Ты не просто исполнитель, а помощник. Если можешь предсказать следующий шаг пользователя (например, после создания встречи предложить отправить ссылку или создать задачу на подготовку), ты ОБЯЗАН это сделать. Всегда ищи возможность быть на шаг впереди.
+2.  **Понимай намерение, а не слова.** Если запрос звучит как "Позвони Ивану Петрову", твоя задача — инициировать звонок, а не просто найти контакт. Используй \`perform_contact_action\`, а не \`find_contacts\`.
+3.  **Используй правильный сервис.** Ты ВСЕГДА проверяешь, какой сервис пользователь выбрал для каждой задачи, и используешь только его.
     -   Календарь: ${serviceMap.calendar}
+    -   Задачи: ${serviceMap.tasks}
     -   Контакты: ${serviceMap.contacts}
     -   Файлы: ${serviceMap.files}
     -   Заметки: ${serviceMap.notes}
-2.  **Поиск данных:** Для поиска контактов (\`find_contacts\`), документов (\`find_documents\`) или заметок (\`find_notes\`) ты используешь только тот сервис, который указан в настройках выше.
-3.  **Создание данных:** Для создания событий (\`create_calendar_event\`) или заметок (\`create_note\`) ты используешь только тот сервис, который указан в настройках.
-4.  **Чтение данных:** Для просмотра календаря (\`get_calendar_events\`), задач (\`get_tasks\`) или почты (\`get_recent_emails\`) ты всегда используешь Google.
-5.  **Диалог — ключ ко всему:** Если информации недостаточно, задавай уточняющие вопросы.
-6.  **Сначала уточнение, потом действие:** Никогда не создавай событие или задачу, если в запросе есть неоднозначные данные (имена людей, названия документов). Сначала найди, покажи пользователю варианты, дождись его выбора.
-7.  **Работа с контактами:** Если пользователь выбирает контакт без email для создания события, ты должен явно спросить у пользователя этот email.
+4.  **Приоритет локальному кэшу:** Если для сервиса (календарь, задачи, контакты, файлы) выбран \`supabase\`, это значит, что у тебя есть доступ к быстрому локальному кэшу. Используй его для всех операций чтения (\`get_calendar_events\`, \`get_tasks\`, \`find_contacts\`, \`find_documents\`). Это обеспечивает мгновенный отклик.
+5.  **Прямые API-вызовы для записи:** Для создания или изменения данных (создание события, задачи) ты всегда используешь прямой вызов к Google, даже если чтение идет из кэша.
+6.  **Диалог — ключ ко всему:** Если информации недостаточно для выполнения действия (например, не указано время встречи), задавай уточняющие вопросы.
+7.  **Сначала уточни, потом действуй.** Никогда не создавай событие или задачу, если в запросе есть неоднозначные данные (несколько контактов с одинаковым именем). Сначала найди, покажи пользователю варианты, дождись его выбора.
 8.  **Контекст:** Ты должен анализировать ВЕСЬ предыдущий диалог, чтобы понимать текущий контекст.
-9.  **Дата и время:** Всегда учитывай текущую дату: ${new Date().toLocaleDateString('ru-RU')} и часовой пояс пользователя: ${timezone}. Используй этот часовой пояс для интерпретации всех запросов, связанных со временем, таких как "завтра в 9 утра" или "через 2 часа".
-10. **Проактивные предложения:** После успешного выполнения основного действия (например, создания встречи), всегда предлагай релевантные последующие шаги.
-11. **Интерактивные ответы:** Если ты задаешь пользователю вопрос, по возможности предлагай 2-4 наиболее вероятных варианта быстрого ответа в формате \`[QUICK_REPLY] Текст ответа\`.
+9.  **Дата и время:** Всегда учитывай текущую дату: ${new Date().toLocaleDateString('ru-RU')} и часовой пояс пользователя: ${timezone}.
+10. **Интерактивные ответы:** Если ты задаешь пользователю вопрос, по возможности предлагай 2-4 наиболее вероятных варианта быстрого ответа в формате \`[QUICK_REPLY] Текст ответа\`.
 `;
 };
 
@@ -359,7 +359,7 @@ export const callGemini = async ({
             try {
                 switch (name) {
                     case 'get_calendar_events': {
-                        const provider = serviceProviders.google;
+                        const provider = getProvider('calendar');
                         const results = await provider.getCalendarEvents(args);
                         if (results && results.length > 0) {
                             resultMessage.text = "Вот ваше ближайшее расписание:";
@@ -370,7 +370,7 @@ export const callGemini = async ({
                         break;
                     }
                     case 'get_tasks': {
-                        const provider = serviceProviders.google;
+                        const provider = getProvider('tasks');
                         const results = await provider.getTasks(args);
                          if (results && results.length > 0) {
                             resultMessage.text = "Вот ваши активные задачи:";
@@ -381,7 +381,7 @@ export const callGemini = async ({
                         break;
                     }
                     case 'get_recent_emails': {
-                        const provider = serviceProviders.google;
+                        const provider = serviceProviders.google; // Email is always Google
                         const results = await provider.getRecentEmails(args);
                          if (results && results.length > 0) {
                             resultMessage.text = `Вот последние ${results.length} писем:`;
@@ -392,7 +392,9 @@ export const callGemini = async ({
                         break;
                     }
                     case 'create_calendar_event': {
-                        const provider = getProvider('calendar');
+                        // Creation always goes to the source of truth, not the cache provider
+                        const creationProviderId = serviceMap.calendar === 'apple' ? 'apple' : 'google';
+                        const provider = serviceProviders[creationProviderId];
                         const result = await provider.createEvent(args);
 
                         if (provider.getId() === 'apple') {
@@ -544,7 +546,23 @@ export const callGemini = async ({
                 }
             } catch (error) {
                  console.error(`Error executing tool ${name}:`, error);
-                 resultMessage = { sender: MessageSender.SYSTEM, text: `Произошла ошибка при выполнении действия: ${error.message}` };
+                 let errorMessage = 'Неизвестная ошибка.';
+                 if (error instanceof Error) {
+                     errorMessage = error.message;
+                 } else if (error && error.result && error.result.error) {
+                     // Handle Google API client specific error format
+                     errorMessage = error.result.error.message || JSON.stringify(error.result.error);
+                 } else if (typeof error === 'string') {
+                     errorMessage = error;
+                 } else if (error) {
+                     // Try to stringify, but fallback for circular structures etc.
+                     try {
+                        errorMessage = JSON.stringify(error);
+                     } catch {
+                        errorMessage = String(error);
+                     }
+                 }
+                 resultMessage = { sender: MessageSender.SYSTEM, text: `Произошла ошибка при выполнении действия: ${errorMessage}` };
             }
             return resultMessage;
         }

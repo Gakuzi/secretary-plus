@@ -110,8 +110,98 @@ export class SupabaseService {
         return { synced: syncedCount };
     }
 
-    // --- Data Retrieval ---
+    async syncCalendarEvents(googleEvents) {
+        const user = (await this.getSession())?.user;
+        if (!user) throw new Error("User not authenticated.");
+
+        const formattedEvents = googleEvents.map(e => ({
+            user_id: user.id,
+            source_id: e.id,
+            title: e.summary,
+            description: e.description,
+            start_time: e.start?.dateTime || e.start?.date,
+            end_time: e.end?.dateTime || e.end?.date,
+            event_link: e.htmlLink,
+            meet_link: e.hangoutLink,
+        }));
+
+        const { error } = await this.client
+            .from('calendar_events')
+            .upsert(formattedEvents, { onConflict: 'user_id,source_id', ignoreDuplicates: false });
+
+        if (error) throw error;
+        return { synced: formattedEvents.length };
+    }
+
+    async syncTasks(googleTasks) {
+        const user = (await this.getSession())?.user;
+        if (!user) throw new Error("User not authenticated.");
+
+        const formattedTasks = googleTasks.map(t => ({
+            user_id: user.id,
+            source_id: t.id,
+            title: t.title,
+            notes: t.notes,
+            due_date: t.due,
+            status: t.status,
+        }));
+
+        const { error } = await this.client
+            .from('tasks')
+            .upsert(formattedTasks, { onConflict: 'user_id,source_id', ignoreDuplicates: false });
+
+        if (error) throw error;
+        return { synced: formattedTasks.length };
+    }
+
+    // --- Data Retrieval (from local cache) ---
     
+    async getCalendarEvents({ time_min, time_max, max_results = 10 }) {
+        let query = this.client
+            .from('calendar_events')
+            .select('*')
+            .order('start_time', { ascending: true })
+            .gte('start_time', time_min || new Date().toISOString())
+            .limit(max_results);
+            
+        if (time_max) {
+            query = query.lte('start_time', time_max);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        
+        // Remap to match Google API structure for compatibility with ResultCard
+        return data.map(e => ({
+            id: e.source_id,
+            summary: e.title,
+            description: e.description,
+            htmlLink: e.event_link,
+            hangoutLink: e.meet_link,
+            start: { dateTime: e.start_time },
+            end: { dateTime: e.end_time }
+        }));
+    }
+
+     async getTasks({ max_results = 20 }) {
+        const { data, error } = await this.client
+            .from('tasks')
+            .select('*')
+            .neq('status', 'completed')
+            .order('due_date', { ascending: true, nullsFirst: true })
+            .limit(max_results);
+
+        if (error) throw error;
+        // Remap for compatibility
+        return data.map(t => ({
+            id: t.source_id,
+            title: t.title,
+            notes: t.notes,
+            due: t.due_date,
+            status: t.status
+        }));
+    }
+
     async findContacts(query) {
         const { data, error } = await this.client
             .from('contacts')

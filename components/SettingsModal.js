@@ -5,13 +5,22 @@ const SERVICE_DEFINITIONS = {
         label: 'Календарь',
         providers: [
             { id: 'google', name: 'Google Calendar' },
-            { id: 'apple', name: 'Apple Calendar (.ics)', disabled: false },
+            { id: 'supabase', name: 'Быстрый кэш (Supabase)' },
+            { id: 'apple', name: 'Apple Calendar (.ics)' },
+        ]
+    },
+    tasks: {
+        label: 'Задачи',
+        providers: [
+            { id: 'google', name: 'Google Tasks' },
+            { id: 'supabase', name: 'Быстрый кэш (Supabase)' },
         ]
     },
     contacts: {
         label: 'Контакты',
         providers: [
             { id: 'google', name: 'Google Contacts' },
+            { id: 'supabase', name: 'Быстрый кэш (Supabase)' },
             { id: 'apple', name: 'Apple iCloud (скоро)', disabled: true },
         ]
     },
@@ -19,6 +28,7 @@ const SERVICE_DEFINITIONS = {
         label: 'Файлы',
         providers: [
             { id: 'google', name: 'Google Drive' },
+            { id: 'supabase', name: 'Быстрый кэш (Supabase)' },
         ]
     },
     notes: {
@@ -196,6 +206,8 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                             <p class="text-sm text-gray-400">Синхронизируйте данные из Google, чтобы ассистент мог быстро находить контакты и документы.</p>
                             <div id="sync-status" class="text-sm text-gray-300"></div>
                             <div class="space-y-3 pt-2">
+                                <button id="sync-calendar-button" ${!authState.isGoogleConnected ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">Синхронизировать Google Календарь</button>
+                                <button id="sync-tasks-button" ${!authState.isGoogleConnected ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">Синхронизировать Google Задачи</button>
                                 <button id="sync-contacts-button" ${!authState.isGoogleConnected ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">Синхронизировать контакты Google</button>
                                 <button id="sync-files-button" ${!authState.isGoogleConnected ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">Синхронизировать файлы Google Drive</button>
                             </div>
@@ -225,6 +237,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             timezone: modalOverlay.querySelector('#timezone-select').value,
             serviceMap: {
                 calendar: modalOverlay.querySelector('#calendar-provider-select').value,
+                tasks: modalOverlay.querySelector('#tasks-provider-select').value,
                 contacts: modalOverlay.querySelector('#contacts-provider-select').value,
                 files: modalOverlay.querySelector('#files-provider-select').value,
                 notes: modalOverlay.querySelector('#notes-provider-select').value,
@@ -280,6 +293,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
         const serviceMapContainer = modalOverlay.querySelector('#service-map-container');
         const currentServiceMap = {
             calendar: modalOverlay.querySelector('#calendar-provider-select').value,
+            tasks: modalOverlay.querySelector('#tasks-provider-select').value,
             contacts: modalOverlay.querySelector('#contacts-provider-select').value,
             files: modalOverlay.querySelector('#files-provider-select').value,
             notes: modalOverlay.querySelector('#notes-provider-select').value,
@@ -311,6 +325,8 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     }
 
     // Sync buttons logic
+    const syncCalendarBtn = modalOverlay.querySelector('#sync-calendar-button');
+    const syncTasksBtn = modalOverlay.querySelector('#sync-tasks-button');
     const syncContactsBtn = modalOverlay.querySelector('#sync-contacts-button');
     const syncFilesBtn = modalOverlay.querySelector('#sync-files-button');
     const syncStatusDiv = modalOverlay.querySelector('#sync-status');
@@ -334,6 +350,20 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     };
 
     if (authState.isGoogleConnected && supabaseService) {
+        syncCalendarBtn.addEventListener('click', () => handleSync(
+            syncCalendarBtn,
+            (items) => supabaseService.syncCalendarEvents(items),
+            () => googleProvider.getCalendarEvents({ max_results: 1000 }), // Fetch more for a full sync
+            'событие',
+            'события'
+        ));
+         syncTasksBtn.addEventListener('click', () => handleSync(
+            syncTasksBtn,
+            (items) => supabaseService.syncTasks(items),
+            () => googleProvider.getTasks({ max_results: 100 }),
+            'задачу',
+            'задачи'
+        ));
         syncContactsBtn.addEventListener('click', () => handleSync(
             syncContactsBtn,
             (items) => supabaseService.syncContacts(items),

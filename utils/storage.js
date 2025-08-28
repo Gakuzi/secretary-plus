@@ -10,6 +10,7 @@ const defaultSettings = {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     serviceMap: {
         calendar: 'google',
+        tasks: 'google',
         contacts: 'google',
         files: 'google',
         notes: 'supabase',
