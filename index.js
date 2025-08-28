@@ -175,7 +175,14 @@ async function handleSendMessage(prompt, image = null, isSystem = false) {
 
 function showSettings() {
     const isUnsupportedDomain = window.location.hostname !== 'localhost' && !window.location.hostname.endsWith('github.io');
-    const modal = createSettingsModal(state.settings, serviceProviders, handleSaveSettings, hideSettings, isUnsupportedDomain);
+    const modal = createSettingsModal(
+        state.settings, 
+        serviceProviders, 
+        handleSaveSettings, 
+        hideSettings, 
+        isUnsupportedDomain,
+        handleAuthAndSave
+    );
     settingsModalContainer.innerHTML = '';
     settingsModalContainer.appendChild(modal);
     settingsModalContainer.classList.remove('hidden');
@@ -215,6 +222,16 @@ function handleSaveSettings(newSettings) {
     setupActiveProvider();
     checkAuth();
 }
+
+async function handleAuthAndSave(newSettings) {
+    state.settings = newSettings;
+    saveSettings(newSettings);
+    setupActiveProvider();
+    hideSettings();
+    // handleLogin will show its own alerts and trigger the auth flow
+    await handleLogin();
+}
+
 
 async function handleLogin() {
     if (!activeProvider) {
@@ -268,6 +285,7 @@ async function checkAuth() {
 function setupActiveProvider() {
     const providerId = state.settings.activeProviderId;
     if (providerId === 'google') {
+        // This will now use the setter in GoogleServiceProvider to reset initialization
         serviceProviders.google.clientId = state.settings.googleClientId;
         activeProvider = serviceProviders.google;
     } else {

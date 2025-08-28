@@ -1,12 +1,26 @@
 import { GOOGLE_SCOPES } from "../../constants.js";
 
 export class GoogleServiceProvider {
-    constructor(clientId) {
+    constructor() {
         this.gapi = window.gapi;
         this.google = window.google;
         this.tokenClient = null;
-        this.clientId = clientId;
+        this._clientId = null;
         this.initPromise = null;
+    }
+
+    // Используем сеттер для сброса состояния при изменении ID
+    set clientId(id) {
+        if (this._clientId !== id) {
+            this._clientId = id;
+            // Сбрасываем promise, чтобы при следующем вызове произошла новая инициализация
+            this.initPromise = null;
+            this.tokenClient = null;
+        }
+    }
+
+    get clientId() {
+        return this._clientId;
     }
     
     initialize() {

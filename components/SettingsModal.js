@@ -1,6 +1,6 @@
 import { FileIcon, SettingsIcon } from './icons/Icons.js';
 
-export function createSettingsModal(currentSettings, providers, onSave, onClose, isUnsupportedDomain) {
+export function createSettingsModal(currentSettings, providers, onSave, onClose, isUnsupportedDomain, onAuthenticate) {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
     
@@ -35,6 +35,9 @@ export function createSettingsModal(currentSettings, providers, onSave, onClose,
                     <input type="text" readonly id="redirect-uri-input" value="${redirectUri}" class="flex-1 bg-transparent text-sm text-gray-300 focus:outline-none">
                     <button id="copy-uri-button" class="ml-2 px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 rounded transition-colors">Копировать</button>
                 </div>
+            </div>
+            <div class="mt-4">
+                <button id="auth-from-settings-button" class="w-full text-center px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors font-semibold">Сохранить и подключить Google</button>
             </div>
         </div>
     `;
@@ -101,6 +104,7 @@ export function createSettingsModal(currentSettings, providers, onSave, onClose,
         const providerSelect = modalOverlay.querySelector('#provider-select');
         const googleSettingsDiv = modalOverlay.querySelector('#google-settings');
         const copyUriButton = modalOverlay.querySelector('#copy-uri-button');
+        const authFromSettingsButton = modalOverlay.querySelector('#auth-from-settings-button');
 
         providerSelect.addEventListener('change', (e) => {
             googleSettingsDiv.classList.toggle('hidden', e.target.value !== 'google');
@@ -111,6 +115,20 @@ export function createSettingsModal(currentSettings, providers, onSave, onClose,
                 copyUriButton.textContent = 'Скопировано!';
                 setTimeout(() => { copyUriButton.textContent = 'Копировать'; }, 2000);
             });
+        });
+
+        authFromSettingsButton.addEventListener('click', () => {
+             const newSettings = { ...currentSettings };
+             newSettings.geminiApiKey = modalOverlay.querySelector('#gemini-api-key').value.trim();
+             newSettings.googleClientId = modalOverlay.querySelector('#google-client-id').value.trim();
+             newSettings.activeProviderId = modalOverlay.querySelector('#provider-select').value;
+            
+             if (!newSettings.googleClientId) {
+                alert('Пожалуйста, введите Google Client ID для подключения.');
+                return;
+             }
+
+             onAuthenticate(newSettings);
         });
     }
 
