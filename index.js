@@ -10,6 +10,13 @@ import { createCameraView } from './components/CameraView.js';
 import { SettingsIcon, ChartBarIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 
+// --- UTILITY ---
+function isMobile() {
+    // Simple check for mobile user agents
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+
 // --- STATE MANAGEMENT ---
 let state = {
     settings: getSettings(),
@@ -75,7 +82,8 @@ function renderMainContent() {
     const chatContainer = createChatInterface(handleSendMessage);
     mainContent.appendChild(chatContainer);
     
-    document.getElementById('camera-button').addEventListener('click', showCameraView);
+    // The camera button event listener is now set inside createChatInterface due to adaptive UI
+    // document.getElementById('camera-button').addEventListener('click', showCameraView);
 
     const chatLog = document.getElementById('chat-log');
     if (state.messages.length === 0) {
@@ -417,6 +425,11 @@ function hideCameraView() {
 
 // --- APP START ---
 async function init() {
+    // Add mobile class for adaptive UI
+    if (isMobile()) {
+        document.body.classList.add('is-mobile');
+    }
+
     settingsButton.innerHTML = SettingsIcon;
     statsButton.innerHTML = ChartBarIcon;
 
