@@ -1,5 +1,52 @@
 import { SettingsIcon } from './icons/Icons.js';
 
+const SERVICE_DEFINITIONS = {
+    calendar: {
+        label: 'Календарь',
+        providers: [
+            { id: 'google', name: 'Google Calendar' },
+            { id: 'apple', name: 'Apple iCloud (скоро)', disabled: true },
+        ]
+    },
+    contacts: {
+        label: 'Контакты',
+        providers: [
+            { id: 'google', name: 'Google Contacts' },
+            { id: 'apple', name: 'Apple iCloud (скоро)', disabled: true },
+        ]
+    },
+    files: {
+        label: 'Файлы',
+        providers: [
+            { id: 'google', name: 'Google Drive' },
+        ]
+    },
+    notes: {
+        label: 'Заметки',
+        providers: [
+            { id: 'supabase', name: 'База данных Supabase' },
+            { id: 'google', name: 'Google Docs' },
+            { id: 'apple', name: 'Apple Notes (скоро)', disabled: true },
+        ]
+    },
+};
+
+function createServiceMappingUI(serviceMap, isSupabaseEnabled) {
+    return Object.entries(SERVICE_DEFINITIONS).map(([key, def]) => `
+        <div class="flex items-center justify-between py-2 border-b border-gray-700/50 last:border-b-0">
+            <label for="${key}-provider-select" class="font-medium text-gray-300">${def.label}</label>
+            <select id="${key}-provider-select" class="bg-gray-700 border border-gray-600 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-sm">
+                ${def.providers.map(p => {
+                    const isDisabled = p.disabled || (p.id === 'supabase' && !isSupabaseEnabled);
+                    const isSelected = serviceMap[key] === p.id;
+                    return `<option value="${p.id}" ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}>${p.name}${isDisabled && p.id === 'supabase' ? ' (требуется Supabase)' : ''}</option>`;
+                }).join('')}
+            </select>
+        </div>
+    `).join('');
+}
+
+
 export function createSettingsModal(currentSettings, authState, onSave, onClose, onLogin, onLogout, googleProvider, supabaseService) {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
@@ -18,7 +65,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                 <aside class="w-48 border-r border-gray-700 p-4">
                     <nav class="flex flex-col space-y-2">
                         <a href="#connections" class="settings-tab-button active text-left" data-tab="connections">Подключения</a>
-                        <a href="#services" class="settings-tab-button" data-tab="services">Сервисы</a>
+                        <a href="#service-map" class="settings-tab-button" data-tab="service-map">Назначение сервисов</a>
                         <a href="#api-keys" class="settings-tab-button" data-tab="api-keys">API Ключи</a>
                         <a href="#sync" class="settings-tab-button" data-tab="sync" ${!currentSettings.isSupabaseEnabled ? 'style="display: none;"' : ''}>Синхронизация</a>
                     </nav>
@@ -28,12 +75,11 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                     <!-- Connections Tab -->
                     <div id="tab-connections" class="settings-tab-content space-y-6">
                         
-                        <!-- Step 0: Choose Method -->
                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h3 class="text-lg font-semibold text-gray-200">Использовать Supabase</h3>
-                                    <p class="text-sm text-gray-400">Рекомендуется для синхронизации и безопасности.</p>
+                                    <p class="text-sm text-gray-400">Рекомендуется для синхронизации и хранения заметок.</p>
                                 </div>
                                 <label class="toggle-switch">
                                     <input type="checkbox" id="supabase-enabled-toggle" ${currentSettings.isSupabaseEnabled ? 'checked' : ''}>
@@ -42,7 +88,6 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                             </div>
                         </div>
 
-                        <!-- Step 1: Configure Method -->
                         <div id="supabase-settings-block" class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4" ${!currentSettings.isSupabaseEnabled ? 'style="display: none;"' : ''}>
                             <div class="flex justify-between items-start">
                                 <div>
@@ -85,7 +130,6 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                             </div>
                         </div>
 
-                        <!-- Step 2: Connect Account -->
                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
                              <h3 class="text-lg font-semibold text-gray-200">2. Подключение аккаунта Google</h3>
                              <p id="auth-method-description" class="text-sm text-gray-400 mt-1 mb-4">
@@ -108,29 +152,14 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
 
                     </div>
 
-                    <!-- Services Tab -->
-                    <div id="tab-services" class="settings-tab-content space-y-6 hidden">
-                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                            <h3 class="text-lg font-semibold text-gray-200">Провайдер сервисов</h3>
-                            <p class="text-sm text-gray-400">Выберите основной сервис, с которым будет работать ассистент. В данный момент поддерживается только Google.</p>
-                            <div class="space-y-3 pt-2">
-                                <div class="flex items-center">
-                                    <input type="radio" id="provider-google" name="service-provider" value="google" checked class="h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500">
-                                    <label for="provider-google" class="ml-3 block text-sm font-medium text-gray-200">Google</label>
-                                </div>
-                                <div class="flex items-center opacity-50">
-                                    <input type="radio" id="provider-apple" name="service-provider" value="apple" disabled class="h-4 w-4 text-blue-600 bg-gray-800 border-gray-600">
-                                    <label for="provider-apple" class="ml-3 block text-sm font-medium text-gray-500">Apple (скоро)</label>
-                                </div>
-                                <div class="flex items-center opacity-50">
-                                    <input type="radio" id="provider-outlook" name="service-provider" value="outlook" disabled class="h-4 w-4 text-blue-600 bg-gray-800 border-gray-600">
-                                    <label for="provider-outlook" class="ml-3 block text-sm font-medium text-gray-500">Outlook (скоро)</label>
-                                </div>
-                                <div class="flex items-center opacity-50">
-                                    <input type="radio" id="provider-yandex" name="service-provider" value="yandex" disabled class="h-4 w-4 text-blue-600 bg-gray-800 border-gray-600">
-                                    <label for="provider-yandex" class="ml-3 block text-sm font-medium text-gray-500">Yandex (скоро)</label>
-                                </div>
-                            </div>
+                    <!-- Service Map Tab -->
+                    <div id="tab-service-map" class="settings-tab-content hidden">
+                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                             <h3 class="text-lg font-semibold text-gray-200">Назначение сервисов</h3>
+                             <p class="text-sm text-gray-400 mt-1 mb-4">Выберите, какой сервис использовать для каждой функции. Ассистент будет следовать этим настройкам.</p>
+                             <div id="service-map-container" class="space-y-2">
+                                ${createServiceMappingUI(currentSettings.serviceMap, currentSettings.isSupabaseEnabled)}
+                             </div>
                         </div>
                     </div>
 
@@ -177,9 +206,14 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             supabaseAnonKey: modalOverlay.querySelector('#supabase-anon-key').value.trim(),
             geminiApiKey: modalOverlay.querySelector('#gemini-api-key').value.trim(),
             isSupabaseEnabled: modalOverlay.querySelector('#supabase-enabled-toggle').checked,
-            // isGoogleEnabled is deprecated but kept for compatibility, we derive logic from isSupabaseEnabled
             isGoogleEnabled: true, 
             googleClientId: modalOverlay.querySelector('#google-client-id').value.trim(),
+            serviceMap: {
+                calendar: modalOverlay.querySelector('#calendar-provider-select').value,
+                contacts: modalOverlay.querySelector('#contacts-provider-select').value,
+                files: modalOverlay.querySelector('#files-provider-select').value,
+                notes: modalOverlay.querySelector('#notes-provider-select').value,
+            }
         };
         onSave(newSettings);
     });
@@ -213,12 +247,21 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
         modalOverlay.querySelector('#direct-google-settings-block').style.display = isEnabled ? 'none' : '';
         modalOverlay.querySelector('a[data-tab="sync"]').style.display = isEnabled ? '' : 'none';
         
+        // Re-render service map UI with updated Supabase status
+        const serviceMapContainer = modalOverlay.querySelector('#service-map-container');
+        const currentServiceMap = {
+            calendar: modalOverlay.querySelector('#calendar-provider-select').value,
+            contacts: modalOverlay.querySelector('#contacts-provider-select').value,
+            files: modalOverlay.querySelector('#files-provider-select').value,
+            notes: modalOverlay.querySelector('#notes-provider-select').value,
+        };
+        serviceMapContainer.innerHTML = createServiceMappingUI(currentServiceMap, isEnabled);
+
         const authDesc = modalOverlay.querySelector('#auth-method-description');
         authDesc.textContent = isEnabled 
             ? 'Для работы ассистента необходимо войти в аккаунт Google через Supabase.' 
             : 'Для работы ассистента необходимо войти в аккаунт Google напрямую.';
         
-        // If sync tab is active and we disable supabase, switch to connections
         const syncTabButton = modalOverlay.querySelector('a[data-tab="sync"]');
         if (!isEnabled && syncTabButton.classList.contains('active')) {
             syncTabButton.classList.remove('active');

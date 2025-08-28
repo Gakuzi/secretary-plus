@@ -1,4 +1,4 @@
-import { GoogleIcon, SupabaseIcon, CalendarIcon, FileIcon, UsersIcon, ChartBarIcon } from './icons/Icons.js';
+import { GoogleIcon, SupabaseIcon, CalendarIcon, FileIcon, UsersIcon, ChartBarIcon, CheckSquareIcon } from './icons/Icons.js';
 
 export function createWelcomeScreen({ isGoogleConnected, isSupabaseEnabled }) {
     const container = document.createElement('div');
@@ -39,7 +39,15 @@ export function createWelcomeScreen({ isGoogleConnected, isSupabaseEnabled }) {
                     </div>
                 </div>
             `
-            : '';
+            : `
+                 <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Найди контакт Иван Петров"}'>
+                    <div class="welcome-action-icon bg-green-500/20 text-green-400">${UsersIcon}</div>
+                    <div>
+                        <h3 class="font-semibold text-gray-100">Найти контакт</h3>
+                        <p class="text-sm text-gray-400">Прямой поиск в Google Contacts</p>
+                    </div>
+                </div>
+            `;
 
         container.innerHTML = `
             <div class="max-w-3xl w-full">
@@ -53,19 +61,19 @@ export function createWelcomeScreen({ isGoogleConnected, isSupabaseEnabled }) {
                             <p class="text-sm text-gray-400">Показать все события из календаря</p>
                         </div>
                     </div>
-                    <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Найди последние 5 измененных документов"}'>
-                        <div class="welcome-action-icon bg-purple-500/20 text-purple-400">${FileIcon}</div>
+                    <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Покажи мои задачи"}'>
+                        <div class="welcome-action-icon bg-yellow-500/20 text-yellow-400">${CheckSquareIcon}</div>
                         <div>
-                            <h3 class="font-semibold text-gray-100">Последние документы</h3>
-                            <p class="text-sm text-gray-400">Найти недавние файлы на Диске</p>
+                            <h3 class="font-semibold text-gray-100">Мои задачи</h3>
+                            <p class="text-sm text-gray-400">Показать список активных дел</p>
                         </div>
                     </div>
                     ${contactActionHtml}
-                    <div class="welcome-action-card" data-action="show_stats">
-                        <div class="welcome-action-icon bg-yellow-500/20 text-yellow-400">${ChartBarIcon}</div>
+                    <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Найди документ с планом проекта"}'>
+                        <div class="welcome-action-icon bg-purple-500/20 text-purple-400">${FileIcon}</div>
                         <div>
-                            <h3 class="font-semibold text-gray-100">Показать статистику</h3>
-                            <p class="text-sm text-gray-400">Открыть окно статистики</p>
+                            <h3 class="font-semibold text-gray-100">Найти документ</h3>
+                            <p class="text-sm text-gray-400">Найти файлы на Диске или в базе</p>
                         </div>
                     </div>
                 </div>

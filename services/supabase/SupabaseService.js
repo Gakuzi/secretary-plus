@@ -12,7 +12,7 @@ export class SupabaseService {
         const { error } = await this.client.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                scopes: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+                scopes: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
                 redirectTo: window.location.origin + window.location.pathname,
             },
         });
@@ -125,6 +125,36 @@ export class SupabaseService {
             .ilike('name', `%${query}%`) // Case-insensitive search
             .limit(10);
             
+        if (error) throw error;
+        return data;
+    }
+
+    // --- Notes ---
+    async createNote(details) {
+        const user = (await this.getSession())?.user;
+        if (!user) throw new Error("User not authenticated.");
+        
+        const { data, error } = await this.client
+            .from('notes')
+            .insert({
+                user_id: user.id,
+                title: details.title,
+                content: details.content,
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    }
+
+    async findNotes(query) {
+        const { data, error } = await this.client
+            .from('notes')
+            .select('*')
+            .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
+            .limit(10);
+        
         if (error) throw error;
         return data;
     }

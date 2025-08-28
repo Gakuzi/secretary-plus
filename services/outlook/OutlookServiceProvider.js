@@ -33,4 +33,10 @@ export class OutlookServiceProvider {
     createGoogleSheet(title) {
         return Promise.reject(new Error("Outlook Service Provider не реализован."));
     }
+    createNote(details) {
+        return Promise.reject(new Error("Outlook Service Provider не реализован."));
+    }
+    findNotes(query) {
+        return Promise.reject(new Error("Outlook Service Provider не реализован."));
+    }
 }

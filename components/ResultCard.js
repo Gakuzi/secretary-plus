@@ -66,6 +66,103 @@ function createStandardCard(card) {
     `;
 }
 
+export function createCalendarViewCard(events) {
+    const itemsHtml = events.map(event => {
+        const start = event.start.dateTime || event.start.date;
+        const end = event.end.dateTime || event.end.date;
+        const isAllDay = !event.start.dateTime;
+        
+        let timeString;
+        if (isAllDay) {
+            timeString = 'Весь день';
+        } else {
+            const options = { hour: '2-digit', minute: '2-digit', hour12: false };
+            const startTime = new Date(start).toLocaleTimeString('ru-RU', options);
+            const endTime = new Date(end).toLocaleTimeString('ru-RU', options);
+            timeString = `${startTime} - ${endTime}`;
+        }
+
+        return `
+            <a href="${event.htmlLink}" target="_blank" rel="noopener noreferrer" class="flex items-start gap-3 p-2 rounded-md hover:bg-gray-900/50 transition-colors">
+                <div class="w-20 text-right font-mono text-sm text-gray-300 flex-shrink-0">${timeString}</div>
+                <div class="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0"></div>
+                <div class="flex-1">
+                    <p class="font-semibold text-gray-100">${event.summary}</p>
+                    ${event.description ? `<p class="text-xs text-gray-400 truncate">${event.description}</p>` : ''}
+                </div>
+            </a>
+        `;
+    }).join('');
+
+    return {
+        type: 'calendar_view',
+        icon: 'CalendarIcon',
+        title: 'Ваше расписание',
+        htmlContent: `<div class="space-y-1">${itemsHtml}</div>`
+    };
+}
+
+
+export function createTasksViewCard(tasks) {
+    const itemsHtml = tasks.map(task => `
+        <div class="flex items-start gap-3 p-2 rounded-md">
+            <div class="w-5 h-5 border-2 border-gray-500 rounded mt-0.5 flex-shrink-0"></div>
+            <div class="flex-1">
+                <p class="font-medium text-gray-100">${task.title}</p>
+                 ${task.notes ? `<p class="text-xs text-gray-400">${task.notes.replace(/\n/g, '<br>')}</p>` : ''}
+            </div>
+        </div>
+    `).join('');
+
+    return {
+        type: 'tasks_view',
+        icon: 'CheckSquareIcon',
+        title: 'Активные задачи',
+        htmlContent: `<div class="space-y-1">${itemsHtml}</div>`,
+    };
+}
+
+export function createEmailsViewCard(emails) {
+    const itemsHtml = emails.map(email => {
+        const from = email.from.replace(/<.*?>/g, '').trim();
+        return `
+            <div class="border-b border-gray-700/50 last:border-b-0 py-2">
+                <p class="font-semibold text-sm text-gray-200 truncate">${from}</p>
+                <p class="font-medium text-gray-100">${email.subject || '(Без темы)'}</p>
+                <p class="text-xs text-gray-400 truncate">${email.snippet}</p>
+            </div>
+        `;
+    }).join('');
+
+    return {
+        type: 'emails_view',
+        icon: 'EmailIcon',
+        title: 'Последние письма',
+        htmlContent: `<div class="space-y-1">${itemsHtml}</div>`
+    };
+}
+
+
+export function createNoteCard(note, providerName) {
+    const isGoogleDoc = note.mimeType === 'application/vnd.google-apps.document';
+    const title = note.title || note.name || 'Безымянная заметка';
+    const link = note.url || note.webViewLink;
+
+    const cardData = {
+        type: 'note_confirmation',
+        icon: 'FileIcon',
+        title: title,
+        details: {
+            'Хранилище': providerName,
+            'Тип': isGoogleDoc ? 'Google Документ' : 'Заметка',
+        },
+        actions: link ? [{ label: 'Открыть', url: link }] : [],
+    };
+
+    return cardData;
+}
+
+
 function createDocumentProposalCard(card) {
     const iconSVG = Icons[card.icon] || '';
     const summaryHtml = card.summary.replace(/\n/g, '<br>');
@@ -227,6 +324,18 @@ export function createResultCardElement(card) {
     const cardElement = document.createElement('div');
     cardElement.className = 'mt-2 border border-gray-600 rounded-lg p-3 bg-gray-700/50';
 
+    if (card.htmlContent) {
+        const iconSVG = Icons[card.icon] || '';
+        cardElement.innerHTML = `
+            <div class="flex items-center mb-2">
+                <div class="w-6 h-6 mr-2 text-gray-300">${iconSVG}</div>
+                <h4 class="font-bold">${card.title}</h4>
+            </div>
+            ${card.htmlContent}
+        `;
+        return cardElement;
+    }
+
     switch (card.type) {
         case 'contact_choice':
             cardElement.innerHTML = createContactChoiceCard(card);
@@ -247,6 +356,7 @@ export function createResultCardElement(card) {
         case 'document':
         case 'document_prompt':
         case 'task':
+        case 'note_confirmation':
         default:
             cardElement.innerHTML = createStandardCard(card);
             break;

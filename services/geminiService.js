@@ -1,8 +1,30 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MessageSender } from "../types.js";
 import { GEMINI_MODEL } from "../constants.js";
+import { createNoteCard, createCalendarViewCard, createTasksViewCard, createEmailsViewCard } from "../components/ResultCard.js";
 
 const baseTools = [
+    {
+      name: "get_calendar_events",
+      description: "Получает список предстоящих событий из календаря пользователя. Позволяет узнать расписание на сегодня, завтра или любой другой период.",
+      parameters: {
+        type: Type.OBJECT,
+        properties: {
+          time_min: {
+            type: Type.STRING,
+            description: "Начальное время для выборки событий в формате ISO 8601. По умолчанию - текущее время.",
+          },
+          time_max: {
+            type: Type.STRING,
+            description: "Конечное время для выборки событий в формате ISO 8601. Необязательно.",
+          },
+          max_results: {
+            type: Type.INTEGER,
+            description: "Максимальное количество событий для возврата. По умолчанию 10.",
+          },
+        },
+      },
+    },
     {
       name: "create_calendar_event",
       description: "Создает новое событие в календаре пользователя. Используйте это для встреч, звонков, напоминаний с конкретным временем.",
@@ -35,8 +57,34 @@ const baseTools = [
       },
     },
     {
+      name: "get_tasks",
+      description: "Получает список активных (незавершенных) задач пользователя из Google Tasks.",
+       parameters: {
+        type: Type.OBJECT,
+        properties: {
+          max_results: {
+            type: Type.INTEGER,
+            description: "Максимальное количество задач для возврата. По умолчанию 20.",
+          },
+        },
+      },
+    },
+     {
+      name: "get_recent_emails",
+      description: "Получает список последних входящих писем из Gmail. Возвращает отправителя, тему и краткое содержание.",
+       parameters: {
+        type: Type.OBJECT,
+        properties: {
+          max_results: {
+            type: Type.INTEGER,
+            description: "Максимальное количество писем для возврата. По умолчанию 5.",
+          },
+        },
+      },
+    },
+    {
       name: "find_documents",
-      description: "Ищет файлы и документы по названию. Если Supabase включен, поиск идет по синхронизированной базе. Если выключен - напрямую в Google Drive.",
+      description: "Ищет файлы и документы по названию. Использует сервис, выбранный пользователем в настройках.",
       parameters: {
         type: Type.OBJECT,
         properties: {
@@ -50,7 +98,7 @@ const baseTools = [
     },
      {
       name: "find_contacts",
-      description: "Ищет контакты по имени, фамилии или email. Если Supabase включен, поиск идет по быстрой синхронизированной базе. Если выключен - напрямую в Google Контактах.",
+      description: "Ищет контакты по имени, фамилии или email. Использует сервис, выбранный пользователем в настройках.",
       parameters: {
         type: Type.OBJECT,
         properties: {
@@ -64,7 +112,7 @@ const baseTools = [
     },
     {
       name: "perform_contact_action",
-      description: "Выполняет немедленное действие с контактом (звонок, email). Поиск контакта происходит в Supabase, если он включен, или напрямую в Google Контактах.",
+      description: "Выполняет немедленное действие с контактом (звонок, email). Поиск контакта происходит через сервис, выбранный пользователем.",
       parameters: {
         type: Type.OBJECT,
         properties: {
@@ -80,6 +128,29 @@ const baseTools = [
         },
         required: ["query", "action"],
       },
+    },
+    {
+        name: "create_note",
+        description: "Создает новую заметку. Использует сервис для заметок, выбранный пользователем (Google Docs или Supabase).",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                title: { type: Type.STRING, description: "Заголовок заметки." },
+                content: { type: Type.STRING, description: "Содержимое заметки." },
+            },
+            required: ["content"],
+        },
+    },
+    {
+        name: "find_notes",
+        description: "Ищет заметки по ключевым словам в заголовке или содержании. Использует сервис, выбранный пользователем.",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                query: { type: Type.STRING, description: "Ключевое слово для поиска." },
+            },
+            required: ["query"],
+        },
     },
     {
       name: "propose_document_with_content",
@@ -192,43 +263,36 @@ const baseTools = [
     },
 ];
 
-// No longer needed, tools moved to baseTools
-const supabaseOnlyTools = [];
 
+const getSystemInstruction = (serviceMap) => {
+    return `Ты — «Секретарь+», проактивный личный ИИ-ассистент. Ты строго следуешь настройкам пользователя по выбору сервисов.
 
-const getSystemInstruction = (isSupabaseEnabled) => {
-    const baseInstruction = `Ты — «Секретарь+», проактивный личный ИИ-ассистент, работающий с данными пользователя.`;
-
-    const principles = [
-        `**Поиск контактов:** Ты ищешь контакты (\`find_contacts\`) и выполняешь с ними действия (\`perform_contact_action\`). ${isSupabaseEnabled ? "Поиск происходит по быстрой синхронизированной базе данных Supabase." : "Поиск происходит напрямую в Google Контактах пользователя, что может занять немного больше времени."}`,
-        `**Поиск документов:** Для поиска документов (\`find_documents\`) ты используешь доступный источник: ${isSupabaseEnabled ? "быструю базу данных Supabase." : "прямой поиск в Google Drive."}`
-    ];
-
-    const commonRules = `
-3.  **Диалог — ключ ко всему:** Если информации недостаточно, задавай уточняющие вопросы.
-4.  **Сначала уточнение, потом действие:** Никогда не создавай событие или задачу, если в запросе есть неоднозначные данные (имена людей, названия документов).
-    -   Упомянуто имя ('Иван')? Используй \`find_contacts\`, покажи пользователю варианты из доступного источника в виде карточки выбора. Дождись его выбора.
-    -   Упомянут документ ('отчет')? Используй \`find_documents\`, покажи пользователю варианты из доступного источника в виде карточки выбора. Дождись его выбора.
-5.  **Работа с контактами:** Если пользователь выбирает контакт без email-адреса для создания события, ты должен явно спросить у пользователя этот email. **КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО** придумывать или подставлять несуществующие email-адреса.
-6.  **Сбор информации:** Только после того, как все участники, документы и другие детали подтверждены пользователем, вызывай финальную функцию, например, \`create_calendar_event\`.
-7.  **Контекст:** **Критически важно:** Ты должен анализировать ВЕСЬ предыдущий диалог, чтобы понимать текущий контекст.
-8.  **Дата и время:** Всегда учитывай текущую дату и время при планировании. Сегодняшняя дата: ${new Date().toLocaleDateString('ru-RU')}.
-9.  **Интерактивные ответы:** Если ты задаешь пользователю вопрос, по возможности предлагай 2-4 наиболее вероятных варианта быстрого ответа. Каждый вариант ответа должен быть на новой строке и начинаться с префикса \`[QUICK_REPLY]\`.
-10. **Мультимодальность:** Если пользователь прислал изображение, проанализируй его и используй в ответе. Если к изображению есть текстовый запрос, отвечай на него с учетом картинки.
-11. **Проактивные предложения:** После успешного выполнения основного действия (например, создания встречи), всегда предлагай релевантные последующие шаги.
-12. **Проактивное создание документов:** Если пользователь просит создать документ и в истории чата есть релевантная информация, используй \`propose_document_with_content\`. Дождись подтверждения от пользователя.`;
-
-    return `${baseInstruction}\n\nПринципы работы:\n${principles.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n${commonRules}`;
+Принципы работы:
+1.  **Выбор сервиса:** Ты ВСЕГДА проверяешь, какой сервис пользователь выбрал для каждой задачи (календарь, контакты, заметки, файлы).
+    -   Календарь: ${serviceMap.calendar}
+    -   Контакты: ${serviceMap.contacts}
+    -   Файлы: ${serviceMap.files}
+    -   Заметки: ${serviceMap.notes}
+2.  **Поиск данных:** Для поиска контактов (\`find_contacts\`), документов (\`find_documents\`) или заметок (\`find_notes\`) ты используешь только тот сервис, который указан в настройках выше.
+3.  **Создание данных:** Для создания событий (\`create_calendar_event\`) или заметок (\`create_note\`) ты используешь только тот сервис, который указан в настройках.
+4.  **Чтение данных:** Для просмотра календаря (\`get_calendar_events\`), задач (\`get_tasks\`) или почты (\`get_recent_emails\`) ты всегда используешь Google.
+5.  **Диалог — ключ ко всему:** Если информации недостаточно, задавай уточняющие вопросы.
+6.  **Сначала уточнение, потом действие:** Никогда не создавай событие или задачу, если в запросе есть неоднозначные данные (имена людей, названия документов). Сначала найди, покажи пользователю варианты, дождись его выбора.
+7.  **Работа с контактами:** Если пользователь выбирает контакт без email для создания события, ты должен явно спросить у пользователя этот email.
+8.  **Контекст:** Ты должен анализировать ВЕСЬ предыдущий диалог, чтобы понимать текущий контекст.
+9.  **Дата и время:** Всегда учитывай текущую дату: ${new Date().toLocaleDateString('ru-RU')}.
+10. **Проактивные предложения:** После успешного выполнения основного действия (например, создания встречи), всегда предлагай релевантные последующие шаги.
+11. **Интерактивные ответы:** Если ты задаешь пользователю вопрос, по возможности предлагай 2-4 наиболее вероятных варианта быстрого ответа в формате \`[QUICK_REPLY] Текст ответа\`.
+`;
 };
 
 
 export const callGemini = async ({
     prompt,
     history,
-    serviceProvider,
-    supabaseService,
+    serviceProviders,
+    serviceMap,
     isGoogleConnected,
-    isSupabaseEnabled,
     image,
     apiKey
 }) => {
@@ -258,17 +322,14 @@ export const callGemini = async ({
         contents.push({ role: 'user', parts: userParts });
     }
     
-    let availableTools = [...baseTools];
-    // Supabase tools are now part of base tools, logic is handled in the switch case
-    
-    const toolsConfig = (isGoogleConnected) ? { functionDeclarations: availableTools } : undefined;
+    const toolsConfig = (isGoogleConnected) ? { functionDeclarations: baseTools } : undefined;
 
     try {
         const response = await ai.models.generateContent({
             model: GEMINI_MODEL,
             contents,
             config: {
-                systemInstruction: getSystemInstruction(isSupabaseEnabled),
+                systemInstruction: getSystemInstruction(serviceMap),
                 tools: toolsConfig ? [toolsConfig] : undefined,
             },
         });
@@ -276,223 +337,161 @@ export const callGemini = async ({
         const firstCandidate = response.candidates?.[0];
         const functionCall = firstCandidate?.content?.parts?.[0]?.functionCall;
 
-        if (functionCall && serviceProvider) {
+        if (functionCall && isGoogleConnected) {
             const { name, args } = functionCall;
             let resultMessage = {
                 id: Date.now().toString(),
                 sender: MessageSender.ASSISTANT,
                 text: '',
                 card: null,
-                functionCallName: name, // Add function name for stats tracking
+                functionCallName: name,
             };
 
-            switch (name) {
-                case 'create_calendar_event': {
-                    const result = await serviceProvider.createEvent(args);
-                    const attendeesEmails = result.attendees?.map(a => a.email) || [];
-                    
-                    const eventActions = [
-                        { label: 'Открыть в Календаре', url: result.htmlLink }
-                    ];
+            // Dynamic provider selection
+            const getProvider = (type) => {
+                const providerId = serviceMap[type];
+                const provider = serviceProviders[providerId];
+                if (!provider) throw new Error(`Provider "${providerId}" for type "${type}" not found.`);
+                return provider;
+            };
 
-                    if (attendeesEmails.length > 0 && result.hangoutLink) {
-                        eventActions.push({
-                            label: 'Отправить ссылку участникам',
-                            action: 'send_meeting_link',
-                            payload: { 
-                                to: attendeesEmails,
-                                subject: `Приглашение на встречу: ${result.summary}`,
-                                body: `Присоединяйтесь к встрече "${result.summary}": <a href="${result.hangoutLink}">${result.hangoutLink}</a>`
-                            }
-                        });
-                    }
-
-                    eventActions.push({
-                        label: 'Создать задачу "Подготовиться"',
-                        action: 'create_prep_task',
-                        payload: {
-                            title: `Подготовиться к встрече: "${result.summary}"`,
-                            notes: `Встреча запланирована на ${new Date(result.start.dateTime).toLocaleString('ru-RU')}. Ссылка: ${result.hangoutLink || 'Нет'}`
+            try {
+                switch (name) {
+                    case 'get_calendar_events': {
+                        const provider = serviceProviders.google;
+                        const results = await provider.getCalendarEvents(args);
+                        if (results && results.length > 0) {
+                            resultMessage.text = "Вот ваше ближайшее расписание:";
+                            resultMessage.card = createCalendarViewCard(results);
+                        } else {
+                            resultMessage.text = "На выбранный период событий в календаре не найдено.";
                         }
-                    });
-
-                    resultMessage.text = `Событие "${result.summary}" успешно создано! Что дальше?`;
-                    resultMessage.card = {
-                        type: 'event',
-                        icon: 'CalendarIcon',
-                        title: result.summary,
-                        details: {
-                            'Время': new Date(result.start.dateTime).toLocaleString('ru-RU'),
-                            'Участники': attendeesEmails.join(', ') || 'Нет',
-                            'Видеовстреча': result.hangoutLink ? `<a href="${result.hangoutLink}" target="_blank" class="text-blue-400 hover:underline">Присоединиться</a>` : 'Нет',
-                        },
-                        actions: eventActions,
-                        shareableLink: result.hangoutLink,
-                        shareText: `Присоединяйтесь к встрече "${result.summary}": ${result.hangoutLink}`,
-                    };
-                    break;
-                }
-                case 'find_contacts': {
-                    const results = isSupabaseEnabled && supabaseService
-                        ? await supabaseService.searchContacts(args.query)
-                        : await serviceProvider.findContacts(args.query);
-
-                    if (results.length === 1) {
-                        const person = results[0];
-                        resultMessage.text = `Найден контакт: ${person.display_name}. Что вы хотите сделать?`;
-                        resultMessage.card = {
-                            type: 'contact',
-                            icon: 'UsersIcon',
-                            title: 'Карточка контакта',
-                            person: person,
-                        };
-                    } else if (results.length > 1) {
-                        resultMessage.text = `Я нашел несколько контактов по вашему запросу. Пожалуйста, выберите нужный:`;
-                        resultMessage.card = {
-                            type: 'contact_choice',
-                            icon: 'UsersIcon',
-                            title: 'Выберите контакт',
-                            options: results
-                        };
-                    } else {
-                        resultMessage.text = `К сожалению, я не нашел контактов по запросу "${args.query}".`;
+                        break;
                     }
-                    break;
-                }
-                case 'perform_contact_action': {
-                    const results = isSupabaseEnabled && supabaseService
-                        ? await supabaseService.searchContacts(args.query)
-                        : await serviceProvider.findContacts(args.query);
-                    
-                     if (results.length === 1) {
-                        const person = results[0];
-                        const actionText = args.action === 'call' ? 'позвонить' : 'написать';
-                        resultMessage.text = `Готовы ${actionText} контакту ${person.display_name}.`;
-                        resultMessage.card = {
-                            type: 'direct_action_card',
-                            icon: args.action === 'call' ? 'PhoneIcon' : 'EmailIcon',
-                            title: `Выполнить действие: ${actionText}`,
-                            person: person,
-                            action: args.action,
-                        };
-                    } else if (results.length > 1) {
-                        const actionText = args.action === 'call' ? 'позвонить' : 'написать';
-                        resultMessage.text = `Я нашел несколько контактов. Кому вы хотите ${actionText}?`;
-                        resultMessage.card = {
-                            type: 'contact_choice',
-                            icon: 'UsersIcon',
-                            title: `Кому ${actionText}?`,
-                            options: results
-                        };
-                    } else {
-                        resultMessage.text = `К сожалению, я не нашел контактов по запросу "${args.query}".`;
+                    case 'get_tasks': {
+                        const provider = serviceProviders.google;
+                        const results = await provider.getTasks(args);
+                         if (results && results.length > 0) {
+                            resultMessage.text = "Вот ваши активные задачи:";
+                            resultMessage.card = createTasksViewCard(results);
+                        } else {
+                            resultMessage.text = "У вас нет активных задач. Отличная работа!";
+                        }
+                        break;
                     }
-                    break;
-                }
-                case 'find_documents': {
-                    const results = isSupabaseEnabled && supabaseService
-                        ? await supabaseService.searchFiles(args.query)
-                        : await serviceProvider.findDocuments(args.query);
-                    
-                    // Normalize data structure for the card
-                    const normalizedResults = results.map(doc => ({
-                        name: doc.name,
-                        url: doc.url || doc.webViewLink,
-                        icon_link: doc.icon_link || doc.iconLink,
-                        source_id: doc.source_id || doc.id
-                    }));
+                    case 'get_recent_emails': {
+                        const provider = serviceProviders.google;
+                        const results = await provider.getRecentEmails(args);
+                         if (results && results.length > 0) {
+                            resultMessage.text = `Вот последние ${results.length} писем:`;
+                            resultMessage.card = createEmailsViewCard(results);
+                        } else {
+                            resultMessage.text = "Ваш почтовый ящик пуст.";
+                        }
+                        break;
+                    }
+                    case 'create_calendar_event': {
+                        const provider = getProvider('calendar');
+                        const result = await provider.createEvent(args);
+                        const attendeesEmails = result.attendees?.map(a => a.email) || [];
+                        const eventActions = [
+                            { label: 'Открыть в Календаре', url: result.htmlLink }
+                        ];
+                        if (attendeesEmails.length > 0 && result.hangoutLink) {
+                            eventActions.push({
+                                label: 'Отправить ссылку участникам',
+                                action: 'send_meeting_link',
+                                payload: { to: attendeesEmails, subject: `Приглашение на встречу: ${result.summary}`, body: `Присоединяйтесь к встрече "${result.summary}": <a href="${result.hangoutLink}">${result.hangoutLink}</a>` }
+                            });
+                        }
+                        eventActions.push({
+                            label: 'Создать задачу "Подготовиться"',
+                            action: 'create_prep_task',
+                            payload: { title: `Подготовиться к встрече: "${result.summary}"`, notes: `Встреча запланирована на ${new Date(result.start.dateTime).toLocaleString('ru-RU')}.` }
+                        });
+                        resultMessage.text = `Событие "${result.summary}" успешно создано! Что дальше?`;
+                        resultMessage.card = { type: 'event', icon: 'CalendarIcon', title: result.summary, details: { 'Время': new Date(result.start.dateTime).toLocaleString('ru-RU'), 'Участники': attendeesEmails.join(', ') || 'Нет', 'Видеовстреча': result.hangoutLink ? `<a href="${result.hangoutLink}" target="_blank" class="text-blue-400 hover:underline">Присоединиться</a>` : 'Нет', }, actions: eventActions, shareableLink: result.hangoutLink, shareText: `Присоединяйтесь к встрече "${result.summary}": ${result.hangoutLink}`};
+                        break;
+                    }
+                    case 'find_contacts':
+                    case 'perform_contact_action': {
+                        const provider = getProvider('contacts');
+                        const results = await provider.findContacts(args.query);
 
-                    if (normalizedResults.length > 0) {
-                        resultMessage.text = `Вот документы, которые я нашел. Какой из них использовать?`;
-                        resultMessage.card = {
-                            type: 'document_choice',
-                            icon: 'FileIcon',
-                            title: 'Выберите документ',
-                            options: normalizedResults,
-                        };
-                    } else {
-                        resultMessage.text = `Не удалось найти документы по запросу "${args.query}".`;
-                        resultMessage.card = {
-                            type: 'document_prompt',
-                            icon: 'FileIcon',
-                            title: 'Документ не найден',
-                            text: 'Хотите создать новый документ в Google Drive?',
-                            actions: [
-                                { label: 'Создать Google Doc', action: 'create_document_prompt', payload: { type: 'doc', query: args.query } },
-                            ]
-                        };
+                        if (results.length === 1) {
+                            const person = results[0];
+                            if (name === 'perform_contact_action') {
+                                const actionText = args.action === 'call' ? 'позвонить' : 'написать';
+                                resultMessage.text = `Готовы ${actionText} контакту ${person.display_name}.`;
+                                resultMessage.card = { type: 'direct_action_card', icon: args.action === 'call' ? 'PhoneIcon' : 'EmailIcon', title: `Выполнить действие: ${actionText}`, person: person, action: args.action };
+                            } else {
+                                resultMessage.text = `Найден контакт: ${person.display_name}. Что вы хотите сделать?`;
+                                resultMessage.card = { type: 'contact', icon: 'UsersIcon', title: 'Карточка контакта', person: person };
+                            }
+                        } else if (results.length > 1) {
+                            const actionText = name === 'perform_contact_action' ? (args.action === 'call' ? 'позвонить' : 'написать') : null;
+                            resultMessage.text = `Я нашел несколько контактов. ${actionText ? `Кому вы хотите ${actionText}?` : 'Пожалуйста, выберите нужный:'}`;
+                            resultMessage.card = { type: 'contact_choice', icon: 'UsersIcon', title: `${actionText ? `Кому ${actionText}?` : 'Выберите контакт'}`, options: results };
+                        } else {
+                            resultMessage.text = `К сожалению, я не нашел контактов по запросу "${args.query}".`;
+                        }
+                        break;
                     }
-                    break;
+                    case 'find_documents': {
+                        const provider = getProvider('files');
+                        const results = await provider.findDocuments(args.query);
+                        const normalizedResults = results.map(doc => ({ name: doc.name, url: doc.url || doc.webViewLink, icon_link: doc.icon_link || doc.iconLink, source_id: doc.source_id || doc.id }));
+                        if (normalizedResults.length > 0) {
+                            resultMessage.text = `Вот документы, которые я нашел. Какой из них использовать?`;
+                            resultMessage.card = { type: 'document_choice', icon: 'FileIcon', title: 'Выберите документ', options: normalizedResults };
+                        } else {
+                            resultMessage.text = `Не удалось найти документы по запросу "${args.query}".`;
+                        }
+                        break;
+                    }
+                    case 'create_note': {
+                        const provider = getProvider('notes');
+                        const result = await provider.createNote(args);
+                        resultMessage.text = `Заметка "${result.title || 'Без названия'}" успешно создана в ${provider.getName()}.`;
+                        resultMessage.card = createNoteCard(result, provider.getName());
+                        break;
+                    }
+                     case 'create_google_doc':
+                     case 'create_google_sheet':
+                     case 'create_google_doc_with_content': {
+                        const provider = serviceProviders.google; // These are Google specific
+                        let result;
+                        if (name === 'create_google_sheet') {
+                            result = await provider.createGoogleSheet(args.title);
+                        } else if (name === 'create_google_doc_with_content') {
+                            result = await provider.createGoogleDocWithContent(args.title, args.content);
+                        } else {
+                            result = await provider.createGoogleDoc(args.title);
+                        }
+                        const docType = result.mimeType.includes('spreadsheet') ? 'Таблица' : 'Документ';
+                        resultMessage.text = `${docType} "${result.name}" успешно создан.`;
+                        resultMessage.card = { type: 'document', icon: 'FileIcon', title: result.name, details: { 'Тип': `Google ${docType}` }, actions: [{ label: 'Открыть документ', url: result.webViewLink }]};
+                        break;
+                     }
+                     case 'create_task': {
+                        const provider = serviceProviders.google;
+                        const result = await provider.createTask(args);
+                        resultMessage.text = `Задача "${result.title}" успешно создана.`;
+                        resultMessage.card = { type: 'task', icon: 'CheckSquareIcon', title: 'Задача создана', details: { 'Название': result.title, 'Статус': 'Нужно выполнить' }, actions: [{ label: 'Открыть в Google Tasks', url: 'https://tasks.google.com/embed/list/~default', target: '_blank' }]};
+                        break;
+                    }
+                    case 'send_email': {
+                        const provider = serviceProviders.google;
+                        await provider.sendEmail(args);
+                        resultMessage.text = `Письмо на тему "${args.subject}" успешно отправлено получателям: ${args.to.join(', ')}.`;
+                        break;
+                    }
+                    default:
+                        resultMessage.text = `Неизвестный вызов функции: ${name}`;
                 }
-                case 'propose_document_with_content': {
-                    resultMessage.text = `Я подготовил краткое содержание нашего обсуждения. Хотите добавить его в новый документ "${args.title}"?`;
-                    resultMessage.card = {
-                        type: 'document_creation_proposal',
-                        icon: 'FileIcon',
-                        title: `Создать документ: ${args.title}`,
-                        summary: args.summary,
-                        actions: [
-                            { label: 'Создать с содержанием', action: 'create_doc_with_content', payload: { title: args.title, content: args.summary } },
-                            { label: 'Создать пустой', action: 'create_empty_doc', payload: { title: args.title } },
-                        ]
-                    };
-                    break;
-                }
-                 case 'create_google_doc':
-                 case 'create_google_sheet': {
-                    const isSheet = name === 'create_google_sheet';
-                    const result = isSheet 
-                        ? await serviceProvider.createGoogleSheet(args.title)
-                        : await serviceProvider.createGoogleDoc(args.title);
-                    
-                    resultMessage.text = `${isSheet ? 'Таблица' : 'Документ'} "${result.name}" успешно создан.`;
-                    resultMessage.card = {
-                        type: 'document',
-                        icon: 'FileIcon',
-                        title: result.name,
-                        details: {
-                            'Тип': result.mimeType.includes('spreadsheet') ? 'Google Таблица' : 'Google Документ',
-                        },
-                        actions: [{ label: 'Открыть документ', url: result.webViewLink }],
-                    };
-                    break;
-                 }
-                 case 'create_google_doc_with_content': {
-                    const result = await serviceProvider.createGoogleDocWithContent(args.title, args.content);
-                    resultMessage.text = `Документ "${result.name}" с вашими заметками успешно создан.`;
-                    resultMessage.card = {
-                        type: 'document',
-                        icon: 'FileIcon',
-                        title: result.name,
-                        details: {
-                            'Тип': 'Google Документ',
-                        },
-                        actions: [{ label: 'Открыть документ', url: result.webViewLink }],
-                    };
-                    break;
-                 }
-                 case 'create_task': {
-                    const result = await serviceProvider.createTask(args);
-                    resultMessage.text = `Задача "${result.title}" успешно создана.`;
-                    resultMessage.card = {
-                        type: 'task',
-                        icon: 'CheckSquareIcon',
-                        title: 'Задача создана',
-                        details: {
-                            'Название': result.title,
-                            'Статус': 'Нужно выполнить',
-                        },
-                        actions: [{ label: 'Открыть в Google Tasks', url: 'https://tasks.google.com/embed/list/~default', target: '_blank' }]
-                    };
-                    break;
-                }
-                case 'send_email': {
-                    await serviceProvider.sendEmail(args);
-                    resultMessage.text = `Письмо на тему "${args.subject}" успешно отправлено получателям: ${args.to.join(', ')}.`;
-                    break;
-                }
-                default:
-                    resultMessage.text = `Неизвестный вызов функции: ${name}`;
+            } catch (error) {
+                 console.error(`Error executing tool ${name}:`, error);
+                 resultMessage = { sender: MessageSender.SYSTEM, text: `Произошла ошибка при выполнении действия: ${error.message}` };
             }
             return resultMessage;
         }

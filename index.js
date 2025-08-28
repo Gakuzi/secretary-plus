@@ -1,4 +1,7 @@
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
+import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
+import { YandexServiceProvider } from './services/yandex/YandexServiceProvider.js';
+import { OutlookServiceProvider } from './services/outlook/OutlookServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
 import { callGemini } from './services/geminiService.js';
 import { getSettings, saveSettings } from './utils/storage.js';
@@ -31,7 +34,19 @@ let state = {
 
 // --- SERVICE INSTANCES ---
 const googleProvider = new GoogleServiceProvider();
+const appleProvider = new AppleServiceProvider();
+const yandexProvider = new YandexServiceProvider();
+const outlookProvider = new OutlookServiceProvider();
 let supabaseService = null;
+
+const serviceProviders = {
+    google: googleProvider,
+    apple: appleProvider,
+    yandex: yandexProvider,
+    outlook: outlookProvider,
+    supabase: null, // Will be populated with supabaseService instance
+};
+
 
 // --- DOM ELEMENTS ---
 const authContainer = document.getElementById('auth-container');
@@ -113,6 +128,7 @@ async function initializeSupabase() {
                 return; 
             }
             supabaseService = new SupabaseService(supabaseUrl, supabaseAnonKey);
+            serviceProviders.supabase = supabaseService;
             state.isSupabaseConfigured = true;
 
             supabaseService.onAuthStateChange((event, session) => {
@@ -126,9 +142,11 @@ async function initializeSupabase() {
             console.error("Supabase initialization failed:", error);
             state.isSupabaseConfigured = false;
             supabaseService = null;
+            serviceProviders.supabase = null;
         }
     } else {
         supabaseService = null;
+        serviceProviders.supabase = null;
         state.isSupabaseConfigured = false;
         if (state.isGoogleConnected && state.settings.isSupabaseEnabled) {
              await updateSupabaseAuthState(null); // Clear auth if Supabase was logged in but now disabled/unconfigured
@@ -196,6 +214,7 @@ async function initializeAppServices() {
     state.isSupabaseConfigured = false;
     state.isGoogleConnected = false;
     supabaseService = null;
+    serviceProviders.supabase = null;
 
     if (state.settings.isSupabaseEnabled) {
         await initializeSupabase();
@@ -260,10 +279,9 @@ async function processBotResponse(prompt, image = null) {
         const response = await callGemini({
             prompt,
             history: state.messages.slice(0, -1),
-            serviceProvider: googleProvider,
-            supabaseService,
+            serviceProviders,
+            serviceMap: state.settings.serviceMap,
             isGoogleConnected: state.isGoogleConnected,
-            isSupabaseEnabled: state.settings.isSupabaseEnabled,
             image,
             apiKey: state.settings.geminiApiKey
         });

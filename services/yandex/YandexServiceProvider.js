@@ -28,5 +28,10 @@ export class YandexServiceProvider {
     findDocuments(query) {
         return Promise.reject(new Error("Yandex Service Provider не реализован."));
     }
-    // Specific methods can be added later
+    createNote(details) {
+        return Promise.reject(new Error("Yandex Service Provider не реализован."));
+    }
+    findNotes(query) {
+        return Promise.reject(new Error("Yandex Service Provider не реализован."));
+    }
 }

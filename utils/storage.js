@@ -1,4 +1,4 @@
-const SETTINGS_KEY = 'secretary-plus-settings-v3';
+const SETTINGS_KEY = 'secretary-plus-settings-v4';
 
 const defaultSettings = {
     supabaseUrl: '',
@@ -7,6 +7,12 @@ const defaultSettings = {
     isSupabaseEnabled: true,
     isGoogleEnabled: true,
     googleClientId: '',
+    serviceMap: {
+        calendar: 'google',
+        contacts: 'google',
+        files: 'google',
+        notes: 'supabase',
+    },
 };
 
 export function getSettings() {
@@ -14,7 +20,9 @@ export function getSettings() {
         const savedSettings = localStorage.getItem(SETTINGS_KEY);
         if (savedSettings) {
             const parsed = JSON.parse(savedSettings);
-            return { ...defaultSettings, ...parsed };
+            // Ensure serviceMap exists and has all keys
+            const serviceMap = { ...defaultSettings.serviceMap, ...(parsed.serviceMap || {}) };
+            return { ...defaultSettings, ...parsed, serviceMap };
         }
     } catch (error) {
         console.error("Failed to parse settings from localStorage", error);

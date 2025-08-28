@@ -100,6 +100,21 @@ export class GoogleServiceProvider {
         };
     }
 
+    async getCalendarEvents({ time_min, time_max, max_results = 10 }) {
+        await this.ensureGapiIsReady();
+        await this.gapi.client.load('calendar', 'v3');
+        const response = await this.gapi.client.calendar.events.list({
+            'calendarId': 'primary',
+            'timeMin': time_min || (new Date()).toISOString(),
+            'timeMax': time_max,
+            'showDeleted': false,
+            'singleEvents': true,
+            'maxResults': max_results,
+            'orderBy': 'startTime'
+        });
+        return response.result.items;
+    }
+
     async createEvent(details) {
         await this.ensureGapiIsReady();
         await this.gapi.client.load('calendar', 'v3');
@@ -269,6 +284,17 @@ export class GoogleServiceProvider {
         return response.result;
     }
 
+    async getTasks({ max_results = 20 }) {
+        await this.ensureGapiIsReady();
+        await this.gapi.client.load('tasks', 'v1');
+        const response = await this.gapi.client.tasks.tasks.list({
+            tasklist: '@default',
+            maxResults: max_results,
+            showCompleted: false,
+        });
+        return response.result.items || [];
+    }
+
     async createTask(details) {
         await this.ensureGapiIsReady();
         await this.gapi.client.load('tasks', 'v1');
@@ -282,6 +308,47 @@ export class GoogleServiceProvider {
             resource: task,
         });
         return response.result;
+    }
+
+    async getRecentEmails({ max_results = 5 }) {
+        await this.ensureGapiIsReady();
+        await this.gapi.client.load('gmail', 'v1');
+
+        const listResponse = await this.gapi.client.gmail.users.messages.list({
+            'userId': 'me',
+            'maxResults': max_results
+        });
+
+        const messages = listResponse.result.messages || [];
+        if (messages.length === 0) {
+            return [];
+        }
+
+        const batch = this.gapi.client.newBatch();
+        messages.forEach(message => {
+            batch.add(this.gapi.client.gmail.users.messages.get({
+                'userId': 'me',
+                'id': message.id,
+                'format': 'metadata',
+                'metadataHeaders': ['Subject', 'From', 'Date']
+            }));
+        });
+        
+        const batchResponse = await batch;
+        
+        return Object.values(batchResponse.result).map(res => {
+            const payload = res.result;
+            const headers = payload.payload.headers;
+            const getHeader = (name) => headers.find(h => h.name === name)?.value || '';
+
+            return {
+                id: payload.id,
+                snippet: payload.snippet,
+                subject: getHeader('Subject'),
+                from: getHeader('From'),
+                date: getHeader('Date'),
+            };
+        });
     }
 
     async sendEmail(details) {
@@ -308,5 +375,15 @@ export class GoogleServiceProvider {
 
         const response = await request;
         return response.result;
+    }
+
+    // --- Notes using Google Docs ---
+    async createNote(details) {
+        return this.createGoogleDocWithContent(details.title, details.content);
+    }
+
+    async findNotes(query) {
+        // Find documents which can be considered notes
+        return this.findDocuments(query);
     }
 }
