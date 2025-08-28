@@ -1,10 +1,16 @@
 import { createMessageElement } from './Message.js';
 import { MicrophoneIcon, SendIcon, CameraIcon, LockIcon, TrashIcon, AttachmentIcon } from './icons/Icons.js';
 import { SpeechRecognizer } from '../utils/speech.js';
-import * as pdfjsLib from 'pdfjs-dist';
+
+// Get pdf.js from the global scope, as it's now loaded via a <script> tag.
+const { pdfjsLib } = window;
 
 // Set worker path for pdf.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js`;
+if (pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js`;
+} else {
+    console.error("pdf.js library not found. PDF functionality will be disabled.");
+}
 
 
 // Module-level variables
@@ -42,6 +48,11 @@ async function handleFileSelect(file) {
         };
         reader.readAsDataURL(file);
     } else if (file.type === 'application/pdf') {
+        if (!pdfjsLib) {
+            alert('Библиотека для чтения PDF не загружена. Функция недоступна.');
+            return;
+        }
+
         const originalPlaceholder = chatInput.placeholder;
         chatInput.placeholder = `Обработка PDF: ${file.name}...`;
         chatInput.disabled = true;

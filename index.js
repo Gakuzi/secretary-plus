@@ -115,7 +115,7 @@ if (!window.isSecretaryPlusAppInitialized) {
                 isGoogleConnected: state.isGoogleConnected,
                 isSupabaseEnabled: state.settings.isSupabaseEnabled,
             }));
-            renderContextualActions(null); // Clear contextual actions on welcome screen
+            renderContextualActions(undefined); 
         } else {
             state.messages.forEach(msg => addMessageToChat(msg));
         }
