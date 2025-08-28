@@ -2,6 +2,7 @@ const SETTINGS_KEY = 'secretary-plus-settings';
 
 const defaultSettings = {
     googleClientId: '',
+    geminiApiKey: '',
     activeProviderId: 'google',
 };
 

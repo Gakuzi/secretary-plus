@@ -109,16 +109,23 @@ const systemInstruction = `Ты — «Секретарь+», проактивн�
 8.  **Мультимодальность:** Если пользователь прислал изображение, проанализируй его и используй в ответе. Если к изображению есть текстовый запрос, отвечай на него с учетом картинки.`;
 
 
-// Initialize the AI client once. It will use the environment variable for the API key.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export const callGemini = async (
     prompt,
     history,
     serviceProvider,
     isUnsupportedDomain,
-    image
+    image,
+    apiKey
 ) => {
+    if (!apiKey) {
+        return {
+            id: Date.now().toString(),
+            sender: MessageSender.SYSTEM,
+            text: "Ошибка: Ключ Gemini API не предоставлен. Пожалуйста, добавьте его в настройках.",
+        };
+    }
+    const ai = new GoogleGenAI({ apiKey });
+
     // Convert message history to Gemini's format
     const contents = history.map(msg => {
         const role = msg.sender === MessageSender.USER ? 'user' : 'model';

@@ -14,6 +14,7 @@ import { MessageSender } from './types.js';
 let state = {
     settings: {
         googleClientId: '',
+        geminiApiKey: '',
         activeProviderId: 'google',
     },
     messages: [],
@@ -90,6 +91,12 @@ function render() {
 
 async function handleSendMessage(prompt, image = null) {
     if (state.isLoading || (!prompt && !image)) return;
+
+    if (!state.settings.geminiApiKey) {
+        const errorMessage = { sender: MessageSender.SYSTEM, text: "Ошибка: Ключ Gemini API не указан. Пожалуйста, добавьте его в настройках (иконка шестеренки в правом верхнем углу)." };
+        addMessageToChat(errorMessage);
+        return;
+    }
     
     // Если это первое сообщение, очистим приветственный экран
     if (state.messages.length === 0) {
@@ -110,7 +117,8 @@ async function handleSendMessage(prompt, image = null) {
             state.messages.slice(0, -1),
             activeProvider,
             isUnsupportedDomain,
-            image
+            image,
+            state.settings.geminiApiKey
         );
         state.messages.push(response);
         addMessageToChat(response);

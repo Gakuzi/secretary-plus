@@ -11,7 +11,7 @@ export function createSettingsModal(currentSettings, providers, onSave, onClose)
                 <button id="close-settings" class="p-1 rounded-full hover:bg-gray-700">&times;</button>
             </div>
 
-            <div class="space-y-4">
+            <div class="space-y-6">
                 <div>
                     <h3 class="text-lg font-semibold mb-2">Провайдеры</h3>
                     <select id="provider-select" class="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2">
@@ -32,7 +32,14 @@ export function createSettingsModal(currentSettings, providers, onSave, onClose)
                     </div>
                 </div>
 
-                <div class="flex justify-end pt-4">
+                <div>
+                    <h3 class="text-lg font-semibold mb-2">Gemini API</h3>
+                    <label for="gemini-api-key" class="block text-sm font-medium text-gray-300 mb-1">Gemini API Key</label>
+                    <input type="password" id="gemini-api-key" class="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value="${currentSettings.geminiApiKey || ''}">
+                    <p class="text-xs text-gray-400 mt-1">Ваш ключ хранится локально и никогда не передается на сервер. Получить ключ можно в <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Google AI Studio</a>.</p>
+                </div>
+
+                <div class="flex justify-end pt-4 border-t border-gray-700">
                     <button id="save-settings" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold">Сохранить</button>
                 </div>
             </div>
@@ -56,6 +63,7 @@ export function createSettingsModal(currentSettings, providers, onSave, onClose)
     saveButton.addEventListener('click', () => {
         const newSettings = {
             googleClientId: modalOverlay.querySelector('#google-client-id').value,
+            geminiApiKey: modalOverlay.querySelector('#gemini-api-key').value,
             activeProviderId: providerSelect.value,
         };
         onSave(newSettings);
