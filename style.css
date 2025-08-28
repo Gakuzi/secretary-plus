@@ -183,6 +183,38 @@ body {
     opacity: 1;
 }
 
+/* --- Welcome Screen Action Cards --- */
+.welcome-action-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background-color: var(--background-light);
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, transform 0.2s;
+}
+.welcome-action-card:hover {
+  background-color: #374151; /* gray-700 */
+  border-color: #4b5563; /* gray-600 */
+  transform: translateY(-2px);
+}
+.welcome-action-icon {
+  flex-shrink: 0;
+  width: 3rem; /* 48px */
+  height: 3rem; /* 48px */
+  border-radius: 0.5rem; /* 8px */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.welcome-action-icon svg {
+  width: 1.5rem; /* 24px */
+  height: 1.5rem; /* 24px */
+}
+
+
 /* --- NEW ADAPTIVE TELEGRAM-STYLE VOICE INPUT --- */
 #input-bar-wrapper {
   position: relative;

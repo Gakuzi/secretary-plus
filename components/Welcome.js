@@ -1,4 +1,4 @@
-import { GoogleIcon, SupabaseIcon } from './icons/Icons.js';
+import { GoogleIcon, SupabaseIcon, CalendarIcon, FileIcon, UsersIcon, ChartBarIcon } from './icons/Icons.js';
 
 export function createWelcomeScreen({ isGoogleConnected, isSupabaseEnabled }) {
     const container = document.createElement('div');
@@ -29,33 +29,44 @@ export function createWelcomeScreen({ isGoogleConnected, isSupabaseEnabled }) {
                 </div>
             `;
             
-        const contactExampleHtml = isSupabaseEnabled
+        const contactActionHtml = isSupabaseEnabled
             ? `
-                <div class="bg-gray-800 p-4 rounded-lg">
-                    <h3 class="font-semibold mb-1">👥 Найти контакт</h3>
-                    <p class="text-gray-400">"Какой email у Ивана Петрова?"</p>
+                <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Найди контакт Иван Петров"}'>
+                    <div class="welcome-action-icon bg-green-500/20 text-green-400">${UsersIcon}</div>
+                    <div>
+                        <h3 class="font-semibold text-gray-100">Найти контакт</h3>
+                        <p class="text-sm text-gray-400">Быстрый поиск по базе контактов</p>
+                    </div>
                 </div>
             `
             : '';
 
         container.innerHTML = `
-            <div class="max-w-2xl w-full">
+            <div class="max-w-3xl w-full">
                 ${connectionStatusHtml}
-                <h2 class="text-3xl font-bold mt-6 mb-2">Чем могу помочь?</h2>
-                <p class="text-gray-400 mb-6">Напишите, что вы хотите сделать, или воспользуйтесь примерами ниже.</p>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left text-sm">
-                    <div class="bg-gray-800 p-4 rounded-lg">
-                        <h3 class="font-semibold mb-1">📅 Создать встречу</h3>
-                        <p class="text-gray-400">"Созвон с командой завтра в 15:00 по проекту Альфа"</p>
+                <h2 class="text-3xl font-bold mt-6 mb-4">Чем могу помочь?</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                    <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Что у меня сегодня в календаре?"}'>
+                        <div class="welcome-action-icon bg-blue-500/20 text-blue-400">${CalendarIcon}</div>
+                        <div>
+                            <h3 class="font-semibold text-gray-100">Расписание на сегодня</h3>
+                            <p class="text-sm text-gray-400">Показать все события из календаря</p>
+                        </div>
                     </div>
-                    <div class="bg-gray-800 p-4 rounded-lg">
-                        <h3 class="font-semibold mb-1">📄 Найти документ</h3>
-                        <p class="text-gray-400">"Найди презентацию по итогам квартала"</p>
+                    <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Найди последние 5 измененных документов"}'>
+                        <div class="welcome-action-icon bg-purple-500/20 text-purple-400">${FileIcon}</div>
+                        <div>
+                            <h3 class="font-semibold text-gray-100">Последние документы</h3>
+                            <p class="text-sm text-gray-400">Найти недавние файлы на Диске</p>
+                        </div>
                     </div>
-                    ${contactExampleHtml}
-                    <div class="bg-gray-800 p-4 rounded-lg">
-                        <h3 class="font-semibold mb-1">📝 Создать документ</h3>
-                        <p class="text-gray-400">"Создай документ 'План работ на май'"</p>
+                    ${contactActionHtml}
+                    <div class="welcome-action-card" data-action="show_stats">
+                        <div class="welcome-action-icon bg-yellow-500/20 text-yellow-400">${ChartBarIcon}</div>
+                        <div>
+                            <h3 class="font-semibold text-gray-100">Показать статистику</h3>
+                            <p class="text-sm text-gray-400">Открыть окно статистики</p>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -18,6 +18,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                 <aside class="w-48 border-r border-gray-700 p-4">
                     <nav class="flex flex-col space-y-2">
                         <a href="#connections" class="settings-tab-button active text-left" data-tab="connections">Подключения</a>
+                        <a href="#services" class="settings-tab-button" data-tab="services">Сервисы</a>
                         <a href="#api-keys" class="settings-tab-button" data-tab="api-keys">API Ключи</a>
                         <a href="#sync" class="settings-tab-button" data-tab="sync" ${!currentSettings.isSupabaseEnabled ? 'style="display: none;"' : ''}>Синхронизация</a>
                     </nav>
@@ -105,6 +106,32 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                             </p>
                         </div>
 
+                    </div>
+
+                    <!-- Services Tab -->
+                    <div id="tab-services" class="settings-tab-content space-y-6 hidden">
+                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                            <h3 class="text-lg font-semibold text-gray-200">Провайдер сервисов</h3>
+                            <p class="text-sm text-gray-400">Выберите основной сервис, с которым будет работать ассистент. В данный момент поддерживается только Google.</p>
+                            <div class="space-y-3 pt-2">
+                                <div class="flex items-center">
+                                    <input type="radio" id="provider-google" name="service-provider" value="google" checked class="h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500">
+                                    <label for="provider-google" class="ml-3 block text-sm font-medium text-gray-200">Google</label>
+                                </div>
+                                <div class="flex items-center opacity-50">
+                                    <input type="radio" id="provider-apple" name="service-provider" value="apple" disabled class="h-4 w-4 text-blue-600 bg-gray-800 border-gray-600">
+                                    <label for="provider-apple" class="ml-3 block text-sm font-medium text-gray-500">Apple (скоро)</label>
+                                </div>
+                                <div class="flex items-center opacity-50">
+                                    <input type="radio" id="provider-outlook" name="service-provider" value="outlook" disabled class="h-4 w-4 text-blue-600 bg-gray-800 border-gray-600">
+                                    <label for="provider-outlook" class="ml-3 block text-sm font-medium text-gray-500">Outlook (скоро)</label>
+                                </div>
+                                <div class="flex items-center opacity-50">
+                                    <input type="radio" id="provider-yandex" name="service-provider" value="yandex" disabled class="h-4 w-4 text-blue-600 bg-gray-800 border-gray-600">
+                                    <label for="provider-yandex" class="ml-3 block text-sm font-medium text-gray-500">Yandex (скоро)</label>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- API Keys Tab -->

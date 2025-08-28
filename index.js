@@ -448,6 +448,19 @@ async function init() {
         const settingsButtonFromWelcome = e.target.closest('#open-settings-from-welcome');
         if (settingsButtonFromWelcome) {
             showSettings();
+            return;
+        }
+
+        const welcomeActionButton = e.target.closest('.welcome-action-card');
+        if (welcomeActionButton) {
+            const action = welcomeActionButton.dataset.action;
+            const payload = welcomeActionButton.dataset.payload ? JSON.parse(welcomeActionButton.dataset.payload) : {};
+
+            if (action === 'welcome_prompt' && payload.prompt) {
+                handleSendMessage(payload.prompt);
+            } else if (action === 'show_stats') {
+                showStatsModal();
+            }
         }
     });
 
