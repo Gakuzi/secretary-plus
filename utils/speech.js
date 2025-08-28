@@ -1,7 +1,7 @@
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 export class SpeechRecognizer {
-    constructor(onResult, onAutoEnd, onError) {
+    constructor(onResult, onEnd, onError) {
         if (!SpeechRecognition) {
             console.warn("Speech Recognition API is not supported in this browser.");
             this.isSupported = false;
@@ -17,11 +17,14 @@ export class SpeechRecognizer {
         this.finalTranscript = '';
 
         this.onResult = onResult;
-        this.onAutoEnd = onAutoEnd;
+        this.onEnd = onEnd; // Changed from onAutoEnd
         this.onError = onError;
 
         this.recognition.onresult = (event) => {
             let interimTranscript = '';
+            // Reset final transcript at the beginning of a new result set
+            this.finalTranscript = event.results[0].isFinal ? '' : this.finalTranscript; 
+            
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
                     this.finalTranscript += event.results[i][0].transcript;
@@ -29,15 +32,15 @@ export class SpeechRecognizer {
                     interimTranscript += event.results[i][0].transcript;
                 }
             }
+            // Always provide the combined transcript for a live preview
             this.onResult(this.finalTranscript + interimTranscript);
         };
 
         this.recognition.onend = () => {
-            if (this.isListening && !this.manualStop) {
-                this.onAutoEnd(this.finalTranscript);
+            if (this.isListening) { // Trigger onEnd whenever recognition stops
+                this.onEnd(this.finalTranscript);
             }
             this.isListening = false;
-            this.finalTranscript = '';
         };
 
         this.recognition.onerror = (event) => {
@@ -58,5 +61,6 @@ export class SpeechRecognizer {
         if (!this.isSupported || !this.isListening) return;
         this.manualStop = true;
         this.recognition.stop();
+        // onend will be called automatically, which then calls this.onEnd
     }
 }

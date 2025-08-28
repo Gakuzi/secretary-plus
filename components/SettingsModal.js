@@ -42,12 +42,27 @@ CREATE POLICY "Allow users to manage their own contacts" ON public.contacts FOR 
 CREATE POLICY "Allow users to manage their own files" ON public.files FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 `;
 
+const renderServiceConnection = (serviceName, isConnected, userEmail, content) => {
+    return `
+        <div class="flex items-center gap-3">
+            <span class="w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-500'}"></span>
+            <div>
+                <p class="font-semibold">${serviceName}</p>
+                <p class="text-sm">Статус: <span class="font-semibold">${isConnected ? `Подключено` : 'Не подключено'}</span></p>
+                ${isConnected && userEmail ? `<p class="text-xs text-gray-400">(${userEmail})</p>` : ''}
+            </div>
+        </div>
+        ${content}
+    `;
+};
+
+
 export function createSettingsModal(currentSettings, authState, onSave, onClose, googleProvider, supabaseService) {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
 
     modalOverlay.innerHTML = `
-        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4" id="settings-content">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col m-4" id="settings-content">
             <header class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
                 <h2 class="text-2xl font-bold flex items-center gap-2">${SettingsIcon} Настройки</h2>
                 <button id="close-settings" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Закрыть настройки">&times;</button>
@@ -65,35 +80,77 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                     
                     <!-- Connections Tab -->
                     <div id="tab-connections" class="settings-tab-content space-y-6">
-                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                            <h3 class="text-lg font-semibold text-gray-200">Подключение к Supabase</h3>
-                            <div class="flex items-center gap-3">
-                                <span class="w-3 h-3 rounded-full ${authState.isSupabaseConnected ? 'bg-green-500' : 'bg-red-500'}"></span>
-                                <p class="text-sm">Статус: <span class="font-semibold">${authState.isSupabaseConnected ? `Подключено` : 'Не подключено'}</span></p>
-                                ${authState.supabaseUser ? `<p class="text-xs text-gray-400">(${authState.supabaseUser.email})</p>` : ''}
-                            </div>
-                            <div class="space-y-2">
-                                <label for="supabase-url" class="block text-sm font-medium text-gray-300">Supabase Project URL</label>
-                                <input type="text" id="supabase-url" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.supabaseUrl || ''}">
-                            </div>
-                            <div class="space-y-2">
-                                <label for="supabase-anon-key" class="block text-sm font-medium text-gray-300">Supabase Anon Key</label>
-                                <input type="password" id="supabase-anon-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.supabaseAnonKey || ''}">
-                            </div>
-                            <details class="text-sm text-gray-400">
-                                <summary class="cursor-pointer hover:text-white">Инструкция по настройке</summary>
-                                <div class="mt-2 p-3 bg-gray-900 rounded-md border border-gray-600 space-y-3 text-xs">
-                                    <p>1. Создайте проект в <a href="https://supabase.com/" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Supabase</a>.</p>
-                                    <p>2. Перейдите в <code class="text-amber-300">Project Settings > API</code> и скопируйте URL и Anon Key.</p>
-                                    <p>3. Перейдите в <code class="text-amber-300">SQL Editor</code>, вставьте и выполните скрипт ниже для создания таблиц:</p>
-                                    <div class="relative">
-                                      <pre class="bg-gray-800 p-2 rounded text-gray-300 overflow-auto max-h-32"><code>${sqlSchemaToCopy}</code></pre>
-                                      <button class="copy-sql-button absolute top-2 right-2 px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 rounded transition-colors">Копировать</button>
-                                    </div>
-                                    <p>4. Включите Google Provider в <code class="text-amber-300">Authentication > Providers</code> и настройте его, используя данные из Google Cloud. Подробнее в <a href="./README.md" target="_blank" class="text-blue-400 hover:underline">README</a>.</p>
-                                </div>
-                            </details>
+                        <div class="flex border-b border-gray-700 mb-4">
+                            <button class="service-tab-button active" data-service="supabase">Supabase</button>
+                            <button class="service-tab-button" data-service="google">Google</button>
+                            <button class="service-tab-button" data-service="apple">Apple</button>
+                            <button class="service-tab-button" data-service="microsoft">Microsoft</button>
+                            <button class="service-tab-button" data-service="yandex">Яндекс</button>
                         </div>
+
+                        <div id="service-content-supabase" class="service-content-panel">
+                            <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                                <h3 class="text-lg font-semibold text-gray-200">Подключение к Supabase</h3>
+                                <div class="space-y-2">
+                                    <label for="supabase-url" class="block text-sm font-medium text-gray-300">Supabase Project URL</label>
+                                    <input type="text" id="supabase-url" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.supabaseUrl || ''}">
+                                </div>
+                                <div class="space-y-2">
+                                    <label for="supabase-anon-key" class="block text-sm font-medium text-gray-300">Supabase Anon Key</label>
+                                    <input type="password" id="supabase-anon-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.supabaseAnonKey || ''}">
+                                </div>
+                                <details class="text-sm text-gray-400">
+                                    <summary class="cursor-pointer hover:text-white">Инструкция по настройке</summary>
+                                    <div class="mt-2 p-3 bg-gray-900 rounded-md border border-gray-600 space-y-3 text-xs">
+                                        <p>1. Создайте проект в <a href="https://supabase.com/" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Supabase</a>.</p>
+                                        <p>2. Перейдите в <code class="text-amber-300">Project Settings > API</code> и скопируйте URL и Anon Key.</p>
+                                        <p>3. Перейдите в <code class="text-amber-300">SQL Editor</code>, вставьте и выполните скрипт ниже для создания таблиц:</p>
+                                        <div class="relative">
+                                          <pre class="bg-gray-800 p-2 rounded text-gray-300 overflow-auto max-h-32"><code>${sqlSchemaToCopy}</code></pre>
+                                          <button class="copy-sql-button absolute top-2 right-2 px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 rounded transition-colors">Копировать</button>
+                                        </div>
+                                        <p>4. Включите Google Provider в <code class="text-amber-300">Authentication > Providers</code> и настройте его, используя данные из Google Cloud. Подробнее в <a href="./README.md" target="_blank" class="text-blue-400 hover:underline">README</a>.</p>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+
+                        <div id="service-content-google" class="service-content-panel hidden">
+                           <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                                ${renderServiceConnection('Google', authState.isGoogleConnected, authState.supabaseUser?.email, `
+                                    <p class="text-sm text-gray-400">Подключение к сервисам Google (Календарь, Диск, Контакты) происходит через основной вход в приложение с помощью аккаунта Google.</p>
+                                    <button id="google-auth-action-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md">${authState.isGoogleConnected ? 'Выйти' : 'Войти через Google'}</button>
+                                `)}
+                           </div>
+                        </div>
+                        
+                        <div id="service-content-apple" class="service-content-panel hidden">
+                           <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                                ${renderServiceConnection('Apple / iCloud', false, null, `
+                                    <p class="text-sm text-gray-400">Интеграция с сервисами Apple (Календарь, Напоминания, Контакты) находится в разработке.</p>
+                                    <button disabled class="px-4 py-2 bg-gray-600 rounded-md cursor-not-allowed">Подключить (скоро)</button>
+                                `)}
+                           </div>
+                        </div>
+
+                        <div id="service-content-microsoft" class="service-content-panel hidden">
+                           <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                                ${renderServiceConnection('Microsoft Outlook', false, null, `
+                                    <p class="text-sm text-gray-400">Интеграция с Microsoft Outlook (Календарь, Почта, Задачи) находится в разработке.</p>
+                                    <button disabled class="px-4 py-2 bg-gray-600 rounded-md cursor-not-allowed">Подключить (скоро)</button>
+                                `)}
+                           </div>
+                        </div>
+                        
+                        <div id="service-content-yandex" class="service-content-panel hidden">
+                           <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                                ${renderServiceConnection('Яндекс', false, null, `
+                                    <p class="text-sm text-gray-400">Интеграция с сервисами Яндекса (Календарь, Почта, Диск) находится в разработке.</p>
+                                    <button disabled class="px-4 py-2 bg-gray-600 rounded-md cursor-not-allowed">Подключить (скоро)</button>
+                                `)}
+                           </div>
+                        </div>
+
                     </div>
 
                     <!-- API Keys Tab -->
@@ -121,7 +178,6 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                             ${!authState.isGoogleConnected ? '<p class="text-xs text-yellow-400 text-center">Для синхронизации необходимо войти в аккаунт Google.</p>' : ''}
                         </div>
                     </div>
-
                 </div>
             </main>
 
@@ -147,7 +203,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
         if (e.target === modalOverlay) onClose();
     });
 
-    // Tab switching logic
+    // Main tab switching logic
     const tabButtons = modalOverlay.querySelectorAll('.settings-tab-button');
     const tabContents = modalOverlay.querySelectorAll('.settings-tab-content');
     tabButtons.forEach(button => {
@@ -163,6 +219,23 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             });
         });
     });
+
+    // Service tab switching logic
+    const serviceTabButtons = modalOverlay.querySelectorAll('.service-tab-button');
+    const serviceTabContents = modalOverlay.querySelectorAll('.service-content-panel');
+    serviceTabButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            const serviceId = e.target.dataset.service;
+
+            serviceTabButtons.forEach(btn => btn.classList.remove('active'));
+            e.target.classList.add('active');
+
+            serviceTabContents.forEach(content => {
+                content.classList.toggle('hidden', content.id !== `service-content-${serviceId}`);
+            });
+        });
+    });
     
     // Copy SQL button
     modalOverlay.querySelector('.copy-sql-button').addEventListener('click', (e) => {
@@ -172,6 +245,19 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             setTimeout(() => { button.textContent = 'Копировать'; }, 2000);
         });
     });
+
+    // Auth action button
+    const googleAuthButton = modalOverlay.querySelector('#google-auth-action-button');
+    if (googleAuthButton) {
+        googleAuthButton.addEventListener('click', () => {
+             if (authState.isGoogleConnected) {
+                supabaseService.signOut();
+             } else {
+                supabaseService.signInWithGoogle();
+             }
+             onClose(); // Close modal to let the auth flow happen
+        });
+    }
 
     // Sync buttons logic
     const syncContactsBtn = modalOverlay.querySelector('#sync-contacts-button');

@@ -181,3 +181,94 @@ body {
     color: var(--text-primary);
     opacity: 1;
 }
+
+/* --- NEW VOICE INPUT STYLES --- */
+#voice-record-button {
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+#voice-record-button.recording-active {
+    transform: scale(1.1);
+    background-color: #ef4444; /* red-500 */
+}
+
+#recording-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: 0;
+    background-color: var(--background-dark);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+#recording-overlay.visible {
+    opacity: 1;
+}
+
+#recording-timer {
+    color: #ef4444; /* red-500 */
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+
+.recording-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+}
+
+.recording-hint.highlight {
+    color: var(--accent-blue);
+    font-weight: 600;
+}
+
+@keyframes slide-left-right {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(-5px); }
+}
+
+.recording-hint svg {
+    animation: slide-left-right 1.5s ease-in-out infinite;
+}
+
+#lock-hint {
+    position: absolute;
+    bottom: 120%; /* Position above the input bar */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 0.5rem;
+    border-radius: 9999px;
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+}
+#lock-hint.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-10px);
+}
+
+/* --- SETTINGS MODAL TABS --- */
+.service-tab-button {
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+  border: 1px solid transparent;
+}
+.service-tab-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+.service-tab-button.active {
+  background-color: var(--accent-blue);
+  color: white;
+  border-color: var(--accent-blue);
+}
