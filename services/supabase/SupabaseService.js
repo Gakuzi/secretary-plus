@@ -1,3 +1,5 @@
+import { GOOGLE_SCOPES } from '../../constants.js';
+
 // Helper function to safely parse date strings from Gmail API
 function parseGmailDate(dateString) {
     if (!dateString) return null;
@@ -34,7 +36,7 @@ export class SupabaseService {
         const { error } = await this.client.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                scopes: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+                scopes: GOOGLE_SCOPES,
                 redirectTo: window.location.origin + window.location.pathname,
             },
         });
@@ -44,12 +46,6 @@ export class SupabaseService {
     async signOut() {
         const { error } = await this.client.auth.signOut();
         if (error) throw error;
-    }
-
-    async getSession() {
-        const { data, error } = await this.client.auth.getSession();
-        if (error) throw error;
-        return data.session;
     }
 
     onAuthStateChange(callback) {
@@ -64,7 +60,7 @@ export class SupabaseService {
      * @returns {Promise<{synced: number, failed: number}>} - The result of the sync operation.
      */
     async syncContacts(googleContacts) {
-        const user = (await this.getSession())?.user;
+        const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
 
         const formattedContacts = googleContacts.map(c => ({
@@ -102,7 +98,7 @@ export class SupabaseService {
      * @returns {Promise<{synced: number, failed: number}>} - The result of the sync operation.
      */
     async syncFiles(googleFiles) {
-        const user = (await this.getSession())?.user;
+        const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
 
         const formattedFiles = googleFiles.map(f => ({
@@ -140,7 +136,7 @@ export class SupabaseService {
     }
 
     async syncCalendarEvents(googleEvents) {
-        const user = (await this.getSession())?.user;
+        const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
 
         const formattedEvents = googleEvents.map(e => ({
@@ -174,7 +170,7 @@ export class SupabaseService {
     }
 
     async syncTasks(googleTasks) {
-        const user = (await this.getSession())?.user;
+        const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
 
         const formattedTasks = googleTasks.map(t => ({
@@ -206,7 +202,7 @@ export class SupabaseService {
     }
 
     async syncEmails(googleEmails) {
-        const user = (await this.getSession())?.user;
+        const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
 
         const formattedEmails = googleEmails.map(e => ({
@@ -311,7 +307,7 @@ export class SupabaseService {
 
     // --- Notes ---
     async createNote(details) {
-        const user = (await this.getSession())?.user;
+        const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
         
         const { data, error } = await this.client
@@ -341,7 +337,7 @@ export class SupabaseService {
 
     // --- Long-term Memory ---
     async saveMemory(memoryData) {
-        const user = (await this.getSession())?.user;
+        const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
 
         const { error } = await this.client

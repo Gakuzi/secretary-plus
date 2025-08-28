@@ -58,15 +58,15 @@ function markdownToHTML(text) {
 }
 
 
-function createServiceMappingUI(serviceMap, isSupabaseEnabled) {
+function createServiceMappingUI(serviceMap) {
     return Object.entries(SERVICE_DEFINITIONS).map(([key, def]) => `
         <div class="flex items-center justify-between py-2 border-b border-gray-700/50 last:border-b-0">
             <label for="${key}-provider-select" class="font-medium text-gray-300">${def.label}</label>
             <select id="${key}-provider-select" class="bg-gray-700 border border-gray-600 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-sm">
                 ${def.providers.map(p => {
-                    const isDisabled = p.disabled || (p.id === 'supabase' && !isSupabaseEnabled);
+                    const isDisabled = p.disabled;
                     const isSelected = serviceMap[key] === p.id;
-                    return `<option value="${p.id}" ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}>${p.name}${isDisabled && p.id === 'supabase' ? ' (требуется Supabase)' : ''}</option>`;
+                    return `<option value="${p.id}" ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}>${p.name}</option>`;
                 }).join('')}
             </select>
         </div>
@@ -92,16 +92,13 @@ function timeAgo(dateString) {
 }
 
 
-export function createSettingsModal(currentSettings, authState, onSave, onClose, onLogin, onLogout, googleProvider, supabaseService, syncStatus, isSyncing, onForceSync) {
+export function createSettingsModal(currentSettings, authState, onSave, onClose, onLogin, onLogout, syncStatus, isSyncing, onForceSync) {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
-
-    const isSupabaseConfigured = !!(currentSettings.supabaseUrl && currentSettings.supabaseAnonKey);
-    const isDirectGoogleConfigured = !!currentSettings.googleClientId;
     
     const authButtonText = authState.isGoogleConnected 
         ? 'Выйти' 
-        : (currentSettings.isSupabaseEnabled ? 'Авторизоваться' : 'Войти через Google');
+        : 'Войти через Google';
 
     modalOverlay.innerHTML = `
         <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col m-4" id="settings-content">
@@ -113,81 +110,23 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             <main class="flex-1 flex overflow-hidden">
                 <aside class="w-52 border-r border-gray-700 p-4">
                     <nav class="flex flex-col space-y-2">
-                        <a href="#connections" class="settings-tab-button active text-left" data-tab="connections">Подключения</a>
+                        <a href="#connections" class="settings-tab-button active text-left" data-tab="connections">Аккаунт</a>
                         <a href="#general" class="settings-tab-button" data-tab="general">Общие</a>
                         <a href="#service-map" class="settings-tab-button" data-tab="service-map">Назначение сервисов</a>
                         <a href="#api-keys" class="settings-tab-button" data-tab="api-keys">API Ключи</a>
-                        <a href="#sync" class="settings-tab-button" data-tab="sync" ${!currentSettings.isSupabaseEnabled ? 'style="display: none;"' : ''}>Синхронизация</a>
+                        <a href="#sync" class="settings-tab-button" data-tab="sync">Синхронизация</a>
                         <a href="#about" class="settings-tab-button" data-tab="about">О приложении</a>
                     </nav>
                 </aside>
                 <div class="flex-1 p-6 overflow-y-auto" id="settings-tabs-content">
                     
-                    <!-- Connections Tab -->
+                    <!-- Connections/Account Tab -->
                     <div id="tab-connections" class="settings-tab-content space-y-6">
                         
                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-gray-200">Использовать Supabase</h3>
-                                    <p class="text-sm text-gray-400">Рекомендуется для синхронизации и хранения заметок.</p>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="supabase-enabled-toggle" ${currentSettings.isSupabaseEnabled ? 'checked' : ''}>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div id="supabase-settings-block" class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4" ${!currentSettings.isSupabaseEnabled ? 'style="display: none;"' : ''}>
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-gray-200">1. Конфигурация Supabase</h3>
-                                    <a href="./setup-guide.html#supabase-setup" target="_blank" class="text-blue-400 hover:underline font-semibold text-sm">
-                                        ➡️ Открыть инструкцию по настройке
-                                    </a>
-                                </div>
-                                <div class="text-sm text-right">
-                                    <p class="font-semibold">Статус конфигурации:</p>
-                                    <p class="${isSupabaseConfigured ? 'text-green-400' : 'text-yellow-400'}">${isSupabaseConfigured ? 'Заполнена' : 'Не заполнена'}</p>
-                                </div>
-                            </div>
-                            <div class="space-y-2">
-                                <label for="supabase-url" class="block text-sm font-medium text-gray-300">Supabase Project URL</label>
-                                <input type="text" id="supabase-url" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.supabaseUrl || ''}">
-                            </div>
-                            <div class="space-y-2">
-                                <label for="supabase-anon-key" class="block text-sm font-medium text-gray-300">Supabase Anon Key</label>
-                                <input type="password" id="supabase-anon-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.supabaseAnonKey || ''}">
-                            </div>
-                            <p class="text-xs text-green-400 text-center" id="settings-sync-status" style="display: none;">
-                                Ваши настройки API ключей и сервисов надежно сохраняются в облаке.
-                            </p>
-                        </div>
-                        
-                        <div id="direct-google-settings-block" class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4" ${currentSettings.isSupabaseEnabled ? 'style="display: none;"' : ''}>
-                             <div class="flex justify-between items-start">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-gray-200">1. Конфигурация Google</h3>
-                                     <a href="./setup-guide.html#google-cloud-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline font-semibold text-sm">
-                                        ➡️ Открыть инструкцию по получению Client ID
-                                     </a>
-                                </div>
-                                 <div class="text-sm text-right">
-                                    <p class="font-semibold">Статус конфигурации:</p>
-                                    <p class="${isDirectGoogleConfigured ? 'text-green-400' : 'text-yellow-400'}">${isDirectGoogleConfigured ? 'Заполнена' : 'Не заполнена'}</p>
-                                </div>
-                            </div>
-                             <div class="space-y-2">
-                                <label for="google-client-id" class="block text-sm font-medium text-gray-300">Google Client ID</label>
-                                <input type="password" id="google-client-id" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Required when Supabase is disabled" value="${currentSettings.googleClientId || ''}">
-                            </div>
-                        </div>
-
-                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                             <h3 class="text-lg font-semibold text-gray-200">2. Подключение аккаунта Google</h3>
-                             <p id="auth-method-description" class="text-sm text-gray-400 mt-1 mb-4">
-                                ${currentSettings.isSupabaseEnabled ? 'Для работы ассистента необходимо войти в аккаунт Google через Supabase.' : 'Для работы ассистента необходимо войти в аккаунт Google напрямую.'}
+                             <h3 class="text-lg font-semibold text-gray-200">Подключение аккаунта Google</h3>
+                             <p class="text-sm text-gray-400 mt-1 mb-4">
+                                Для работы ассистента необходимо войти в аккаунт Google. Все ваши настройки будут безопасно сохранены в облаке.
                              </p>
                              <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-3">
@@ -205,7 +144,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                         </div>
 
                          <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                            <h3 class="text-lg font-semibold text-gray-200">3. Прокси-сервер Gemini (Опционально)</h3>
+                            <h3 class="text-lg font-semibold text-gray-200">Прокси-сервер Gemini (Опционально)</h3>
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h4 class="font-semibold text-gray-200">Активировать Прокси</h4>
@@ -258,7 +197,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                              <h3 class="text-lg font-semibold text-gray-200">Назначение сервисов</h3>
                              <p class="text-sm text-gray-400 mt-1 mb-4">Выберите, какой сервис использовать для каждой функции. Ассистент будет следовать этим настройкам.</p>
                              <div id="service-map-container" class="space-y-2">
-                                ${createServiceMappingUI(currentSettings.serviceMap, currentSettings.isSupabaseEnabled)}
+                                ${createServiceMappingUI(currentSettings.serviceMap)}
                              </div>
                         </div>
                     </div>
@@ -271,12 +210,12 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                 <label for="gemini-api-key" class="block text-sm font-medium text-gray-300">Gemini API Key</label>
                                 <input type="password" id="gemini-api-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.geminiApiKey || ''}">
                             </div>
-                            <p class="text-xs text-gray-400 mt-1">Ваш ключ хранится локально в браузере. <a href="./setup-guide.html#gemini-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как получить ключ?</a></p>
+                            <p class="text-xs text-gray-400 mt-1">Ключ хранится локально и синхронизируется с облаком. <a href="./setup-guide.html#gemini-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как получить ключ?</a></p>
                         </div>
                     </div>
 
                     <!-- Sync Tab -->
-                    <div id="tab-sync" class="settings-tab-content space-y-6 ${!currentSettings.isSupabaseEnabled ? 'hidden' : ''}">
+                    <div id="tab-sync" class="settings-tab-content space-y-6">
                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
                             <div class="flex items-center justify-between">
                                 <div>
@@ -323,14 +262,9 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     modalOverlay.querySelector('#close-settings').addEventListener('click', onClose);
     modalOverlay.querySelector('#save-settings').addEventListener('click', () => {
         const newSettings = {
-            supabaseUrl: modalOverlay.querySelector('#supabase-url').value.trim(),
-            supabaseAnonKey: modalOverlay.querySelector('#supabase-anon-key').value.trim(),
             geminiApiKey: modalOverlay.querySelector('#gemini-api-key').value.trim(),
             isProxyEnabled: modalOverlay.querySelector('#proxy-enabled-toggle').checked,
             geminiProxyUrl: modalOverlay.querySelector('#gemini-proxy-url').value.trim(),
-            isSupabaseEnabled: modalOverlay.querySelector('#supabase-enabled-toggle').checked,
-            isGoogleEnabled: true, 
-            googleClientId: modalOverlay.querySelector('#google-client-id').value.trim(),
             timezone: modalOverlay.querySelector('#timezone-select').value,
             enableEmailPolling: modalOverlay.querySelector('#email-polling-toggle').checked,
             enableAutoSync: modalOverlay.querySelector('#auto-sync-enabled-toggle').checked,
@@ -444,38 +378,6 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
         timezoneSelect.innerHTML = `<option value="${currentSettings.timezone}">${currentSettings.timezone}</option>`;
         timezoneSelect.disabled = true;
     }
-
-
-    // Logic for Supabase toggle
-    const supabaseToggle = modalOverlay.querySelector('#supabase-enabled-toggle');
-    supabaseToggle.addEventListener('change', (e) => {
-        const isEnabled = e.target.checked;
-        modalOverlay.querySelector('#supabase-settings-block').style.display = isEnabled ? '' : 'none';
-        modalOverlay.querySelector('#direct-google-settings-block').style.display = isEnabled ? 'none' : '';
-        modalOverlay.querySelector('a[data-tab="sync"]').style.display = isEnabled ? '' : 'none';
-        
-        // Re-render service map UI with updated Supabase status
-        const serviceMapContainer = modalOverlay.querySelector('#service-map-container');
-        const currentServiceMap = {
-            calendar: modalOverlay.querySelector('#calendar-provider-select').value,
-            tasks: modalOverlay.querySelector('#tasks-provider-select').value,
-            contacts: modalOverlay.querySelector('#contacts-provider-select').value,
-            files: modalOverlay.querySelector('#files-provider-select').value,
-            notes: modalOverlay.querySelector('#notes-provider-select').value,
-        };
-        serviceMapContainer.innerHTML = createServiceMappingUI(currentServiceMap, isEnabled);
-
-        const authDesc = modalOverlay.querySelector('#auth-method-description');
-        authDesc.textContent = isEnabled 
-            ? 'Для работы ассистента необходимо войти в аккаунт Google через Supabase.' 
-            : 'Для работы ассистента необходимо войти в аккаунт Google напрямую.';
-        
-        const syncTabButton = modalOverlay.querySelector('a[data-tab="sync"]');
-        if (!isEnabled && syncTabButton.classList.contains('active')) {
-            syncTabButton.classList.remove('active');
-            modalOverlay.querySelector('a[data-tab="connections"]').click();
-        }
-    });
     
     // Logic for Proxy toggle
     const proxyToggle = modalOverlay.querySelector('#proxy-enabled-toggle');
@@ -496,12 +398,6 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                 onLogin();
              }
         });
-    }
-
-    // Show settings cloud sync status
-    const settingsSyncStatus = modalOverlay.querySelector('#settings-sync-status');
-    if (currentSettings.isSupabaseEnabled && authState.isGoogleConnected) {
-        settingsSyncStatus.style.display = 'block';
     }
 
     // Sync Tab Logic

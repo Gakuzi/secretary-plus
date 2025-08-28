@@ -2,14 +2,9 @@ const SETTINGS_KEY = 'secretary-plus-settings-v4';
 const SYNC_STATUS_KEY = 'secretary-plus-sync-status-v1';
 
 const defaultSettings = {
-    supabaseUrl: '',
-    supabaseAnonKey: '',
     geminiApiKey: '',
     isProxyEnabled: false, // For enabling/disabling proxy usage
     geminiProxyUrl: '', // URL for Gemini API proxy
-    isSupabaseEnabled: true,
-    isGoogleEnabled: true,
-    googleClientId: '',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     enableEmailPolling: true, // For proactive email notifications
     enableAutoSync: true, // For background data synchronization
@@ -39,7 +34,17 @@ export function getSettings() {
 
 export function saveSettings(settings) {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        // Create a clean settings object to save, removing legacy fields
+        const settingsToSave = {
+            geminiApiKey: settings.geminiApiKey,
+            isProxyEnabled: settings.isProxyEnabled,
+            geminiProxyUrl: settings.geminiProxyUrl,
+            timezone: settings.timezone,
+            enableEmailPolling: settings.enableEmailPolling,
+            enableAutoSync: settings.enableAutoSync,
+            serviceMap: settings.serviceMap,
+        };
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
     } catch (error)
     {
         console.error("Failed to save settings to localStorage", error);
