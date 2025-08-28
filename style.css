@@ -103,6 +103,34 @@ body {
   height: 1rem; /* 16px */
 }
 
+/* Styles for the main action button in direct action cards */
+.card-primary-action-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem; /* 12px */
+    padding: 0.75rem 1.5rem; /* 12px 24px */
+    font-size: 1rem; /* 16px */
+    font-weight: 600; /* semibold */
+    border-radius: 0.5rem; /* 8px */
+    background-color: var(--accent-blue);
+    color: white;
+    text-decoration: none;
+    transition: background-color 0.2s;
+    width: 100%;
+    max-width: 300px;
+}
+
+.card-primary-action-button:hover {
+    background-color: #2563eb; /* A slightly darker blue */
+}
+
+.card-primary-action-button svg {
+    width: 1.25rem; /* 20px */
+    height: 1.25rem; /* 20px */
+}
+
+
 /* Styles for share buttons */
 .share-button {
   display: inline-flex;

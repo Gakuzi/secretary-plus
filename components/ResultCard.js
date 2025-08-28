@@ -98,6 +98,48 @@ function createContactCard(card) {
     `;
 }
 
+function createDirectActionCard(card) {
+    const { person, action } = card;
+    const name = person.names?.[0]?.displayName || 'Имя не указано';
+    const email = person.emailAddresses?.[0]?.value || null;
+    const phone = person.phoneNumbers?.[0]?.value || null;
+    const iconSVG = Icons[card.icon] || '';
+    
+    let actionButtonHtml = '';
+    let errorMessage = '';
+
+    if (action === 'call') {
+        if (phone) {
+            actionButtonHtml = `<a href="tel:${phone}" class="card-primary-action-button">${Icons.PhoneIcon} Позвонить ${name}</a>`;
+        } else {
+            errorMessage = `<p class="text-sm text-red-400">У этого контакта не указан номер телефона.</p>`;
+        }
+    } else if (action === 'email') {
+        if (email) {
+            actionButtonHtml = `<a href="mailto:${email}" class="card-primary-action-button">${Icons.EmailIcon} Написать ${name}</a>`;
+        } else {
+            errorMessage = `<p class="text-sm text-red-400">У этого контакта не указан email.</p>`;
+        }
+    }
+
+    return `
+        <div class="flex items-center mb-3">
+            <div class="w-6 h-6 mr-2 text-gray-300">${iconSVG}</div>
+            <h4 class="font-bold">${card.title}</h4>
+        </div>
+        <div class="mt-4 text-center">
+            ${actionButtonHtml}
+            ${errorMessage}
+        </div>
+        <div class="text-center mt-3 text-xs text-gray-400">
+            ${phone ? `<span>${phone}</span>` : ''}
+            ${phone && email ? `<span class="mx-2">&middot;</span>` : ''}
+            ${email ? `<span>${email}</span>` : ''}
+        </div>
+    `;
+}
+
+
 function createContactChoiceCard(card) {
     const iconSVG = Icons[card.icon] || '';
     const optionsHtml = card.options.map(person => {
@@ -163,6 +205,9 @@ export function createResultCardElement(card) {
             break;
         case 'contact':
             cardElement.innerHTML = createContactCard(card);
+            break;
+        case 'direct_action_card':
+            cardElement.innerHTML = createDirectActionCard(card);
             break;
         case 'document_choice':
             cardElement.innerHTML = createDocumentChoiceCard(card);
