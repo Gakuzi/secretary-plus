@@ -74,16 +74,23 @@ export class SupabaseService {
             avatar_url: c.photos?.[0]?.url || null,
         })).filter(c => c.display_name); // Only sync contacts with names
 
-        const { error } = await this.client
-            .from('contacts')
-            .upsert(formattedContacts, { onConflict: 'user_id,source,source_id', ignoreDuplicates: false });
+        // Upsert in chunks to avoid payload size limits
+        const chunkSize = 500;
+        let syncedCount = 0;
+        for (let i = 0; i < formattedContacts.length; i += chunkSize) {
+            const chunk = formattedContacts.slice(i, i + chunkSize);
+            const { error } = await this.client
+                .from('contacts')
+                .upsert(chunk, { onConflict: 'user_id,source,source_id', ignoreDuplicates: false });
 
-        if (error) {
-            console.error("Error syncing contacts:", error);
-            throw error;
+            if (error) {
+                console.error("Error syncing contacts chunk:", error);
+                throw error;
+            }
+            syncedCount += chunk.length;
         }
 
-        return { synced: formattedContacts.length };
+        return { synced: syncedCount };
     }
     
      /**
@@ -144,12 +151,23 @@ export class SupabaseService {
             meet_link: e.hangoutLink,
         }));
 
-        const { error } = await this.client
-            .from('calendar_events')
-            .upsert(formattedEvents, { onConflict: 'user_id,source_id', ignoreDuplicates: false });
+        // Upsert in chunks to avoid payload size limits
+        const chunkSize = 500;
+        let syncedCount = 0;
+        for (let i = 0; i < formattedEvents.length; i += chunkSize) {
+            const chunk = formattedEvents.slice(i, i + chunkSize);
+            const { error } = await this.client
+                .from('calendar_events')
+                .upsert(chunk, { onConflict: 'user_id,source_id', ignoreDuplicates: false });
 
-        if (error) throw error;
-        return { synced: formattedEvents.length };
+            if (error) {
+                 console.error("Error syncing calendar events chunk:", error);
+                throw error;
+            }
+            syncedCount += chunk.length;
+        }
+
+        return { synced: syncedCount };
     }
 
     async syncTasks(googleTasks) {
@@ -165,12 +183,23 @@ export class SupabaseService {
             status: t.status,
         }));
 
-        const { error } = await this.client
-            .from('tasks')
-            .upsert(formattedTasks, { onConflict: 'user_id,source_id', ignoreDuplicates: false });
+        // Upsert in chunks for consistency, although tasks are usually fewer.
+        const chunkSize = 500;
+        let syncedCount = 0;
+        for (let i = 0; i < formattedTasks.length; i += chunkSize) {
+            const chunk = formattedTasks.slice(i, i + chunkSize);
+            const { error } = await this.client
+                .from('tasks')
+                .upsert(chunk, { onConflict: 'user_id,source_id', ignoreDuplicates: false });
 
-        if (error) throw error;
-        return { synced: formattedTasks.length };
+            if (error) {
+                 console.error("Error syncing tasks chunk:", error);
+                throw error;
+            }
+            syncedCount += chunk.length;
+        }
+        
+        return { synced: syncedCount };
     }
 
     async syncEmails(googleEmails) {
@@ -186,12 +215,23 @@ export class SupabaseService {
             received_at: parseGmailDate(e.date),
         }));
 
-        const { error } = await this.client
-            .from('emails')
-            .upsert(formattedEmails, { onConflict: 'user_id,source_id', ignoreDuplicates: false });
+        // Upsert in chunks to avoid payload size limits
+        const chunkSize = 500;
+        let syncedCount = 0;
+        for (let i = 0; i < formattedEmails.length; i += chunkSize) {
+            const chunk = formattedEmails.slice(i, i + chunkSize);
+            const { error } = await this.client
+                .from('emails')
+                .upsert(chunk, { onConflict: 'user_id,source_id', ignoreDuplicates: false });
 
-        if (error) throw error;
-        return { synced: formattedEmails.length };
+            if (error) {
+                console.error("Error syncing emails chunk:", error);
+                throw error;
+            }
+            syncedCount += chunk.length;
+        }
+        
+        return { synced: syncedCount };
     }
 
 

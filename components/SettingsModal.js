@@ -421,7 +421,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     const editServiceButton = modalOverlay.querySelector('#edit-service-button');
     if (editServiceButton) {
         editServiceButton.addEventListener('click', () => {
-            window.open(window.location.href, '_blank');
+            window.open('https://aistudio.google.com/app/apps/drive/1-YFIo56NWOtYuQYpZUWiPcMY323lJPuK?showAssistant=true&showPreview=true', '_blank');
         });
     }
 
