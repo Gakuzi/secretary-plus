@@ -16,6 +16,7 @@ export function createMessageElement(message) {
     const isUser = message.sender === MessageSender.USER;
     const wrapper = document.createElement('div');
     wrapper.className = `flex items-start space-x-3 message-item ${isUser ? 'justify-end' : ''}`;
+    wrapper.dataset.messageId = message.id;
 
     const avatar = document.createElement('div');
     avatar.className = `w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0 ${isUser ? 'bg-blue-600' : 'bg-gray-700'}`;

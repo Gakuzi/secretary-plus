@@ -1,4 +1,4 @@
-import { GoogleIcon, SupabaseIcon, CalendarIcon, FileIcon, UsersIcon, ChartBarIcon, CheckSquareIcon } from './icons/Icons.js';
+import { GoogleIcon, SupabaseIcon, CalendarIcon, FileIcon, UsersIcon, ChartBarIcon, CheckSquareIcon, EmailIcon } from './icons/Icons.js';
 
 export function createWelcomeScreen({ isGoogleConnected, isSupabaseEnabled }) {
     const container = document.createElement('div');
@@ -29,36 +29,23 @@ export function createWelcomeScreen({ isGoogleConnected, isSupabaseEnabled }) {
                 </div>
             `;
             
-        const contactActionHtml = isSupabaseEnabled
-            ? `
-                <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Найди контакт Иван Петров"}'>
-                    <div class="welcome-action-icon bg-green-500/20 text-green-400">${UsersIcon}</div>
-                    <div>
-                        <h3 class="font-semibold text-gray-100">Найти контакт</h3>
-                        <p class="text-sm text-gray-400">Быстрый поиск по базе контактов</p>
-                    </div>
-                </div>
-            `
-            : `
-                 <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Найди контакт Иван Петров"}'>
-                    <div class="welcome-action-icon bg-green-500/20 text-green-400">${UsersIcon}</div>
-                    <div>
-                        <h3 class="font-semibold text-gray-100">Найти контакт</h3>
-                        <p class="text-sm text-gray-400">Прямой поиск в Google Contacts</p>
-                    </div>
-                </div>
-            `;
-
         container.innerHTML = `
-            <div class="max-w-3xl w-full">
+            <div class="max-w-4xl w-full">
                 ${connectionStatusHtml}
                 <h2 class="text-3xl font-bold mt-6 mb-4">Чем могу помочь?</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
                     <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Что у меня сегодня в календаре?"}'>
                         <div class="welcome-action-icon bg-blue-500/20 text-blue-400">${CalendarIcon}</div>
                         <div>
                             <h3 class="font-semibold text-gray-100">Расписание на сегодня</h3>
                             <p class="text-sm text-gray-400">Показать все события из календаря</p>
+                        </div>
+                    </div>
+                    <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Создай встречу с Иваном Петровым завтра в 11:00"}'>
+                        <div class="welcome-action-icon bg-blue-500/20 text-blue-400">${CalendarIcon}</div>
+                        <div>
+                            <h3 class="font-semibold text-gray-100">Создать встречу</h3>
+                            <p class="text-sm text-gray-400">Быстро запланировать новое событие</p>
                         </div>
                     </div>
                     <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Покажи мои задачи"}'>
@@ -68,12 +55,46 @@ export function createWelcomeScreen({ isGoogleConnected, isSupabaseEnabled }) {
                             <p class="text-sm text-gray-400">Показать список активных дел</p>
                         </div>
                     </div>
-                    ${contactActionHtml}
+                     <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Найди контакт Иван Петров"}'>
+                        <div class="welcome-action-icon bg-green-500/20 text-green-400">${UsersIcon}</div>
+                        <div>
+                            <h3 class="font-semibold text-gray-100">Найти контакт</h3>
+                            <p class="text-sm text-gray-400">Поиск по имени, фамилии или email</p>
+                        </div>
+                    </div>
+                    <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Позвони Ивану Петрову"}'>
+                        <div class="welcome-action-icon bg-green-500/20 text-green-400">${UsersIcon}</div>
+                        <div>
+                            <h3 class="font-semibold text-gray-100">Позвонить контакту</h3>
+                            <p class="text-sm text-gray-400">Инициировать звонок или письмо</p>
+                        </div>
+                    </div>
                     <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Найди документ с планом проекта"}'>
                         <div class="welcome-action-icon bg-purple-500/20 text-purple-400">${FileIcon}</div>
                         <div>
                             <h3 class="font-semibold text-gray-100">Найти документ</h3>
                             <p class="text-sm text-gray-400">Найти файлы на Диске или в базе</p>
+                        </div>
+                    </div>
+                    <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Создай заметку: Идеи для отпуска. 1. Поездка в горы. 2. Отдых на море."}'>
+                        <div class="welcome-action-icon bg-orange-500/20 text-orange-400">${FileIcon}</div>
+                        <div>
+                            <h3 class="font-semibold text-gray-100">Создать заметку</h3>
+                            <p class="text-sm text-gray-400">Быстро сохранить идею или мысль</p>
+                        </div>
+                    </div>
+                     <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Какие у меня последние 3 письма?"}'>
+                        <div class="welcome-action-icon bg-red-500/20 text-red-400">${EmailIcon}</div>
+                        <div>
+                            <h3 class="font-semibold text-gray-100">Последние письма</h3>
+                            <p class="text-sm text-gray-400">Просмотреть входящие в Gmail</p>
+                        </div>
+                    </div>
+                     <div class="welcome-action-card" data-action="welcome_prompt" data-payload='{"prompt": "Создай документ с названием `Итоги встречи` и добавь туда краткое резюме нашего последнего разговора"}'>
+                        <div class="welcome-action-icon bg-purple-500/20 text-purple-400">${FileIcon}</div>
+                        <div>
+                            <h3 class="font-semibold text-gray-100">Создать документ</h3>
+                            <p class="text-sm text-gray-400">Использовать контекст чата для GDocs</p>
                         </div>
                     </div>
                 </div>

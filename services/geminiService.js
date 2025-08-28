@@ -71,7 +71,7 @@ const baseTools = [
     },
      {
       name: "get_recent_emails",
-      description: "Получает список последних входящих писем из Gmail. Возвращает отправителя, тему и краткое содержание.",
+      description: "Получает список последних входящих писем из Gmail. Возвращает отправителя, тему, дату и ПОЛНОЕ СОДЕРЖИМОЕ письма для анализа.",
        parameters: {
         type: Type.OBJECT,
         properties: {
@@ -98,7 +98,7 @@ const baseTools = [
     },
      {
       name: "find_contacts",
-      description: "Ищет контакты по имени, фамилии или email. Использует сервис, выбранный пользователем в настройках.",
+      description: "Ищет контакты по имени, фамилии или email. Использует сервис, выбранный пользователем в настройках. НЕ ИСПОЛЬЗУЙ этот инструмент, если пользователь просит совершить действие (позвонить, написать), для этого есть perform_contact_action.",
       parameters: {
         type: Type.OBJECT,
         properties: {
@@ -112,7 +112,7 @@ const baseTools = [
     },
     {
       name: "perform_contact_action",
-      description: "Выполняет немедленное действие с контактом (звонок, email). Поиск контакта происходит через сервис, выбранный пользователем.",
+      description: "Выполняет немедленное действие с контактом (звонок, email). Это ПРИОРИТЕТНЫЙ инструмент для запросов типа 'позвони', 'напиши'.",
       parameters: {
         type: Type.OBJECT,
         properties: {
@@ -261,28 +261,88 @@ const baseTools = [
         required: ["to", "subject", "body"],
       },
     },
+    {
+        name: "summarize_and_save_memory",
+        description: "Создает краткую сводку текущего разговора и сохраняет ее в долговременную память для будущего использования.",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                summary: { type: Type.STRING, description: "Краткая суть разговора. Включай ключевые имена, даты, решения." },
+                keywords: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Список ключевых слов для поиска этой записи в будущем." },
+            },
+            required: ["summary", "keywords"],
+        },
+    },
+    {
+        name: "recall_memory",
+        description: "Ищет в долговременной памяти информацию, относящуюся к текущему запросу.",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                query: { type: Type.STRING, description: "Ключевое слово или фраза для поиска в памяти." },
+            },
+            required: ["query"],
+        },
+    },
+    {
+      name: "delete_calendar_event",
+      description: "Удаляет событие из календаря. Перед удалением необходимо найти событие и получить его ID, а затем ОБЯЗАТЕЛЬНО спросить у пользователя подтверждение.",
+      parameters: {
+        type: Type.OBJECT,
+        properties: {
+          eventId: { type: Type.STRING, description: "ID события для удаления." },
+        },
+        required: ["eventId"],
+      },
+    },
+    {
+      name: "delete_task",
+      description: "Удаляет задачу из Google Tasks. Перед удалением необходимо найти задачу и получить ее ID, а затем ОБЯЗАТЕЛЬНО спросить у пользователя подтверждение.",
+      parameters: {
+        type: Type.OBJECT,
+        properties: {
+          taskId: { type: Type.STRING, description: "ID задачи для удаления." },
+        },
+        required: ["taskId"],
+      },
+    },
+    {
+      name: "delete_email",
+      description: "Перемещает письмо в корзину в Gmail. Перед удалением необходимо найти письмо и получить его ID, а затем ОБЯЗАТЕЛЬНО спросить у пользователя подтверждение.",
+      parameters: {
+        type: Type.OBJECT,
+        properties: {
+          messageId: { type: Type.STRING, description: "ID письма для перемещения в корзину." },
+        },
+        required: ["messageId"],
+      },
+    }
 ];
 
 
 const getSystemInstruction = (serviceMap, timezone) => {
     return `Ты — «Секретарь+», проактивный личный ИИ-ассистент. Твоя главная цель — предугадывать потребности пользователя и действовать на опережение.
 
+ЗОЛОТОЕ ПРАВИЛО: Действие превыше информации. Если запрос пользователя можно выполнить (создать, отправить, позвонить, удалить), ты ОБЯЗАН использовать соответствующий инструмент, а не просто искать информацию.
+
 Принципы работы:
-1.  **Проактивность - твой главный приоритет.** Ты не просто исполнитель, а помощник. Если можешь предсказать следующий шаг пользователя (например, после создания встречи предложить отправить ссылку или создать задачу на подготовку), ты ОБЯЗАН это сделать. Всегда ищи возможность быть на шаг впереди.
-2.  **Понимай намерение, а не слова.** Если запрос звучит как "Позвони Ивану Петрову", твоя задача — инициировать звонок, а не просто найти контакт. Используй \`perform_contact_action\`, а не \`find_contacts\`.
-3.  **Используй правильный сервис.** Ты ВСЕГДА проверяешь, какой сервис пользователь выбрал для каждой задачи, и используешь только его.
+1.  **Проактивность - твой главный приоритет.** После выполнения задачи ты ОБЯЗАН проанализировать результат и предложить наиболее вероятные следующие шаги. Для этого используй специальный формат в конце своего ответа: \`[CONTEXT_ACTIONS] [{"label": "Название кнопки", "prompt": "Текст запроса для этой кнопки", "icon": "UsersIcon"}]\`. Например, после анализа письма с приглашением на встречу, предложи создать событие в календаре.
+2.  **Понимай намерение, а не слова.** Если запрос звучит как "Позвони Ивану Петрову", твоя задача — инициировать звонок. Используй инструмент \`perform_contact_action\`, а не \`find_contacts\`. Не показывай карточку, а сразу предлагай действие.
+3.  **Анализируй почту.** Инструмент \`get_recent_emails\` возвращает ПОЛНОЕ содержимое письма. Твоя задача — прочитать его, понять суть и предложить пользователю релевантные действия (например, создать задачу, запланировать встречу, ответить).
+4.  **Безопасное удаление.** Инструменты \`delete_calendar_event\`, \`delete_task\`, \`delete_email\` очень мощные. Перед тем как их вызвать, ты ОБЯЗАН найти нужный объект, показать его пользователю и задать прямой вопрос: "Вы уверены, что хотите удалить [название объекта]?". И только после утвердительного ответа вызывать инструмент удаления.
+5.  **Интерактивные списки.** Когда ты возвращаешь список (событий, задач, писем), пользователь может нажать на любой элемент. После этого он отправит тебе системное сообщение с деталями этого элемента. Твоя задача — отреагировать на это, предоставив более подробную информацию и предложив контекстные действия (удалить, ответить, создать что-то на основе элемента).
+6.  **Используй правильный сервис.** Ты ВСЕГДА проверяешь, какой сервис пользователь выбрал для каждой задачи, и используешь только его.
     -   Календарь: ${serviceMap.calendar}
     -   Задачи: ${serviceMap.tasks}
     -   Контакты: ${serviceMap.contacts}
     -   Файлы: ${serviceMap.files}
     -   Заметки: ${serviceMap.notes}
-4.  **Приоритет локальному кэшу:** Если для сервиса (календарь, задачи, контакты, файлы) выбран \`supabase\`, это значит, что у тебя есть доступ к быстрому локальному кэшу. Используй его для всех операций чтения (\`get_calendar_events\`, \`get_tasks\`, \`find_contacts\`, \`find_documents\`). Это обеспечивает мгновенный отклик.
-5.  **Прямые API-вызовы для записи:** Для создания или изменения данных (создание события, задачи) ты всегда используешь прямой вызов к Google, даже если чтение идет из кэша.
-6.  **Диалог — ключ ко всему:** Если информации недостаточно для выполнения действия (например, не указано время встречи), задавай уточняющие вопросы.
-7.  **Сначала уточни, потом действуй.** Никогда не создавай событие или задачу, если в запросе есть неоднозначные данные (несколько контактов с одинаковым именем). Сначала найди, покажи пользователю варианты, дождись его выбора.
-8.  **Контекст:** Ты должен анализировать ВЕСЬ предыдущий диалог, чтобы понимать текущий контекст.
-9.  **Дата и время:** Всегда учитывай текущую дату: ${new Date().toLocaleDateString('ru-RU')} и часовой пояс пользователя: ${timezone}.
-10. **Интерактивные ответы:** Если ты задаешь пользователю вопрос, по возможности предлагай 2-4 наиболее вероятных варианта быстрого ответа в формате \`[QUICK_REPLY] Текст ответа\`.
+7.  **Управление памятью:**
+    -   Если разговор становится длинным и содержит важную информацию (планы, контакты, решения), используй инструмент \`summarize_and_save_memory\`, чтобы сохранить эту информацию в **долговременную память**.
+    -   Если запрос пользователя кажется связанным с прошлой информацией, используй \`recall_memory\` для поиска в долговременной памяти.
+8.  **Диалог и уточнения:** Если информации недостаточно для выполнения действия (не указано время встречи), задавай уточняющие вопросы.
+9.  **Интерактивные ответы:** Если ты задаешь пользователю вопрос, по возможности предлагай 2-4 наиболее вероятных варианта быстрого ответа в формате \`[QUICK_REPLY] Текст ответа\`.
+10. **Дата и время:** Всегда учитывай текущую дату: ${new Date().toLocaleDateString('ru-RU')} и часовой пояс пользователя: ${timezone}.
 `;
 };
 
@@ -305,8 +365,11 @@ export const callGemini = async ({
         };
     }
     const ai = new GoogleGenAI({ apiKey });
+    
+    // Limit short-term memory to the last 10 messages to keep context relevant and payload small
+    const limitedHistory = history.slice(-10);
 
-    const contents = history.map(msg => {
+    const contents = limitedHistory.map(msg => {
         const role = msg.sender === MessageSender.USER ? 'user' : 'model';
         const parts = [];
         if (msg.text) parts.push({ text: msg.text });
@@ -362,7 +425,7 @@ export const callGemini = async ({
                         const provider = getProvider('calendar');
                         const results = await provider.getCalendarEvents(args);
                         if (results && results.length > 0) {
-                            resultMessage.text = "Вот ваше ближайшее расписание:";
+                            resultMessage.text = "Вот ваше ближайшее расписание. Нажмите на событие, чтобы увидеть детали и действия.";
                             resultMessage.card = createCalendarViewCard(results);
                         } else {
                             resultMessage.text = "На выбранный период событий в календаре не найдено.";
@@ -373,7 +436,7 @@ export const callGemini = async ({
                         const provider = getProvider('tasks');
                         const results = await provider.getTasks(args);
                          if (results && results.length > 0) {
-                            resultMessage.text = "Вот ваши активные задачи:";
+                            resultMessage.text = "Вот ваши активные задачи. Нажмите на задачу для просмотра деталей.";
                             resultMessage.card = createTasksViewCard(results);
                         } else {
                             resultMessage.text = "У вас нет активных задач. Отличная работа!";
@@ -384,8 +447,14 @@ export const callGemini = async ({
                         const provider = serviceProviders.google; // Email is always Google
                         const results = await provider.getRecentEmails(args);
                          if (results && results.length > 0) {
-                            resultMessage.text = `Вот последние ${results.length} писем:`;
-                            resultMessage.card = createEmailsViewCard(results);
+                            // Only show summary in UI, but pass full content to model in next turn
+                            const summarizedResults = results.map(({ body, ...rest }) => rest);
+                            resultMessage.text = `Вот последние ${results.length} писем. Я изучил их содержание. Нажмите на письмо, чтобы я предложил действия.`;
+                            resultMessage.card = createEmailsViewCard(summarizedResults);
+                            
+                            // Prepend a system message with the full content for the next turn
+                            const emailContentForContext = results.map(e => `--- EMAIL START ---\nFrom: ${e.from}\nSubject: ${e.subject}\nID: ${e.id}\n\n${e.body}\n--- EMAIL END ---`).join('\n\n');
+                            resultMessage.systemContext = `Проанализируй содержимое этих писем и предложи релевантные действия:\n${emailContentForContext}`;
                         } else {
                             resultMessage.text = "Ваш почтовый ящик пуст.";
                         }
@@ -406,7 +475,6 @@ export const callGemini = async ({
                                 details: {
                                     'Время': new Date(args.startTime).toLocaleString('ru-RU'),
                                     'Метод': 'Экспорт в .ics файл',
-                                    'Почему так?': 'Это самый безопасный способ для веб-приложений без серверной части. Он не требует доступа к вашему Apple ID.'
                                 },
                                 actions: [{
                                     label: 'Скачать .ics файл',
@@ -416,8 +484,9 @@ export const callGemini = async ({
                             };
                         } else {
                             const attendeesEmails = result.attendees?.map(a => a.email) || [];
-                            const eventActions = [
-                                { label: 'Открыть в Календаре', url: result.htmlLink }
+                            let eventActions = [
+                                { label: 'Открыть в Календаре', url: result.htmlLink },
+                                { label: 'Удалить', action: 'request_delete', payload: { id: result.id, type: 'event' }, style: 'danger' }
                             ];
                             if (attendeesEmails.length > 0 && result.hangoutLink) {
                                 eventActions.push({
@@ -464,8 +533,6 @@ export const callGemini = async ({
                         const provider = getProvider('files');
                         let results = await provider.findDocuments(args.query);
 
-                        // HYBRID SEARCH: If the primary search (e.g., Supabase) finds nothing,
-                        // perform a live search on Google Drive as a fallback.
                         if (results.length === 0 && provider.getId() === 'supabase') {
                             const googleProvider = serviceProviders.google;
                             if (googleProvider && await googleProvider.isAuthenticated()) {
@@ -532,13 +599,56 @@ export const callGemini = async ({
                         const provider = serviceProviders.google;
                         const result = await provider.createTask(args);
                         resultMessage.text = `Задача "${result.title}" успешно создана.`;
-                        resultMessage.card = { type: 'task', icon: 'CheckSquareIcon', title: 'Задача создана', details: { 'Название': result.title, 'Статус': 'Нужно выполнить' }, actions: [{ label: 'Открыть в Google Tasks', url: 'https://tasks.google.com/embed/list/~default', target: '_blank' }]};
+                        resultMessage.card = { type: 'task', icon: 'CheckSquareIcon', title: 'Задача создана', details: { 'Название': result.title, 'Статус': 'Нужно выполнить' }, actions: [{ label: 'Открыть в Google Tasks', url: 'https://tasks.google.com/embed/list/~default', target: '_blank' }, { label: 'Удалить', action: 'request_delete', payload: { id: result.id, type: 'task' }, style: 'danger' }]};
                         break;
                     }
                     case 'send_email': {
                         const provider = serviceProviders.google;
                         await provider.sendEmail(args);
                         resultMessage.text = `Письмо на тему "${args.subject}" успешно отправлено получателям: ${args.to.join(', ')}.`;
+                        break;
+                    }
+                    case 'delete_calendar_event': {
+                        const provider = serviceProviders.google;
+                        await provider.deleteCalendarEvent(args);
+                        resultMessage.text = `Событие было успешно удалено.`;
+                        break;
+                    }
+                    case 'delete_task': {
+                        const provider = serviceProviders.google;
+                        await provider.deleteTask(args);
+                        resultMessage.text = `Задача была успешно удалена.`;
+                        break;
+                    }
+                    case 'delete_email': {
+                        const provider = serviceProviders.google;
+                        await provider.deleteEmail(args);
+                        resultMessage.text = `Письмо было перемещено в корзину.`;
+                        break;
+                    }
+                    case 'summarize_and_save_memory': {
+                        const provider = serviceProviders.supabase;
+                        if (provider) {
+                            await provider.saveMemory(args);
+                            resultMessage.text = "Хорошо, я запомнил это.";
+                        } else {
+                            resultMessage.text = "Не могу сохранить в память, Supabase не настроен.";
+                        }
+                        break;
+                    }
+                    case 'recall_memory': {
+                        const provider = serviceProviders.supabase;
+                        if (provider) {
+                            const memories = await provider.recallMemory(args.query);
+                            if (memories.length > 0) {
+                                const memoryText = memories.map(m => `- ${m.summary} (Ключевые слова: ${m.keywords.join(', ')})`).join('\n');
+                                resultMessage.text = `Я кое-что вспомнил:\n${memoryText}`;
+                            } else {
+                                resultMessage.text = "Я не смог ничего вспомнить по этому поводу.";
+                            }
+                        } else {
+                             resultMessage.text = "Не могу ничего вспомнить, Supabase не настроен.";
+                        }
                         break;
                     }
                     default:
@@ -571,12 +681,23 @@ export const callGemini = async ({
         const lines = rawText.split('\n');
         const responseTextLines = [];
         const suggestedReplies = [];
+        let contextualActions = null;
+
         const QUICK_REPLY_PREFIX = '[QUICK_REPLY]';
+        const CONTEXT_ACTIONS_PREFIX = '[CONTEXT_ACTIONS]';
 
         for (const line of lines) {
             if (line.startsWith(QUICK_REPLY_PREFIX)) {
                 suggestedReplies.push(line.substring(QUICK_REPLY_PREFIX.length).trim());
-            } else {
+            } else if (line.startsWith(CONTEXT_ACTIONS_PREFIX)) {
+                try {
+                    const jsonPart = line.substring(CONTEXT_ACTIONS_PREFIX.length).trim();
+                    contextualActions = JSON.parse(jsonPart);
+                } catch (e) {
+                    console.error("Failed to parse contextual actions:", e);
+                }
+            }
+            else {
                 responseTextLines.push(line);
             }
         }
@@ -586,6 +707,7 @@ export const callGemini = async ({
             sender: MessageSender.ASSISTANT,
             text: responseTextLines.join('\n').trim(),
             suggestedReplies: suggestedReplies.length > 0 ? suggestedReplies : null,
+            contextualActions: contextualActions,
         };
 
     } catch (error) {

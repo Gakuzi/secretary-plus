@@ -6,10 +6,11 @@ import { getSettings, saveSettings } from './utils/storage.js';
 import { createSettingsModal } from './components/SettingsModal.js';
 import { createStatsModal } from './components/StatsModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
-import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator } from './components/Chat.js';
+import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
-import { SettingsIcon, ChartBarIcon, SupabaseIcon, GoogleIcon } from './components/icons/Icons.js';
+import { SettingsIcon, ChartBarIcon, SupabaseIcon, GoogleIcon, NewChatIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
+import { createItemDetailsCard } from './components/ResultCard.js';
 
 // Add a guard to prevent the script from running multiple times
 // if it's loaded by both the HTML and the TSX entry point.
@@ -33,12 +34,15 @@ if (!window.isSecretaryPlusAppInitialized) {
         supabaseUser: null,
         isLoading: false,
         actionStats: {},
+        lastSeenEmailId: null, // For proactive email check
     };
 
     // --- SERVICE INSTANCES ---
     const googleProvider = new GoogleServiceProvider();
     const appleProvider = new AppleServiceProvider();
     let supabaseService = null;
+    let emailCheckInterval = null;
+
 
     const serviceProviders = {
         google: googleProvider,
@@ -52,6 +56,7 @@ if (!window.isSecretaryPlusAppInitialized) {
     const mainContent = document.getElementById('main-content');
     const settingsButton = document.getElementById('settings-button');
     const statsButton = document.getElementById('stats-button');
+    const newChatButton = document.getElementById('new-chat-button');
     const settingsModalContainer = document.getElementById('settings-modal-container');
     const statsModalContainer = document.getElementById('stats-modal-container');
     const cameraViewContainer = document.getElementById('camera-view-container');
@@ -107,6 +112,7 @@ if (!window.isSecretaryPlusAppInitialized) {
                 isGoogleConnected: state.isGoogleConnected,
                 isSupabaseEnabled: state.settings.isSupabaseEnabled,
             }));
+            renderContextualActions(null); // Clear contextual actions on welcome screen
         } else {
             state.messages.forEach(msg => addMessageToChat(msg));
         }
@@ -178,6 +184,7 @@ if (!window.isSecretaryPlusAppInitialized) {
             googleProvider.setAuthToken(null);
         }
         renderAuth();
+        setupEmailPolling();
     }
 
     async function updateGoogleDirectAuthState(token) {
@@ -197,6 +204,7 @@ if (!window.isSecretaryPlusAppInitialized) {
              googleProvider.setAuthToken(null);
         }
          renderAuth();
+         setupEmailPolling();
     }
 
     function handleGoogleDirectAuthResponse(tokenResponse) {
@@ -265,22 +273,31 @@ if (!window.isSecretaryPlusAppInitialized) {
         hideSettings();
         await initializeAppServices();
     }
+    
+    function handleNewChat() {
+        state.messages = [];
+        state.lastSeenEmailId = null;
+        renderMainContent();
+    }
 
     /**
      * Central function to process a prompt (from user or system), call Gemini, and display the response.
      * @param {string} prompt - The text prompt to send to the Gemini model.
      * @param {object|null} image - An optional image object to send.
+     * @param {boolean} isSystemInitiated - Flag to indicate if this is a proactive message.
      */
-    async function processBotResponse(prompt, image = null) {
+    async function processBotResponse(prompt, image = null, isSystemInitiated = false) {
         state.isLoading = true;
         showLoadingIndicator();
 
         try {
-            // The history sent to Gemini is always the state of messages *before* the current prompt.
-            // The current prompt is passed separately.
+            // If the message is system-initiated, it doesn't get added to history beforehand.
+            // History is the state of messages *before* the current prompt.
+            const history = isSystemInitiated ? state.messages : state.messages.slice(0, -1);
+            
             const response = await callGemini({
                 prompt,
-                history: state.messages.slice(0, -1),
+                history: history,
                 serviceProviders,
                 serviceMap: state.settings.serviceMap,
                 timezone: state.settings.timezone,
@@ -292,9 +309,26 @@ if (!window.isSecretaryPlusAppInitialized) {
             if (response.functionCallName) {
                 state.actionStats[response.functionCallName] = (state.actionStats[response.functionCallName] || 0) + 1;
             }
+            
+            // If the assistant provides system context (like email content), add it to history
+            // but don't display it. This enriches the next turn's context.
+            if (response.systemContext) {
+                 state.messages.push({ sender: MessageSender.SYSTEM, text: response.systemContext, id: Date.now() });
+            }
+
+            // If system initiated, add a special message indicating this.
+            if (isSystemInitiated) {
+                const systemPromptMessage = { sender: MessageSender.SYSTEM, text: prompt, id: Date.now() };
+                state.messages.push(systemPromptMessage);
+                 // We don't display this system message, but it's in history for context.
+            }
 
             state.messages.push(response);
             addMessageToChat(response);
+
+            if (response.contextualActions) {
+                renderContextualActions(response.contextualActions);
+            }
         } catch (error) {
             console.error("Error calling Gemini:", error);
             const errorMessage = { sender: MessageSender.SYSTEM, text: `Произошла ошибка: ${error.message}` };
@@ -316,9 +350,10 @@ if (!window.isSecretaryPlusAppInitialized) {
             return;
         }
         
-        if (state.messages.length === 0) {
-            const chatLog = document.getElementById('chat-log');
-            if (chatLog) chatLog.innerHTML = '';
+        const chatLog = document.getElementById('chat-log');
+        const welcomeScreen = chatLog?.querySelector('.welcome-screen-container');
+        if (welcomeScreen) {
+             chatLog.innerHTML = '';
         }
         
         // Add the user's message to history first
@@ -342,6 +377,21 @@ if (!window.isSecretaryPlusAppInitialized) {
         let promptToSend = '';
 
         switch (action) {
+            case 'view_item_details': {
+                const cardElement = target.closest('.message-item');
+                const messageId = cardElement.dataset.messageId;
+                const message = state.messages.find(m => m.id == messageId);
+                
+                if (message) {
+                    // Replace the list card with a details card
+                    message.card = createItemDetailsCard(payload);
+                    renderMainContent(); // Re-render the chat
+                }
+                return; // No bot call needed, just UI update
+            }
+             case 'use_item_context':
+                promptToSend = payload.prompt;
+                break;
             case 'select_contact':
                 promptToSend = `Для моей задачи я выбираю контакт: ${payload.name} (${payload.email || 'email не указан'}).`;
                 break;
@@ -362,6 +412,21 @@ if (!window.isSecretaryPlusAppInitialized) {
                 // Same here, confirming the proposed action.
                 promptToSend = `Да, создай задачу для подготовки к встрече.`;
                 break;
+            case 'request_delete': {
+                const { id, type } = payload;
+                let typeText = '';
+                if (type === 'event') {
+                    typeText = `событие с ID ${id}`;
+                } else if (type === 'task') {
+                    typeText = `задачу с ID ${id}`;
+                } else if (type === 'email') {
+                    typeText = `письмо с ID ${id}`;
+                }
+                if(typeText) {
+                    promptToSend = `Да, я подтверждаю удаление: ${typeText}.`;
+                }
+                break;
+            }
             case 'create_doc_with_content':
                 promptToSend = `Да, создай документ "${payload.title}" с предложенным тобой содержанием.`;
                 break;
@@ -399,6 +464,67 @@ if (!window.isSecretaryPlusAppInitialized) {
         target.classList.add('clicked');
 
         await handleSendMessage(replyText);
+    }
+    
+    async function handleActionPrompt(e) {
+        const target = e.target.closest('[data-action-prompt]');
+        if (!target) return;
+        
+        const promptText = target.dataset.actionPrompt;
+        if (promptText) {
+            await handleSendMessage(promptText);
+        }
+    }
+
+    // --- PROACTIVE FEATURES ---
+
+    async function checkForNewEmail() {
+        if (!state.isGoogleConnected || document.hidden || state.isLoading) {
+            return; // Don't check if not connected, tab is not visible, or app is busy
+        }
+
+        try {
+            const recentEmails = await googleProvider.getRecentEmails({ max_results: 1 });
+            if (recentEmails && recentEmails.length > 0) {
+                const latestEmail = recentEmails[0];
+                if (state.lastSeenEmailId === null) {
+                    // On first load, just set the ID and don't notify
+                    state.lastSeenEmailId = latestEmail.id;
+                    return;
+                }
+
+                if (latestEmail.id !== state.lastSeenEmailId) {
+                    console.log("New email detected:", latestEmail.subject);
+                    state.lastSeenEmailId = latestEmail.id;
+
+                    const chatLog = document.getElementById('chat-log');
+                    const welcomeScreen = chatLog?.querySelector('.welcome-screen-container');
+                    if (welcomeScreen) {
+                        chatLog.innerHTML = '';
+                    }
+
+                    // The assistant "speaks first"
+                    const systemPrompt = `Пришло новое письмо от "${latestEmail.from}" с темой "${latestEmail.subject}". Содержимое: "${latestEmail.snippet}". Проанализируй и кратко сообщи мне об этом, предложив релевантные действия (ответить, удалить, создать задачу и т.д.).`;
+                    await processBotResponse(systemPrompt, null, true);
+                }
+            }
+        } catch (error) {
+            console.error("Error checking for new email:", error);
+            // Don't alert the user, just log it.
+        }
+    }
+
+    function setupEmailPolling() {
+        if (emailCheckInterval) {
+            clearInterval(emailCheckInterval);
+            emailCheckInterval = null;
+        }
+
+        if (state.settings.enableEmailPolling && state.isGoogleConnected) {
+            // Check immediately, then start the interval
+            setTimeout(checkForNewEmail, 2000);
+            emailCheckInterval = setInterval(checkForNewEmail, 60000); // Check every 60 seconds
+        }
     }
 
 
@@ -470,13 +596,16 @@ if (!window.isSecretaryPlusAppInitialized) {
 
         settingsButton.innerHTML = SettingsIcon;
         statsButton.innerHTML = ChartBarIcon;
+        newChatButton.innerHTML = NewChatIcon;
 
         settingsButton.addEventListener('click', showSettings);
         statsButton.addEventListener('click', showStatsModal);
+        newChatButton.addEventListener('click', handleNewChat);
 
         mainContent.addEventListener('click', (e) => {
             handleCardAction(e);
             handleQuickReply(e);
+            handleActionPrompt(e);
             
             const settingsButtonFromWelcome = e.target.closest('#open-settings-from-welcome');
             if (settingsButtonFromWelcome) {

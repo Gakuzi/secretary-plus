@@ -1,6 +1,7 @@
 import { createMessageElement } from './Message.js';
 import { MicrophoneIcon, SendIcon, CameraIcon, LockIcon, TrashIcon, AttachmentIcon } from './icons/Icons.js';
 import { SpeechRecognizer } from '../utils/speech.js';
+import * as Icons from './icons/Icons.js';
 
 // Module-level variables
 let chatLog, chatInput, sendButton, voiceRecordButton, cameraButton, attachButton, fileInput;
@@ -220,6 +221,10 @@ export function createChatInterface(onSendMessage, showCameraView) {
         </div>
 
         <div id="input-bar-wrapper" class="p-2 sm:p-4 border-t border-gray-700">
+            <!-- Contextual Action Buttons -->
+            <div id="action-bar-container" class="pb-2 flex items-center gap-2">
+                <!-- Buttons will be rendered here by renderContextualActions -->
+            </div>
             <div class="flex items-center w-full gap-2">
                 <div id="left-actions" class="flex items-center gap-1">
                     <button id="camera-button" class="p-2.5 rounded-full hover:bg-gray-700 flex-shrink-0">${CameraIcon}</button>
@@ -331,4 +336,30 @@ export function showLoadingIndicator() {
 export function hideLoadingIndicator() {
     const indicator = document.getElementById('loading-indicator');
     if (indicator) indicator.remove();
+}
+
+const defaultActions = [
+    { label: 'Что в календаре?', prompt: 'Что у меня сегодня в календаре?', icon: 'CalendarIcon' },
+    { label: 'Мои задачи', prompt: 'Покажи мои задачи', icon: 'CheckSquareIcon' },
+    { label: 'Найти контакт', prompt: 'Найди контакт Иван', icon: 'UsersIcon' },
+    { label: 'Найти документ', prompt: 'Найди документ "план"', icon: 'FileIcon' },
+];
+
+export function renderContextualActions(actions) {
+    const container = document.getElementById('action-bar-container');
+    if (!container) return;
+    
+    const actionsToRender = actions || defaultActions;
+
+    container.innerHTML = actionsToRender.map(action => {
+        const iconSVG = Icons[action.icon] || '';
+        return `
+            <button class="action-bar-button" data-action-prompt="${action.prompt}">
+                ${iconSVG}
+                ${action.label}
+            </button>
+        `;
+    }).join('');
+    
+    container.style.display = actionsToRender.length > 0 ? 'flex' : 'none';
 }

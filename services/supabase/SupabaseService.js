@@ -254,4 +254,34 @@ export class SupabaseService {
         if (error) throw error;
         return data;
     }
+
+    // --- Long-term Memory ---
+    async saveMemory(memoryData) {
+        const user = (await this.getSession())?.user;
+        if (!user) throw new Error("User not authenticated.");
+
+        const { error } = await this.client
+            .from('chat_memory')
+            .insert({
+                user_id: user.id,
+                summary: memoryData.summary,
+                keywords: memoryData.keywords,
+            });
+
+        if (error) throw error;
+        return { success: true };
+    }
+
+    async recallMemory(query) {
+        const { data, error } = await this.client
+            .from('chat_memory')
+            .select('*')
+            // A simple text search. For more advanced search, pg_vector would be used.
+            .or(`summary.ilike.%${query}%,keywords.cs.{${query}}`)
+            .order('created_at', { ascending: false })
+            .limit(5);
+
+        if (error) throw error;
+        return data;
+    }
 }

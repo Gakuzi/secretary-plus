@@ -1,5 +1,66 @@
 import { GOOGLE_SCOPES } from "../../constants.js";
 
+// Helper to decode base64url string
+function base64UrlDecode(str) {
+    let output = str.replace(/-/g, '+').replace(/_/g, '/');
+    switch (output.length % 4) {
+        case 0: break;
+        case 2: output += '=='; break;
+        case 3: output += '='; break;
+        default: throw 'Illegal base64url string!';
+    }
+    try {
+        return decodeURIComponent(atob(output).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+    } catch (e) {
+        console.error("Base64 decoding failed:", e);
+        return atob(output); // Fallback to raw decoding
+    }
+}
+
+
+// Finds the most appropriate text part from a Gmail message payload
+function getEmailBody(payload) {
+    let body = '';
+    
+    // Prioritize text/plain over text/html
+    const findPart = (parts, mimeType) => {
+        let result = null;
+        if (!parts) return null;
+        for (const part of parts) {
+            if (part.mimeType === mimeType && part.body && part.body.data) {
+                return part.body.data;
+            }
+            if (part.parts) {
+                result = findPart(part.parts, mimeType);
+                if (result) return result;
+            }
+        }
+        return null;
+    };
+    
+    const plainTextPart = findPart([payload], 'text/plain');
+    if (plainTextPart) {
+        body = base64UrlDecode(plainTextPart);
+    } else {
+        const htmlPart = findPart([payload], 'text/html');
+        if (htmlPart) {
+            body = base64UrlDecode(htmlPart);
+            // Simple strip of HTML tags
+            body = body.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+    }
+    
+    // Fallback for non-multipart messages
+    if (!body && payload.body && payload.body.data) {
+        body = base64UrlDecode(payload.body.data);
+    }
+
+    return body;
+}
+
+
 export class GoogleServiceProvider {
     constructor() {
         this.gapi = window.gapi;
@@ -151,6 +212,17 @@ export class GoogleServiceProvider {
         const response = await request;
         return response.result;
     }
+
+    async deleteCalendarEvent({ eventId, calendarId = 'primary' }) {
+        await this.ensureGapiIsReady();
+        await this.gapi.client.load('calendar', 'v3');
+        await this.gapi.client.calendar.events.delete({
+            calendarId: calendarId,
+            eventId: eventId,
+        });
+        return { success: true, eventId };
+    }
+
 
     async getAllContacts() {
         await this.ensureGapiIsReady();
@@ -315,13 +387,23 @@ export class GoogleServiceProvider {
         return response.result;
     }
 
+     async deleteTask({ taskId, tasklist = '@default' }) {
+        await this.ensureGapiIsReady();
+        await this.gapi.client.load('tasks', 'v1');
+        await this.gapi.client.tasks.tasks.delete({
+            tasklist: tasklist,
+            task: taskId,
+        });
+        return { success: true, taskId };
+    }
+
     async getRecentEmails({ max_results = 5 }) {
         await this.ensureGapiIsReady();
         await this.gapi.client.load('gmail', 'v1');
 
         const listResponse = await this.gapi.client.gmail.users.messages.list({
-            'userId': 'me',
-            'maxResults': max_results
+            userId: 'me',
+            maxResults: max_results,
         });
 
         const messages = listResponse.result.messages || [];
@@ -332,10 +414,9 @@ export class GoogleServiceProvider {
         const batch = this.gapi.client.newBatch();
         messages.forEach(message => {
             batch.add(this.gapi.client.gmail.users.messages.get({
-                'userId': 'me',
-                'id': message.id,
-                'format': 'metadata',
-                'metadataHeaders': ['Subject', 'From', 'Date']
+                userId: 'me',
+                id: message.id,
+                format: 'full', // Request full payload to get body
             }));
         });
         
@@ -344,7 +425,7 @@ export class GoogleServiceProvider {
         return Object.values(batchResponse.result).map(res => {
             const payload = res.result;
             const headers = payload.payload.headers;
-            const getHeader = (name) => headers.find(h => h.name === name)?.value || '';
+            const getHeader = (name) => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
 
             return {
                 id: payload.id,
@@ -352,6 +433,7 @@ export class GoogleServiceProvider {
                 subject: getHeader('Subject'),
                 from: getHeader('From'),
                 date: getHeader('Date'),
+                body: getEmailBody(payload.payload) // Extract and decode body
             };
         });
     }
@@ -379,6 +461,17 @@ export class GoogleServiceProvider {
         });
 
         const response = await request;
+        return response.result;
+    }
+    
+    async deleteEmail({ messageId, userId = 'me' }) {
+        await this.ensureGapiIsReady();
+        await this.gapi.client.load('gmail', 'v1');
+        // We use 'trash' instead of 'delete' for safety.
+        const response = await this.gapi.client.gmail.users.messages.trash({
+            userId: userId,
+            id: messageId,
+        });
         return response.result;
     }
 

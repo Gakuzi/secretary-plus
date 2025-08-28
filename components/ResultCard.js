@@ -37,12 +37,21 @@ function createStandardCard(card) {
     let actionsHtml = '';
     if (card.actions) {
         actionsHtml = card.actions.map(action => {
+            let buttonClass = "px-3 py-1 rounded-md text-sm transition-colors ";
+            if (action.style === 'danger') {
+                buttonClass += 'bg-red-600 hover:bg-red-500';
+            } else {
+                buttonClass += 'bg-blue-600 hover:bg-blue-500';
+            }
+
             if (action.url) {
-                return `<a href="${action.url}" target="_blank" rel="noopener noreferrer" class="px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded-md text-sm transition-colors">${action.label}</a>`;
+                // For links, we'll use a slightly different style to distinguish them
+                buttonClass = 'px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded-md text-sm transition-colors';
+                return `<a href="${action.url}" target="_blank" rel="noopener noreferrer" class="${buttonClass}">${action.label}</a>`;
             }
             if (action.action) {
                  const payload = JSON.stringify(action.payload || {});
-                 return `<button data-action="${action.action}" data-payload='${payload}' class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded-md text-sm transition-colors">${action.label}</button>`;
+                 return `<button data-action="${action.action}" data-payload='${payload}' class="${buttonClass}">${action.label}</button>`;
             }
             return '';
         }).join('');
@@ -81,16 +90,27 @@ export function createCalendarViewCard(events) {
             const endTime = new Date(end).toLocaleTimeString('ru-RU', options);
             timeString = `${startTime} - ${endTime}`;
         }
+        
+        const payload = {
+            type: 'event',
+            id: event.id,
+            summary: event.summary,
+            description: event.description,
+            startTime: start,
+            endTime: end,
+            htmlLink: event.htmlLink,
+            hangoutLink: event.hangoutLink,
+        };
 
         return `
-            <a href="${event.htmlLink}" target="_blank" rel="noopener noreferrer" class="flex items-start gap-3 p-2 rounded-md hover:bg-gray-900/50 transition-colors">
+            <button data-action="view_item_details" data-payload='${JSON.stringify(payload)}' class="w-full flex items-start gap-3 p-2 rounded-md hover:bg-gray-900/50 transition-colors text-left">
                 <div class="w-20 text-right font-mono text-sm text-gray-300 flex-shrink-0">${timeString}</div>
                 <div class="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0"></div>
-                <div class="flex-1">
-                    <p class="font-semibold text-gray-100">${event.summary}</p>
+                <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-gray-100 truncate">${event.summary}</p>
                     ${event.description ? `<p class="text-xs text-gray-400 truncate">${event.description}</p>` : ''}
                 </div>
-            </a>
+            </button>
         `;
     }).join('');
 
@@ -104,15 +124,23 @@ export function createCalendarViewCard(events) {
 
 
 export function createTasksViewCard(tasks) {
-    const itemsHtml = tasks.map(task => `
-        <div class="flex items-start gap-3 p-2 rounded-md">
+    const itemsHtml = tasks.map(task => {
+        const payload = {
+            type: 'task',
+            id: task.id,
+            title: task.title,
+            notes: task.notes,
+            due: task.due,
+        };
+        return `
+        <button data-action="view_item_details" data-payload='${JSON.stringify(payload)}' class="w-full flex items-start gap-3 p-2 rounded-md hover:bg-gray-900/50 transition-colors text-left">
             <div class="w-5 h-5 border-2 border-gray-500 rounded mt-0.5 flex-shrink-0"></div>
-            <div class="flex-1">
+            <div class="flex-1 min-w-0">
                 <p class="font-medium text-gray-100">${task.title}</p>
-                 ${task.notes ? `<p class="text-xs text-gray-400">${task.notes.replace(/\n/g, '<br>')}</p>` : ''}
+                 ${task.notes ? `<p class="text-xs text-gray-400 truncate">${task.notes.replace(/\n/g, ' ')}</p>` : ''}
             </div>
-        </div>
-    `).join('');
+        </button>
+    `}).join('');
 
     return {
         type: 'tasks_view',
@@ -125,12 +153,20 @@ export function createTasksViewCard(tasks) {
 export function createEmailsViewCard(emails) {
     const itemsHtml = emails.map(email => {
         const from = email.from.replace(/<.*?>/g, '').trim();
+        const payload = {
+            type: 'email',
+            id: email.id,
+            from: from,
+            subject: email.subject || '(Без темы)',
+            snippet: email.snippet,
+        };
+
         return `
-            <div class="border-b border-gray-700/50 last:border-b-0 py-2">
+            <button data-action="view_item_details" data-payload='${JSON.stringify(payload)}' class="w-full border-b border-gray-700/50 last:border-b-0 py-2 text-left hover:bg-gray-900/50 px-2 rounded-md transition-colors">
                 <p class="font-semibold text-sm text-gray-200 truncate">${from}</p>
                 <p class="font-medium text-gray-100">${email.subject || '(Без темы)'}</p>
                 <p class="text-xs text-gray-400 truncate">${email.snippet}</p>
-            </div>
+            </button>
         `;
     }).join('');
 
@@ -322,6 +358,67 @@ function createDocumentChoiceCard(card) {
             ${optionsHtml}
         </div>
     `;
+}
+
+export function createItemDetailsCard(item) {
+    let detailsHtml = '';
+    let actions = [];
+    let icon = 'FileIcon';
+    let title = item.summary || item.title || item.subject;
+
+    switch (item.type) {
+        case 'event':
+            icon = 'CalendarIcon';
+            const startTime = new Date(item.startTime).toLocaleString('ru-RU');
+            const endTime = new Date(item.endTime).toLocaleString('ru-RU');
+            detailsHtml = `
+                <p><strong>Время:</strong> ${startTime} - ${endTime}</p>
+                <p><strong>Описание:</strong> ${item.description || 'Нет'}</p>
+            `;
+            actions.push({ label: 'Открыть в Календаре', url: item.htmlLink });
+            actions.push({ label: 'Удалить', action: 'request_delete', payload: { id: item.id, type: 'event' }, style: 'danger' });
+            actions.push({ label: 'Создать задачу "Подготовиться"', action: 'use_item_context', payload: { prompt: `Создай задачу "Подготовиться к: ${title}"` } });
+            break;
+        case 'task':
+            icon = 'CheckSquareIcon';
+            detailsHtml = `
+                 ${item.notes ? `<p><strong>Заметки:</strong> ${item.notes}</p>` : ''}
+                 ${item.due ? `<p><strong>Срок:</strong> ${new Date(item.due).toLocaleString('ru-RU')}</p>` : ''}
+            `;
+            actions.push({ label: 'Удалить', action: 'request_delete', payload: { id: item.id, type: 'task' }, style: 'danger' });
+            actions.push({ label: 'Создать событие в календаре', action: 'use_item_context', payload: { prompt: `Создай событие в календаре для задачи: ${title}` } });
+            break;
+        case 'email':
+            icon = 'EmailIcon';
+            detailsHtml = `
+                <p><strong>От:</strong> ${item.from}</p>
+                <p><strong>Кратко:</strong> ${item.snippet}</p>
+            `;
+            actions.push({ label: 'Удалить', action: 'request_delete', payload: { id: item.id, type: 'email' }, style: 'danger' });
+            actions.push({ label: 'Ответить', action: 'use_item_context', payload: { prompt: `Подготовь ответ на письмо с темой "${title}" от ${item.from}` } });
+            actions.push({ label: 'Создать задачу', action: 'use_item_context', payload: { prompt: `Создай задачу на основе письма: ${title}` } });
+            break;
+    }
+
+    return {
+        type: 'item_details',
+        icon: icon,
+        title: title,
+        htmlContent: `
+            <div class="text-sm space-y-2 mb-3">${detailsHtml}</div>
+            <div class="flex flex-wrap gap-2">
+                ${actions.map(action => {
+                     let buttonClass = "px-3 py-1 rounded-md text-sm transition-colors ";
+                     if (action.style === 'danger') buttonClass += 'bg-red-600 hover:bg-red-500';
+                     else buttonClass += 'bg-blue-600 hover:bg-blue-500';
+                     
+                     if (action.url) return `<a href="${action.url}" target="_blank" rel="noopener noreferrer" class="${buttonClass}">${action.label}</a>`;
+                     
+                     return `<button data-action="${action.action}" data-payload='${JSON.stringify(action.payload)}' class="${buttonClass}">${action.label}</button>`;
+                }).join('')}
+            </div>
+        `
+    };
 }
 
 

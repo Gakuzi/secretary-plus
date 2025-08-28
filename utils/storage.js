@@ -8,6 +8,7 @@ const defaultSettings = {
     isGoogleEnabled: true,
     googleClientId: '',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    enableEmailPolling: true, // New setting for proactive email checks
     serviceMap: {
         calendar: 'google',
         tasks: 'google',

@@ -163,7 +163,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                     </div>
 
                     <!-- General Tab -->
-                    <div id="tab-general" class="settings-tab-content hidden">
+                    <div id="tab-general" class="settings-tab-content hidden space-y-6">
                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
                              <h3 class="text-lg font-semibold text-gray-200">Часовой пояс</h3>
                              <p class="text-sm text-gray-400 mt-1 mb-4">Выберите ваш основной часовой пояс. Ассистент будет использовать его для корректной интерпретации времени.</p>
@@ -173,6 +173,18 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                                     <!-- Options populated by JS -->
                                 </select>
                              </div>
+                        </div>
+                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                             <div class="flex items-center justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-gray-200">Проактивные уведомления</h3>
+                                    <p class="text-sm text-gray-400">Ассистент будет проверять почту и сообщать о новых письмах.</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="email-polling-toggle" ${currentSettings.enableEmailPolling ? 'checked' : ''}>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
                         </div>
                     </div>
 
@@ -235,6 +247,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             isGoogleEnabled: true, 
             googleClientId: modalOverlay.querySelector('#google-client-id').value.trim(),
             timezone: modalOverlay.querySelector('#timezone-select').value,
+            enableEmailPolling: modalOverlay.querySelector('#email-polling-toggle').checked,
             serviceMap: {
                 calendar: modalOverlay.querySelector('#calendar-provider-select').value,
                 tasks: modalOverlay.querySelector('#tasks-provider-select').value,
