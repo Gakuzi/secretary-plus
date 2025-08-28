@@ -247,7 +247,7 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
                             <h3 class="text-lg font-semibold text-gray-200">Статус синхронизации</h3>
                             <p class="text-sm text-gray-400">Данные из Google кэшируются для быстрого доступа ассистента.</p>
-                            <div id="sync-status-list" class="space-y-2 text-sm border-t border-b border-gray-700/50 py-3 my-2">
+                            <div id="sync-status-list" class="text-sm border-t border-gray-700/50 pt-3 mt-2">
                                 <!-- Status items will be rendered here by JS -->
                             </div>
                             <div class="pt-2">
@@ -390,21 +390,38 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     if (syncStatusList) {
         syncStatusList.innerHTML = Object.entries(SYNC_NAMES).map(([key, label]) => {
             const status = syncStatus[key];
-            let statusText;
-            let statusClass = 'text-gray-400';
+            let statusHtml;
 
             if (typeof status === 'object' && status !== null && status.error) {
-                statusText = `Ошибка: ${status.error.slice(0, 30)}...`;
-                statusClass = 'text-red-400';
+                const shortError = status.error.slice(0, 30) + (status.error.length > 30 ? '...' : '');
+                const fullError = status.error;
+                const errorId = `sync-error-details-${key}`;
+                
+                statusHtml = `
+                    <div class="flex flex-col items-end">
+                        <button 
+                            class="font-mono text-xs text-red-400 hover:underline cursor-pointer text-right"
+                            data-action="toggle-error-details"
+                            data-target="${errorId}"
+                            title="Показать/скрыть детали"
+                        >
+                            Ошибка: ${shortError}
+                        </button>
+                        <div id="${errorId}" class="hidden mt-2 w-full p-2 bg-gray-900 border border-gray-700 rounded-md">
+                            <pre class="text-xs text-gray-300 whitespace-pre-wrap break-all">${fullError}</pre>
+                        </div>
+                    </div>
+                `;
             } else {
-                statusText = timeAgo(status);
-                statusClass = 'text-green-400';
+                statusHtml = `<span class="font-mono text-xs text-green-400">${timeAgo(status)}</span>`;
             }
             
             return `
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-300">${label}:</span>
-                    <span class="font-mono text-xs ${statusClass}">${statusText}</span>
+                 <div class="py-2 border-b border-gray-700/50 last:border-b-0">
+                    <div class="flex justify-between items-start">
+                        <span class="text-gray-300 pt-0.5">${label}:</span>
+                        ${statusHtml}
+                    </div>
                 </div>
             `;
         }).join('');
@@ -412,8 +429,6 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
     
     const forceSyncButton = modalOverlay.querySelector('#force-sync-button');
     if (forceSyncButton) {
-        // Corrected logic: Button is disabled only if not connected or actively syncing.
-        // It is independent of the auto-sync toggle.
         forceSyncButton.disabled = !authState.isGoogleConnected || isSyncing;
         forceSyncButton.addEventListener('click', onForceSync);
     }
@@ -424,6 +439,18 @@ export function createSettingsModal(currentSettings, authState, onSave, onClose,
             window.open('https://aistudio.google.com/app/apps/drive/1-YFIo56NWOtYuQYpZUWiPcMY323lJPuK?showAssistant=true&showPreview=true', '_blank');
         });
     }
+
+    // Event Delegation for toggling error details
+    modalOverlay.addEventListener('click', (e) => {
+        const toggleButton = e.target.closest('[data-action="toggle-error-details"]');
+        if (toggleButton) {
+            const targetId = toggleButton.dataset.target;
+            const detailsElement = modalOverlay.querySelector(`#${targetId}`);
+            if (detailsElement) {
+                detailsElement.classList.toggle('hidden');
+            }
+        }
+    });
 
     return modalOverlay;
 }
