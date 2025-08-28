@@ -1,13 +1,10 @@
-
-
-
 import React, { useState, useContext } from 'react';
-import Chat from './components/Chat';
-import SettingsModal from './components/SettingsModal';
-import { AppContext } from './contexts/AppContext';
-import { GoogleIcon, SettingsIcon } from './components/icons/Icons';
+import Chat from './components/Chat.jsx';
+import SettingsModal from './components/SettingsModal.jsx';
+import { AppContext } from './contexts/AppContext.jsx';
+import { GoogleIcon, SettingsIcon } from './components/icons/Icons.jsx';
 
-const App: React.FC = () => {
+const App = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { settings, isUnsupportedDomain, isAuthenticated, userProfile, connect } = useContext(AppContext);
 

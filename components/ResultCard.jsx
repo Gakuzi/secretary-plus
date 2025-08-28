@@ -1,18 +1,10 @@
-
-
 import React from 'react';
-import { CardData, SelectionOption } from '../types';
-import { EditIcon, DeleteIcon, OpenIcon } from './icons/Icons';
+import { EditIcon, DeleteIcon, OpenIcon } from './icons/Icons.jsx';
 
-interface ResultCardProps {
-    cardData: CardData;
-    onSelection?: (type: 'contact' | 'document', option: SelectionOption) => void;
-}
-
-const ResultCard: React.FC<ResultCardProps> = ({ cardData, onSelection }) => {
+const ResultCard = ({ cardData, onSelection }) => {
     const isSelectionCard = cardData.type === 'contact-selection' || cardData.type === 'document-selection';
 
-    const handleSelect = (option: SelectionOption) => {
+    const handleSelect = (option) => {
         if (onSelection) {
             const type = cardData.type === 'contact-selection' ? 'contact' : 'document';
             onSelection(type, option);

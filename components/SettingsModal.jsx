@@ -1,16 +1,8 @@
-
-
-
 import React, { useState, useContext, useEffect, useCallback } from 'react';
-import { AppContext } from '../contexts/AppContext';
-import { GoogleIcon, CopyIcon, CheckIcon, UserIcon, AppleIcon, MicrosoftIcon, SupabaseIcon } from './icons/Icons';
+import { AppContext } from '../contexts/AppContext.jsx';
+import { GoogleIcon, CopyIcon, CheckIcon, UserIcon, AppleIcon, MicrosoftIcon, SupabaseIcon } from './icons/Icons.jsx';
 
-interface SettingsModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-}
-
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+const SettingsModal = ({ isOpen, onClose }) => {
     const { settings, setSettings, isAuthenticated, userProfile, connect, disconnect, isUnsupportedDomain } = useContext(AppContext);
     const [localSettings, setLocalSettings] = useState(settings);
     const [originUri, setOriginUri] = useState('');
@@ -46,7 +38,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         onClose();
     };
 
-    const handleCopy = useCallback((textToCopy: string, type: 'origin' | 'redirect') => {
+    const handleCopy = useCallback((textToCopy, type) => {
         navigator.clipboard.writeText(textToCopy).then(() => {
             if (type === 'origin') {
                 setIsOriginCopied(true);

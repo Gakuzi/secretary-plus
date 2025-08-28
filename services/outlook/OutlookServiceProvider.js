@@ -1,42 +1,36 @@
-
-import { ServiceProvider } from "../ServiceProvider";
-import { UserProfile } from "../../types";
-
-export class OutlookServiceProvider implements ServiceProvider {
-    getId(): string {
+export class OutlookServiceProvider {
+    getId() {
         return "outlook";
     }
-    getName(): string {
+    getName() {
         return "Outlook";
     }
-    isAuthenticated(): Promise<boolean> {
+    isAuthenticated() {
         return Promise.resolve(false);
     }
-    authenticate(): Promise<void> {
+    authenticate() {
         return Promise.reject(new Error("Outlook Service Provider не реализован."));
     }
-    disconnect(): Promise<void> {
+    disconnect() {
         console.warn("Outlook Service Provider не реализован.");
         return Promise.resolve();
     }
-    getUserProfile(): Promise<UserProfile> {
+    getUserProfile() {
         return Promise.reject(new Error("Outlook Service Provider не реализован."));
     }
-    createEvent(details: any): Promise<any> {
+    createEvent(details) {
         return Promise.reject(new Error("Outlook Service Provider не реализован."));
     }
-    // FIX: Implement findContacts to conform to ServiceProvider interface.
-    findContacts(query: string): Promise<any[]> {
+    findContacts(query) {
         return Promise.reject(new Error("Outlook Service Provider не реализован."));
     }
-    // FIX: Implement findDocuments to conform to ServiceProvider interface.
-    findDocuments(query: string): Promise<any[]> {
+    findDocuments(query) {
         return Promise.reject(new Error("Outlook Service Provider не реализован."));
     }
-    createGoogleDoc(title: string): Promise<any> {
+    createGoogleDoc(title) {
         return Promise.reject(new Error("Outlook Service Provider не реализован."));
     }
-    createGoogleSheet(title: string): Promise<any> {
+    createGoogleSheet(title) {
         return Promise.reject(new Error("Outlook Service Provider не реализован."));
     }
 }

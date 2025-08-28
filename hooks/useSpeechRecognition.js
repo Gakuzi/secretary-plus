@@ -1,73 +1,6 @@
-// FIX: Add type definitions for Web Speech API to fix TypeScript errors.
-// This avoids errors like "Cannot find name 'SpeechRecognition'" and "property 'SpeechRecognition' does not exist on type 'Window'".
-interface SpeechRecognitionEvent extends Event {
-    readonly resultIndex: number;
-    readonly results: SpeechRecognitionResultList;
-}
-
-interface SpeechRecognitionResultList {
-    readonly length: number;
-    item(index: number): SpeechRecognitionResult;
-    [index: number]: SpeechRecognitionResult;
-}
-
-interface SpeechRecognitionResult {
-    readonly isFinal: boolean;
-    readonly length: number;
-    item(index: number): SpeechRecognitionAlternative;
-    [index: number]: SpeechRecognitionAlternative;
-}
-
-interface SpeechRecognitionAlternative {
-    readonly transcript: string;
-    readonly confidence: number;
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-    readonly error: string;
-    readonly message: string;
-}
-
-interface SpeechRecognition extends EventTarget {
-    continuous: boolean;
-    interimResults: boolean;
-    lang: string;
-    onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
-    onend: ((this: SpeechRecognition, ev: Event) => any) | null;
-    onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null;
-    onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
-    start(): void;
-    stop(): void;
-}
-
-declare var SpeechRecognition: {
-    prototype: SpeechRecognition;
-    new(): SpeechRecognition;
-};
-
-declare var webkitSpeechRecognition: {
-    prototype: SpeechRecognition;
-    new(): SpeechRecognition;
-};
-
-declare global {
-  interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof webkitSpeechRecognition;
-  }
-}
-
 import { useState, useEffect, useRef } from 'react';
 
-interface SpeechRecognitionHook {
-    transcript: string;
-    isListening: boolean;
-    startListening: () => void;
-    stopListening: () => void;
-    hasRecognitionSupport: boolean;
-}
-
-const getSpeechRecognition = (): typeof SpeechRecognition | null => {
+const getSpeechRecognition = () => {
     if (typeof window !== 'undefined') {
         return window.SpeechRecognition || window.webkitSpeechRecognition;
     }
@@ -76,10 +9,10 @@ const getSpeechRecognition = (): typeof SpeechRecognition | null => {
 
 const SpeechRecognitionAPI = getSpeechRecognition();
 
-export const useSpeechRecognition = (): SpeechRecognitionHook => {
+export const useSpeechRecognition = () => {
     const [isListening, setIsListening] = useState(false);
     const [transcript, setTranscript] = useState('');
-    const recognitionRef = useRef<SpeechRecognition | null>(null);
+    const recognitionRef = useRef(null);
 
     useEffect(() => {
         if (!SpeechRecognitionAPI) {

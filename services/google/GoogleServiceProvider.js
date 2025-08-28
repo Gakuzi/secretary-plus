@@ -1,30 +1,15 @@
+import { GOOGLE_SCOPES } from "../../constants.js";
 
-
-import { ServiceProvider } from "../ServiceProvider";
-import { UserProfile } from "../../types";
-import { GOOGLE_SCOPES } from "../../constants";
-
-declare global {
-    interface Window {
-        gapi: any;
-        google: any;
-    }
-}
-
-export class GoogleServiceProvider implements ServiceProvider {
-    private gapi: any;
-    private google: any;
-    private tokenClient: any;
-    private clientId: string;
-    private initPromise: Promise<void> | null = null;
-
-    constructor(clientId: string) {
+export class GoogleServiceProvider {
+    constructor(clientId) {
         this.gapi = window.gapi;
         this.google = window.google;
+        this.tokenClient = null;
         this.clientId = clientId;
+        this.initPromise = null;
     }
     
-    private initialize(): Promise<void> {
+    initialize() {
         if (this.initPromise) {
             return this.initPromise;
         }
@@ -50,24 +35,24 @@ export class GoogleServiceProvider implements ServiceProvider {
     }
 
 
-    getId(): string {
+    getId() {
         return "google";
     }
 
-    getName(): string {
+    getName() {
         return "Google";
     }
 
-    async isAuthenticated(): Promise<boolean> {
+    async isAuthenticated() {
         await this.initialize();
         return !!this.gapi.client.getToken();
     }
 
-    authenticate(): Promise<void> {
+    authenticate() {
         return new Promise(async (resolve, reject) => {
             try {
                 await this.initialize();
-                const callback = (resp: any) => {
+                const callback = (resp) => {
                     if (resp.error) {
                         return reject(resp);
                     }
@@ -87,7 +72,7 @@ export class GoogleServiceProvider implements ServiceProvider {
         });
     }
 
-    async disconnect(): Promise<void> {
+    async disconnect() {
         await this.initialize();
         const token = this.gapi.client.getToken();
         if (token) {
@@ -101,7 +86,7 @@ export class GoogleServiceProvider implements ServiceProvider {
         return Promise.resolve();
     }
 
-    async getUserProfile(): Promise<UserProfile> {
+    async getUserProfile() {
         await this.initialize();
         await this.gapi.client.load('oauth2', 'v2');
         const response = await this.gapi.client.oauth2.userinfo.get();
@@ -113,7 +98,7 @@ export class GoogleServiceProvider implements ServiceProvider {
         };
     }
 
-    async createEvent(details: { title: string; startTime: string; endTime: string; attendees?: string[]; description?: string }): Promise<any> {
+    async createEvent(details) {
         await this.initialize();
         await this.gapi.client.load('calendar', 'v3');
         const event = {
@@ -145,7 +130,7 @@ export class GoogleServiceProvider implements ServiceProvider {
         return response.result;
     }
 
-    async findContacts(query: string): Promise<any[]> {
+    async findContacts(query) {
         await this.initialize();
         await this.gapi.client.load('people', 'v1');
         
@@ -157,7 +142,7 @@ export class GoogleServiceProvider implements ServiceProvider {
         return response.result.results || [];
     }
 
-    async findDocuments(query: string): Promise<any[]> {
+    async findDocuments(query) {
         await this.initialize();
         await this.gapi.client.load('drive', 'v3');
 
@@ -170,7 +155,7 @@ export class GoogleServiceProvider implements ServiceProvider {
         return response.result.files || [];
     }
 
-    async createGoogleDoc(title: string): Promise<any> {
+    async createGoogleDoc(title) {
         await this.initialize();
         await this.gapi.client.load('drive', 'v3');
         const fileMetadata = {
@@ -184,7 +169,7 @@ export class GoogleServiceProvider implements ServiceProvider {
         return response.result;
     }
 
-    async createGoogleSheet(title: string): Promise<any> {
+    async createGoogleSheet(title) {
         await this.initialize();
         await this.gapi.client.load('drive', 'v3');
         const fileMetadata = {

@@ -1,41 +1,26 @@
+import React, { createContext, useState, useEffect, useMemo } from 'react';
+import useLocalStorage from '../hooks/useLocalStorage.js';
+import { GoogleServiceProvider } from '../services/google/GoogleServiceProvider.js';
 
-
-import React, { createContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import { AppSettings, UserProfile } from '../types';
-import useLocalStorage from '../hooks/useLocalStorage';
-import { ServiceProvider } from '../services/ServiceProvider';
-import { GoogleServiceProvider } from '../services/google/GoogleServiceProvider';
-
-const isUnsupportedHost = (): boolean => {
+const isUnsupportedHost = () => {
     const hostname = window.location.hostname;
     // Google OAuth fails on temporary or sandboxed domains.
     // We check for known patterns like *.usercontent.goog or hostnames without a TLD (except localhost).
     return hostname.endsWith('usercontent.goog') || (!hostname.includes('.') && hostname !== 'localhost');
 };
 
-interface AppContextType {
-  settings: AppSettings;
-  setSettings: (settings: AppSettings) => void;
-  serviceProvider: ServiceProvider | null;
-  isAuthenticated: boolean;
-  userProfile: UserProfile | null;
-  isUnsupportedDomain: boolean;
-  connect: () => Promise<void>;
-  disconnect: () => Promise<void>;
-}
+export const AppContext = createContext({});
 
-export const AppContext = createContext<AppContextType>({} as AppContextType);
-
-export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const AppProvider = ({ children }) => {
   // FIX: Removed geminiApiKey from settings, as it's handled by environment variables.
-  const [settings, setSettings] = useLocalStorage<AppSettings>('app-settings', {
+  const [settings, setSettings] = useLocalStorage('app-settings', {
     googleClientId: '',
   });
 
-  const [serviceProvider, setServiceProvider] = useState<ServiceProvider | null>(null);
+  const [serviceProvider, setServiceProvider] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isUnsupportedDomain] = useState<boolean>(isUnsupportedHost());
+  const [userProfile, setUserProfile] = useState(null);
+  const [isUnsupportedDomain] = useState(isUnsupportedHost());
 
   useEffect(() => {
     // Do not initialize Google provider if the domain is unsupported or no client ID is set.

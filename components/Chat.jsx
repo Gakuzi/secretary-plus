@@ -1,22 +1,20 @@
-
-
 import React, { useState, useRef, useEffect, useContext } from 'react';
-import { AppContext } from '../contexts/AppContext';
-import { ChatMessage, MessageSender, SelectionOption } from '../types';
-import Message from './Message';
-import CameraView from './CameraView';
-import { PaperclipIcon, MicIcon, SendIcon, CameraIcon, CloseIcon } from './icons/Icons';
-import { callGemini } from '../services/geminiService';
-import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import { AppContext } from '../contexts/AppContext.jsx';
+import { MessageSender } from '../types.js';
+import Message from './Message.jsx';
+import CameraView from './CameraView.jsx';
+import { PaperclipIcon, MicIcon, SendIcon, CameraIcon, CloseIcon } from './icons/Icons.jsx';
+import { callGemini } from '../services/geminiService.js';
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition.js';
 
-const Chat: React.FC = () => {
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
+const Chat = () => {
+    const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [attachedImage, setAttachedImage] = useState<{ base64: string; mimeType: string } | null>(null);
+    const [attachedImage, setAttachedImage] = useState(null);
     const [isCameraOpen, setIsCameraOpen] = useState(false);
-    const chatEndRef = useRef<HTMLDivElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const chatEndRef = useRef(null);
+    const fileInputRef = useRef(null);
     const { serviceProvider, isUnsupportedDomain } = useContext(AppContext);
 
     const {
@@ -46,10 +44,10 @@ const Chat: React.FC = () => {
         }
     };
     
-    const sendMessage = async (userMessage: ChatMessage, messageHistory: ChatMessage[]) => {
+    const sendMessage = async (userMessage, messageHistory) => {
         setIsLoading(true);
 
-        const loadingMessage: ChatMessage = {
+        const loadingMessage = {
             id: (Date.now() + 1).toString(),
             sender: MessageSender.ASSISTANT,
             isLoading: true,
@@ -62,7 +60,7 @@ const Chat: React.FC = () => {
             setMessages(prev => [...prev.filter(m => !m.isLoading), response]);
         } catch (error) {
             console.error("Ошибка при вызове Gemini:", error);
-            const errorMessage: ChatMessage = {
+            const errorMessage = {
                 id: (Date.now() + 2).toString(),
                 sender: MessageSender.SYSTEM,
                 text: "Произошла ошибка. Не удалось получить ответ от ассистента.",
@@ -73,14 +71,14 @@ const Chat: React.FC = () => {
         }
     }
 
-    const handleSendMessage = async (e: React.FormEvent) => {
+    const handleSendMessage = async (e) => {
         e.preventDefault();
         if (isListening) {
             stopListening();
         }
         if ((!input.trim() && !attachedImage) || isLoading) return;
 
-        const userMessage: ChatMessage = {
+        const userMessage = {
             id: Date.now().toString(),
             sender: MessageSender.USER,
             text: input,
@@ -94,7 +92,7 @@ const Chat: React.FC = () => {
         sendMessage(userMessage, [...history, userMessage]);
     };
 
-    const handleSelection = (messageId: string, type: 'contact' | 'document', option: SelectionOption) => {
+    const handleSelection = (messageId, type, option) => {
         const originalMessage = messages.find(m => m.id === messageId);
         if (!originalMessage || !originalMessage.originalPrompt) return;
 
@@ -120,12 +118,12 @@ const Chat: React.FC = () => {
         fileInputRef.current?.click();
     };
 
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = (event) => {
         const file = event.target.files?.[0];
         if (file && file.type.startsWith('image/')) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                const base64 = (e.target?.result as string).split(',')[1];
+                const base64 = (e.target?.result).split(',')[1];
                 if (base64) {
                     setAttachedImage({ base64, mimeType: file.type });
                 }
@@ -137,7 +135,7 @@ const Chat: React.FC = () => {
         event.target.value = ''; // Reset input
     };
 
-    const handleCapture = (imageDataUrl: string) => {
+    const handleCapture = (imageDataUrl) => {
         const [header, base64] = imageDataUrl.split(',');
         const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
         if (base64) {

@@ -1,12 +1,10 @@
-// FIX: Removed GenerateContentRequest as it is deprecated and not an exported member.
-import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
-import { ChatMessage, MessageSender, CardData, SelectionOption } from "../types";
-import { ServiceProvider } from "./ServiceProvider";
-import { GEMINI_MODEL } from "../constants";
-import { CalendarIcon, UserIcon, FileIcon, DocIcon, SheetIcon } from "../components/icons/Icons";
+import { GoogleGenAI, Type } from "@google/genai";
+import { MessageSender } from "../types.js";
+import { GEMINI_MODEL } from "../constants.js";
+import { CalendarIcon, UserIcon, FileIcon, DocIcon, SheetIcon } from "../components/icons/Icons.jsx";
 import React from "react";
 
-const tools: { functionDeclarations: FunctionDeclaration[] } = {
+const tools = {
   functionDeclarations: [
     {
       name: "create_calendar_event",
@@ -98,7 +96,6 @@ const tools: { functionDeclarations: FunctionDeclaration[] } = {
   ],
 };
 
-// FIX: Corrected template literal by wrapping tool names in backticks to avoid being interpreted as variables.
 const systemInstruction = `Ты — «Секретарь+», проактивный личный ИИ-ассистент. Твоя главная цель — не просто выполнить команду, а помочь пользователю создать максимально полную и полезную сущность (событие, задачу и т.д.), предугадывая его потребности.
 
 Принципы работы:
@@ -113,8 +110,7 @@ const systemInstruction = `Ты — «Секретарь+», проактивн�
 7.  **Дружелюбный тон:** Общайся вежливо и профессионально.
 8.  **Мультимодальность:** Если пользователь прислал изображение, проанализируй его и используй в ответе. Если к изображению есть текстовый запрос, отвечай на него с учетом картинки.`;
 
-// FIX: Added API_KEY check per coding guidelines.
-let ai: GoogleGenAI | null = null;
+let ai = null;
 if (process.env.API_KEY) {
   ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 } else {
@@ -123,13 +119,12 @@ if (process.env.API_KEY) {
 
 
 export const callGemini = async (
-    prompt: string,
-    history: ChatMessage[],
-    serviceProvider: ServiceProvider | null,
-    isUnsupportedDomain: boolean,
-    image?: { base64: string, mimeType: string }
-): Promise<ChatMessage> => {
-    // FIX: Ensure ai is initialized before use.
+    prompt,
+    history,
+    serviceProvider,
+    isUnsupportedDomain,
+    image
+) => {
     if (!ai) {
         return {
             id: Date.now().toString(),
@@ -139,9 +134,9 @@ export const callGemini = async (
     }
     
     // Convert message history to Gemini's format
-    const contents: any[] = history.map(msg => {
+    const contents = history.map(msg => {
         const role = msg.sender === MessageSender.USER ? 'user' : 'model';
-        const parts: any[] = [];
+        const parts = [];
         if (msg.text) parts.push({ text: msg.text });
         // Include image from history if it exists
         if (msg.image) {
@@ -151,7 +146,7 @@ export const callGemini = async (
     }).filter(msg => msg.parts.length > 0);
 
     // Add current user message
-    const userParts: any[] = [];
+    const userParts = [];
     if (prompt) userParts.push({ text: prompt });
     if (image) userParts.push({ inlineData: { mimeType: image.mimeType, data: image.base64 } });
     if (userParts.length > 0) {
@@ -161,7 +156,6 @@ export const callGemini = async (
     const toolsConfig = (serviceProvider && !isUnsupportedDomain) ? { functionDeclarations: tools.functionDeclarations } : undefined;
 
     try {
-        // FIX: The `systemInstruction` and `tools` properties must be placed inside the `config` object.
         const response = await ai.models.generateContent({
             model: GEMINI_MODEL,
             contents,
@@ -178,14 +172,14 @@ export const callGemini = async (
 
             switch (name) {
                 case 'create_calendar_event': {
-                    const result = await serviceProvider.createEvent(args as any);
-                    const cardData: CardData = {
+                    const result = await serviceProvider.createEvent(args);
+                    const cardData = {
                         type: 'event',
                         icon: React.createElement(CalendarIcon),
                         title: result.summary,
                         details: {
                             'Время': new Date(result.start.dateTime).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }),
-                            'Участники': result.attendees?.map((a: any) => a.email) || ['Нет'],
+                            'Участники': result.attendees?.map((a) => a.email) || ['Нет'],
                             'Видеовстреча': result.hangoutLink ? 'Да' : 'Нет',
                         },
                         actions: [{ label: 'Открыть', url: result.htmlLink }],
@@ -198,15 +192,15 @@ export const callGemini = async (
                     };
                 }
                 case 'find_contacts': {
-                    const results = await serviceProvider.findContacts(args.query as string);
+                    const results = await serviceProvider.findContacts(args.query);
                     if (!results || results.length === 0) {
                         return { id: Date.now().toString(), sender: MessageSender.ASSISTANT, text: `Я не смог найти контакты по запросу "${args.query}".` };
                     }
-                    const cardData: CardData = {
+                    const cardData = {
                         type: 'contact-selection',
                         icon: React.createElement(UserIcon),
                         title: `Найденные контакты для "${args.query}"`,
-                        selectionOptions: results.map((r: any) => ({
+                        selectionOptions: results.map((r) => ({
                             id: r.person.resourceName,
                             label: r.person.names?.[0]?.displayName || 'Без имени',
                             description: r.person.emailAddresses?.[0]?.value || r.person.phoneNumbers?.[0]?.value || 'Нет данных',
@@ -222,11 +216,11 @@ export const callGemini = async (
                     };
                 }
                 case 'find_documents': {
-                    const results = await serviceProvider.findDocuments(args.query as string);
+                    const results = await serviceProvider.findDocuments(args.query);
                      if (!results || results.length === 0) {
                         return { id: Date.now().toString(), sender: MessageSender.ASSISTANT, text: `Я не смог найти документы по запросу "${args.query}".` };
                     }
-                    const cardData: CardData = {
+                    const cardData = {
                         type: 'document-selection',
                         icon: React.createElement(FileIcon),
                         title: `Найденные документы для "${args.query}"`,
@@ -248,10 +242,10 @@ export const callGemini = async (
                  case 'create_google_doc':
                  case 'create_google_sheet': {
                     const result = name === 'create_google_doc'
-                        ? await serviceProvider.createGoogleDoc(args.title as string)
-                        : await serviceProvider.createGoogleSheet(args.title as string);
+                        ? await serviceProvider.createGoogleDoc(args.title)
+                        : await serviceProvider.createGoogleSheet(args.title);
 
-                    const cardData: CardData = {
+                    const cardData = {
                         type: 'document',
                         icon: name === 'create_google_doc' ? React.createElement(DocIcon) : React.createElement(SheetIcon),
                         title: result.name,

@@ -1,18 +1,12 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 
-interface CameraViewProps {
-    onCapture: (imageDataUrl: string) => void;
-    onClose: () => void;
-}
-
-const CameraView: React.FC<CameraViewProps> = ({ onCapture, onClose }) => {
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [error, setError] = useState<string | null>(null);
+const CameraView = ({ onCapture, onClose }) => {
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
-        let stream: MediaStream | null = null;
+        let stream = null;
         
         const startCamera = async () => {
             try {

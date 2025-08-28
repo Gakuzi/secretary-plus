@@ -1,15 +1,8 @@
-
-
 import React from 'react';
-import { ChatMessage, MessageSender, SelectionOption } from '../types';
-import ResultCard from './ResultCard';
+import { MessageSender } from '../types.js';
+import ResultCard from './ResultCard.jsx';
 
-interface MessageProps {
-    message: ChatMessage;
-    onSelection?: (type: 'contact' | 'document', option: SelectionOption) => void;
-}
-
-const Message: React.FC<MessageProps> = ({ message, onSelection }) => {
+const Message = ({ message, onSelection }) => {
     const isUser = message.sender === MessageSender.USER;
     const isAssistant = message.sender === MessageSender.ASSISTANT;
     const isSystem = message.sender === MessageSender.SYSTEM;
