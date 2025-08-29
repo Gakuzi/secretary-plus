@@ -429,6 +429,23 @@ export class SupabaseService {
         return { success: true };
     }
     
+    // --- Data Viewer ---
+    async getSampleData(tableName, limit = 10) {
+        if (!tableName) throw new Error("Table name is required.");
+        
+        const { data, error } = await this.client
+            .from(tableName)
+            .select('*')
+            .limit(limit);
+            
+        if (error) {
+            console.error(`Error fetching sample data from ${tableName}:`, error);
+            return { error: error.message };
+        }
+        
+        return { data: data || [] };
+    }
+
     // --- Proxy Management ---
     async getProxies() {
         const { data, error } = await this.client

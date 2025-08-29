@@ -876,7 +876,6 @@ export const analyzeGenericErrorWithGemini = async ({ errorMessage, appStructure
     }
     const clientOptions = { apiKey };
     if (proxyUrl) {
-        // The SDK constructor expects the endpoint without the protocol.
         clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
     }
     const ai = new GoogleGenAI(clientOptions);

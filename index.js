@@ -1,7 +1,7 @@
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
-import { callGemini, analyzeGenericErrorWithGemini } from './services/geminiService.js';
+import { callGemini, analyzeGenericErrorWithGemini, analyzeSyncErrorWithGemini } from './services/geminiService.js';
 import { getSettings, saveSettings, getSyncStatus, saveSyncStatus } from './utils/storage.js';
 import { createSetupWizard } from './components/SetupWizard.js';
 import { createSettingsModal } from './components/SettingsModal.js';
@@ -113,11 +113,11 @@ function renderMainContent() {
 // --- SYNC LOGIC ---
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
 const syncTasks = [
-    { name: 'Calendar', label: 'Календарь', icon: 'CalendarIcon', providerFn: () => googleProvider.getCalendarEvents({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncCalendarEvents(items) },
-    { name: 'Tasks', label: 'Задачи', icon: 'CheckSquareIcon', providerFn: () => googleProvider.getTasks({ max_results: 100 }), supabaseFn: (items) => supabaseService.syncTasks(items) },
-    { name: 'Contacts', label: 'Контакты', icon: 'UsersIcon', providerFn: () => googleProvider.getAllContacts(), supabaseFn: (items) => supabaseService.syncContacts(items) },
-    { name: 'Files', label: 'Файлы', icon: 'FileIcon', providerFn: () => googleProvider.getAllFiles(), supabaseFn: (items) => supabaseService.syncFiles(items) },
-    { name: 'Emails', label: 'Почта', icon: 'EmailIcon', providerFn: () => googleProvider.getRecentEmails({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncEmails(items) },
+    { name: 'Calendar', label: 'Календарь', icon: 'CalendarIcon', tableName: 'calendar_events', providerFn: () => googleProvider.getCalendarEvents({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncCalendarEvents(items) },
+    { name: 'Tasks', label: 'Задачи', icon: 'CheckSquareIcon', tableName: 'tasks', providerFn: () => googleProvider.getTasks({ max_results: 100 }), supabaseFn: (items) => supabaseService.syncTasks(items) },
+    { name: 'Contacts', label: 'Контакты', icon: 'UsersIcon', tableName: 'contacts', providerFn: () => googleProvider.getAllContacts(), supabaseFn: (items) => supabaseService.syncContacts(items) },
+    { name: 'Files', label: 'Файлы', icon: 'FileIcon', tableName: 'files', providerFn: () => googleProvider.getAllFiles(), supabaseFn: (items) => supabaseService.syncFiles(items) },
+    { name: 'Emails', label: 'Почта', icon: 'EmailIcon', tableName: 'emails', providerFn: () => googleProvider.getRecentEmails({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncEmails(items) },
 ];
 
 async function runAllSyncs() {
@@ -470,10 +470,23 @@ function showProfileModal() {
                 }
             }
         },
+        onAnalyzeError: async ({ context, error }) => {
+             return analyzeSyncErrorWithGemini({
+                errorMessage: error,
+                context: context,
+                apiKey: state.settings.geminiApiKey,
+                proxyUrl: null,
+            });
+        },
+        onViewData: async ({ tableName }) => {
+            if (supabaseService) {
+                return await supabaseService.getSampleData(tableName);
+            }
+            return { error: 'Supabase не подключен.' };
+        },
     };
     
-    const syncTasksMeta = syncTasks.map(t => ({ name: t.name, label: t.label, icon: t.icon }));
-    const modal = createProfileModal(state.userProfile, state.settings, handlers, state.syncStatus, syncTasksMeta);
+    const modal = createProfileModal(state.userProfile, state.settings, handlers, state.syncStatus, syncTasks);
     showModal(modal);
 }
 

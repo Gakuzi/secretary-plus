@@ -215,10 +215,12 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
         if (!state.schemaScript) {
             try {
                 const response = await fetch('./SUPABASE_SETUP.md');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const markdown = await response.text();
                 const sqlMatch = markdown.match(/```sql\n([\s\S]*?)\n```/);
                 state.schemaScript = sqlMatch ? sqlMatch[1].trim() : 'Не удалось извлечь SQL-скрипт.';
             } catch (error) {
+                console.error("Error fetching schema script:", error);
                 state.schemaScript = `Ошибка загрузки скрипта: ${error.message}`;
             }
         }

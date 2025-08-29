@@ -39,7 +39,7 @@ function createSyncStatusItem(task, status) {
             statusText = `Ошибка: ${lastSyncData.error}`;
             statusColor = 'text-red-400';
         } else if (lastSyncData.lastSync) {
-            statusText = `Синхронизировано: ${new Date(lastSyncData.lastSync).toLocaleString()}`;
+            statusText = `Синхронизировано: ${new Date(lastSyncData.lastSync).toLocaleString('ru-RU')}`;
             statusColor = 'text-green-400';
         }
     }

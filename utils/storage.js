@@ -17,6 +17,7 @@ const defaultSettings = {
         files: 'google',
         notes: 'supabase',
     },
+    useProxy: false, // New setting for proxy usage
 };
 
 export function getSettings() {
@@ -47,6 +48,7 @@ export function saveSettings(settings) {
             enableEmailPolling: settings.enableEmailPolling,
             enableAutoSync: settings.enableAutoSync,
             serviceMap: settings.serviceMap,
+            useProxy: settings.useProxy,
         };
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
     } catch (error)
