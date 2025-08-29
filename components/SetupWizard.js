@@ -32,25 +32,50 @@ export function createSetupWizard({ onComplete, googleProvider, resumeState = nu
         { id: 'proxies', title: 'Прокси (для Supabase)' },
         { id: 'finish', title: 'Завершение' },
     ];
+    
+    // Forward-declare render so handlers can use it
+    let render; 
 
-    const render = () => {
-        const stepConfig = STEPS[state.currentStep];
-        wizardElement.innerHTML = `
-            <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col">
-                <header class="p-4 border-b border-gray-700 flex-shrink-0">
-                    <h1 class="text-xl font-bold text-white">Мастер Настройки Секретарь+</h1>
-                    <p class="text-sm text-gray-400">Шаг ${state.currentStep + 1} из ${STEPS.length}: ${stepConfig.title}</p>
-                </header>
-                <main class="flex-1 p-6 overflow-y-auto" id="wizard-content">
-                    <!-- Step content is rendered here -->
-                </main>
-                <footer class="p-4 border-t border-gray-700 flex justify-between items-center flex-shrink-0" id="wizard-footer">
-                    <!-- Footer buttons are rendered here -->
-                </footer>
-            </div>
-        `;
-        renderStepContent();
-        attachEventListeners();
+    const addNextButton = (footerEl, text = 'Далее', skip = false) => {
+        const nextBtn = document.createElement('button');
+        nextBtn.className = `px-6 py-2 rounded-md font-semibold ${skip ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'}`;
+        nextBtn.textContent = text;
+        nextBtn.dataset.action = 'next';
+        footerEl.appendChild(nextBtn);
+    };
+
+    const renderProxyList = async () => {
+        if (!supabaseService) return;
+        state.isLoading = true;
+        render();
+        try {
+            state.proxies = await supabaseService.getProxies();
+            const container = wizardElement.querySelector('#proxy-list-container');
+            if (container) {
+                if (state.proxies.length === 0) {
+                    container.innerHTML = `<p class="text-center text-gray-500 text-sm py-4">Прокси не добавлены.</p>`;
+                } else {
+                    container.innerHTML = state.proxies.map(p => `
+                        <div class="bg-gray-800 p-2 rounded-md flex items-center gap-2 text-sm">
+                           <div class="w-3 h-3 rounded-full ${p.last_status === 'ok' ? 'bg-green-500' : p.last_status === 'error' ? 'bg-red-500' : 'bg-gray-500'}"></div>
+                           <div class="flex-1 truncate" title="${p.url}">${p.alias || p.url}</div>
+                           <div class="text-xs text-gray-400">P: ${p.priority}</div>
+                           <button data-action="test-proxy" data-id="${p.id}" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 rounded">Тест</button>
+                           <button data-action="edit-proxy" data-id="${p.id}" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded">Изм.</button>
+                           <button data-action="delete-proxy" data-id="${p.id}" class="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 rounded">Удл.</button>
+                        </div>
+                    `).join('');
+                }
+            }
+        } catch (e) {
+            alert(`Ошибка загрузки прокси: ${e.message}`);
+        } finally {
+            state.isLoading = false;
+        }
+    }
+    
+    const showProxyEditor = (proxy = null) => {
+        // ... implementation from old SettingsModal
     };
 
     const renderStepContent = () => {
@@ -203,13 +228,24 @@ export function createSetupWizard({ onComplete, googleProvider, resumeState = nu
                 break;
         }
     };
-
-    const addNextButton = (footerEl, text = 'Далее', skip = false) => {
-        const nextBtn = document.createElement('button');
-        nextBtn.className = `px-6 py-2 rounded-md font-semibold ${skip ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'}`;
-        nextBtn.textContent = text;
-        nextBtn.dataset.action = 'next';
-        footerEl.appendChild(nextBtn);
+    
+    render = () => {
+        const stepConfig = STEPS[state.currentStep];
+        wizardElement.innerHTML = `
+            <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col">
+                <header class="p-4 border-b border-gray-700 flex-shrink-0">
+                    <h1 class="text-xl font-bold text-white">Мастер Настройки Секретарь+</h1>
+                    <p class="text-sm text-gray-400">Шаг ${state.currentStep + 1} из ${STEPS.length}: ${stepConfig.title}</p>
+                </header>
+                <main class="flex-1 p-6 overflow-y-auto" id="wizard-content">
+                    <!-- Step content is rendered here -->
+                </main>
+                <footer class="p-4 border-t border-gray-700 flex justify-between items-center flex-shrink-0" id="wizard-footer">
+                    <!-- Footer buttons are rendered here -->
+                </footer>
+            </div>
+        `;
+        renderStepContent();
     };
 
     const collectInputs = () => {
@@ -307,69 +343,33 @@ export function createSetupWizard({ onComplete, googleProvider, resumeState = nu
         render(); // Re-render to show auth status
     };
     
-    // --- PROXY LOGIC ---
-    const renderProxyList = async () => {
-        if (!supabaseService) return;
-        state.isLoading = true;
-        render();
-        try {
-            state.proxies = await supabaseService.getProxies();
-            const container = wizardElement.querySelector('#proxy-list-container');
-            if (container) {
-                if (state.proxies.length === 0) {
-                    container.innerHTML = `<p class="text-center text-gray-500 text-sm py-4">Прокси не добавлены.</p>`;
-                } else {
-                    container.innerHTML = state.proxies.map(p => `
-                        <div class="bg-gray-800 p-2 rounded-md flex items-center gap-2 text-sm">
-                           <div class="w-3 h-3 rounded-full ${p.last_status === 'ok' ? 'bg-green-500' : p.last_status === 'error' ? 'bg-red-500' : 'bg-gray-500'}"></div>
-                           <div class="flex-1 truncate" title="${p.url}">${p.alias || p.url}</div>
-                           <div class="text-xs text-gray-400">P: ${p.priority}</div>
-                           <button data-action="test-proxy" data-id="${p.id}" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 rounded">Тест</button>
-                           <button data-action="edit-proxy" data-id="${p.id}" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded">Изм.</button>
-                           <button data-action="delete-proxy" data-id="${p.id}" class="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 rounded">Удл.</button>
-                        </div>
-                    `).join('');
-                }
-            }
-        } catch (e) {
-            alert(`Ошибка загрузки прокси: ${e.message}`);
-        } finally {
-            state.isLoading = false;
+    // Attach one persistent event listener for the entire wizard lifecycle.
+    // This fixes the bug where multiple listeners were being attached.
+    wizardElement.addEventListener('click', async (e) => {
+        const target = e.target.closest('[data-action], [data-choice]');
+        if (!target) return;
+
+        const action = target.dataset.action;
+        const choice = target.dataset.choice;
+        
+        if (choice) {
+            state.authChoice = choice;
+            state.config.isSupabaseEnabled = choice === 'supabase';
+            render();
         }
-    }
-    
-    // ... Other proxy functions (add, edit, delete, test) will be here
-    const showProxyEditor = (proxy = null) => {
-        // ... implementation from old SettingsModal
-    };
 
-    const attachEventListeners = () => {
-        wizardElement.addEventListener('click', async (e) => {
-            const target = e.target.closest('[data-action], [data-choice]');
-            if (!target) return;
-
-            const action = target.dataset.action;
-            const choice = target.dataset.choice;
-            
-            if (choice) {
-                state.authChoice = choice;
-                state.config.isSupabaseEnabled = choice === 'supabase';
-                render();
-            }
-
-            switch (action) {
-                case 'next': handleNext(); break;
-                case 'back': handleBack(); break;
-                case 'login': handleLogin(); break;
-                case 'finish': 
-                    collectInputs();
-                    state.config.proxies = state.proxies;
-                    onComplete(state.config); 
-                    break;
-                // Proxy actions would be here
-            }
-        });
-    };
+        switch (action) {
+            case 'next': handleNext(); break;
+            case 'back': handleBack(); break;
+            case 'login': handleLogin(); break;
+            case 'finish': 
+                collectInputs();
+                state.config.proxies = state.proxies;
+                onComplete(state.config); 
+                break;
+            // Proxy actions would be here
+        }
+    });
     
     // Initial render
     if (resumeState) {
