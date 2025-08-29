@@ -299,7 +299,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         const content = wizardElement.querySelector('#proxy-test-modal-content');
         modal.classList.remove('hidden');
         content.innerHTML = `<p class="font-semibold mb-2">Тестирование...</p><p class="font-mono text-sm text-gray-400 break-all">${url}</p><div class="loading-dots mt-4"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
-        const result = await testProxyConnection({ proxyUrl: url, apiKey: state.config.geminiApiKey });
+        const result = await testProxyConnection({ proxyUrl: url });
 
          const testResultHtml = `
             <div class="w-full text-left text-sm mt-4 space-y-2">
@@ -312,7 +312,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                     <span class="test-result-value">${result.speed} мс</span>
                 </div>` : ''}
                 ${result.geolocation ? `<div class="test-result-item">
-                    <span class="test-result-label">Геолокация</span>
+                    <span class="test-result-label">IP адрес</span>
                     <span class="test-result-value">${result.geolocation}</span>
                 </div>` : ''}
             </div>

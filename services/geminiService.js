@@ -791,39 +791,44 @@ export const callGemini = async ({
     }
 };
 
-export const testProxyConnection = async ({ proxyUrl, apiKey }) => {
-    if (!proxyUrl || !apiKey) {
-        return { status: 'error', message: 'Для теста необходимы URL прокси и API ключ.' };
+export const testProxyConnection = async ({ proxyUrl }) => {
+    if (!proxyUrl) {
+        return { status: 'error', message: 'URL прокси не указан.' };
     }
 
+    // Append a specific path for the test endpoint on the user's worker
+    const testUrl = new URL(proxyUrl);
+    testUrl.pathname = '/test-proxy';
+
     try {
-        const ai = new GoogleGenAI({
-            apiKey,
-            apiEndpoint: proxyUrl.replace(/^https?:\/\//, ''),
-        });
-        
         const startTime = performance.now();
-        // A lightweight call to test connectivity and authentication
-        await ai.models.generateContent({ model: GEMINI_MODEL, contents: 'test' });
+        const response = await fetch(testUrl.toString(), {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+        });
         const endTime = performance.now();
         const speed = Math.round(endTime - startTime);
-        
-        // Use the connection to ask Gemini to report the source IP's location.
-        // This is a "real" test of the proxy's egress location from the target service's perspective.
-        const geoResponse = await ai.models.generateContent({
-            model: GEMINI_MODEL,
-            contents: "Analyze the source IP address of this request and return its geolocation. Required format: 'City, Country'. Example: 'Mountain View, United States'. Do not add any other text.",
-        });
-        const geolocation = geoResponse.text.trim();
 
-        return { status: 'ok', message: 'Соединение успешно.', speed, geolocation };
+        if (!response.ok) {
+            throw new Error(`Proxy returned status ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // The test service (ipify) returns { "ip": "..." }
+        if (!data.ip) {
+             throw new Error("Invalid response from test service through proxy.");
+        }
+
+        // Return a successful result. 'geolocation' is now the proxy's IP.
+        return { status: 'ok', message: 'Соединение успешно.', speed, geolocation: data.ip };
+
     } catch (error) {
         console.error('Ошибка при тесте прокси:', error);
-        let message = `Сетевая ошибка: ${error.message}. Проверьте CORS, URL и доступность сервера.`;
-        if (error.message.includes('API key not valid')) {
-            message = 'Неверный API ключ.';
-        } else if (error.message.includes('fetch')) {
-            message = `Ошибка сети. Проверьте URL прокси и CORS.`;
+        // Provide a user-friendly error message.
+        let message = `Ошибка сети. Убедитесь, что URL прокси правильный, и что на нем настроены CORS-заголовки. Проверьте инструкцию.`;
+        if (error.message.includes('status')) {
+            message = `Прокси вернул ошибку: ${error.message}. Проверьте код воркера.`;
         }
         return { status: 'error', message: message, speed: null, geolocation: null };
     }
