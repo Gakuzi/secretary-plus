@@ -32,7 +32,7 @@ function markdownToHTML(text) {
 
 
 export function createProfileModal(userProfile, settings, handlers, initialSyncStatus, syncTasks, supabaseUrl) {
-    const { onClose, onSave, onLogout, onDelete, onForceSync, onAnalyzeError, onViewData } = handlers;
+    const { onClose, onSave, onLogout, onDelete, onForceSync, onAnalyzeError, onViewData, onLaunchDbWizard } = handlers;
     
     const SERVICE_DEFINITIONS = {
         calendar: { label: 'Календарь', providers: [{ id: 'google', name: 'Google' }, { id: 'supabase', name: 'Кэш (Supabase)' }, { id: 'apple', name: 'Apple (.ics)' }] },
@@ -115,10 +115,13 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
     
     const renderSyncSection = () => {
         const currentStatus = getSyncStatus();
-        const hasErrors = Object.values(currentStatus).some(s => s.error);
+        const hasAnyError = Object.values(currentStatus).some(s => s.error);
+        const hasSchemaError = Object.values(currentStatus).some(s => 
+            s.error && (s.error.includes('column') || s.error.includes('does not exist') || s.error.includes('constraint') || s.error.includes('relation'))
+        );
         
         let buttonHtml;
-        if (hasErrors) {
+        if (hasAnyError) {
             buttonHtml = `
                 <button data-action="force-sync" class="w-full sm:w-auto px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-md text-sm font-semibold flex items-center justify-center gap-2">
                     ${Icons.AlertTriangleIcon}
@@ -131,6 +134,18 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
                     <span>Синхронизировать сейчас</span>
                 </button>`;
         }
+
+        const schemaErrorHtml = hasSchemaError ? `
+            <div class="p-3 mb-4 rounded-md bg-red-100/50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 text-red-800 dark:text-red-300 flex items-start gap-3">
+                <div class="w-5 h-5 flex-shrink-0 mt-0.5">${Icons.AlertTriangleIcon}</div>
+                <div>
+                    <p class="font-bold">Обнаружена проблема с базой данных!</p>
+                    <p class="text-sm">Вероятно, структура вашей базы данных устарела, что вызывает ошибки синхронизации. Пожалуйста, запустите мастер настройки, чтобы обновить схему.</p>
+                     <button data-action="launch-db-wizard" class="mt-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-semibold">Запустить мастер настройки БД</button>
+                </div>
+            </div>
+        ` : '';
+
 
         const projectRef = supabaseUrl ? new URL(supabaseUrl).hostname.split('.')[0] : null;
 
@@ -180,6 +195,7 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
                     <h3 class="text-lg font-semibold">Синхронизация данных</h3>
                     <div id="force-sync-button-wrapper">${buttonHtml}</div>
                 </div>
+                ${schemaErrorHtml}
                 <div id="sync-status-list" class="space-y-1">${syncItemsHtml}</div>
             </div>`;
     };
@@ -193,6 +209,7 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
             case 'close': onClose(); break;
             case 'logout': onLogout(); break;
             case 'delete': onDelete(); break;
+            case 'launch-db-wizard': onLaunchDbWizard(); break;
             case 'save': {
                 const newSettings = {
                     ...settings, 
@@ -259,7 +276,9 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
                                     `).join('')}
                                 </tbody>
                             </table>
-                        </div>`;
+                        </div>
+                        ${result.warning ? `<p class="text-xs text-slate-500 mt-2">Примечание: ${result.warning}</p>` : ''}
+                        `;
                      renderSubModal(`Последние ${result.data.length} записей: ${label}`, tableHtml, true);
                 }
                 break;

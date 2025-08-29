@@ -411,21 +411,37 @@ export class SupabaseService {
     // --- Data Viewer ---
     async getSampleData(tableName, limit = 10) {
         if (!tableName) throw new Error("Table name is required.");
-        
+
         const orderColumn = ['notes', 'files', 'contacts'].includes(tableName) ? 'updated_at' : 'created_at';
 
-        const { data, error } = await this.client
-            .from(tableName)
-            .select('*')
-            .order(orderColumn, { ascending: false, nullsFirst: true })
-            .limit(limit);
-            
-        if (error) {
+        try {
+            const { data, error } = await this.client
+                .from(tableName)
+                .select('*')
+                .order(orderColumn, { ascending: false, nullsFirst: true })
+                .limit(limit);
+
+            if (error) throw error; // Re-throw to be caught below
+            return { data: data || [] };
+        } catch (error) {
             console.error(`Error fetching sample data from ${tableName}:`, error);
+            // If it's a "column does not exist" error, retry without ordering
+            if (error.message && error.message.includes('column') && error.message.includes('does not exist')) {
+                console.warn(`Column for ordering not found in ${tableName}. Retrying without order.`);
+                const { data, error: retryError } = await this.client
+                    .from(tableName)
+                    .select('*')
+                    .limit(limit);
+
+                if (retryError) {
+                    // If retry also fails, return the original error message
+                    return { error: retryError.message };
+                }
+                return { data: data || [], warning: 'Could not sort by date.' };
+            }
+            // For other errors, return them
             return { error: error.message };
         }
-        
-        return { data: data || [] };
     }
 
 

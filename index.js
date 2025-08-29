@@ -524,6 +524,11 @@ function showProfileModal() {
         return await supabaseService.getSampleData(tableName);
     };
 
+    const onLaunchDbWizard = () => {
+        modalContainer.innerHTML = ''; // Close profile modal first
+        showDbSetupWizard();
+    };
+
     const modal = createProfileModal(
         state.userProfile,
         state.settings,
@@ -535,6 +540,7 @@ function showProfileModal() {
             onForceSync,
             onAnalyzeError,
             onViewData,
+            onLaunchDbWizard,
         },
         state.syncStatus,
         syncTasks,

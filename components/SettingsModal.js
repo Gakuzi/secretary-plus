@@ -4,30 +4,38 @@ import * as Icons from './icons/Icons.js';
 
 const SUPABASE_SCHEMA_SQL = `-- =================================================================
 --  Скрипт настройки базы данных "Секретарь+"
---  Версия: 2.5.0
---  Этот скрипт является идемпотентным. Его можно безопасно 
---  запускать несколько раз для создания или обновления схемы.
+--  Версия: 2.5.1
+--  Этот скрипт является идемпотентным и обратно совместимым. 
+--  Он безопасно создает или обновляет схему до последней версии.
 -- =================================================================
 
 -- 1. Таблица контактов (contacts)
 CREATE TABLE IF NOT EXISTS public.contacts (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  source_id TEXT,
+  source_id TEXT NOT NULL,
   display_name TEXT,
   email TEXT,
   phone TEXT,
-  avatar_url TEXT,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
+  avatar_url TEXT
 );
 DO $$ BEGIN
+  -- Handle legacy 'source' column
+  IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='contacts' AND column_name='source') AND NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='contacts' AND column_name='source_id') THEN
+    ALTER TABLE public.contacts RENAME COLUMN "source" TO "source_id";
+  END IF;
+  -- Ensure standard timestamp columns exist
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='contacts' and column_name='created_at') THEN ALTER TABLE public.contacts ADD COLUMN "created_at" timestamptz DEFAULT now(); END IF;
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='contacts' and column_name='updated_at') THEN ALTER TABLE public.contacts ADD COLUMN "updated_at" timestamptz DEFAULT now(); END IF;
+  -- Ensure new data columns exist
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='contacts' and column_name='addresses') THEN ALTER TABLE public.contacts ADD COLUMN "addresses" jsonb; END IF;
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='contacts' and column_name='organizations') THEN ALTER TABLE public.contacts ADD COLUMN "organizations" jsonb; END IF;
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='contacts' and column_name='birthdays') THEN ALTER TABLE public.contacts ADD COLUMN "birthdays" jsonb; END IF;
+  -- Ensure constraints
+  ALTER TABLE public.contacts ALTER COLUMN source_id SET NOT NULL;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'contacts_user_id_source_id_key' AND conrelid = 'public.contacts'::regclass) THEN
     ALTER TABLE public.contacts ADD UNIQUE(user_id, source_id);
   END IF;
-  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='contacts' and column_name='addresses') THEN ALTER TABLE public.contacts ADD COLUMN "addresses" jsonb; END IF;
-  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='contacts' and column_name='organizations') THEN ALTER TABLE public.contacts ADD COLUMN "organizations" jsonb; END IF;
-  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='contacts' and column_name='birthdays') THEN ALTER TABLE public.contacts ADD COLUMN "birthdays" jsonb; END IF;
 END $$;
 
 
@@ -35,7 +43,7 @@ END $$;
 CREATE TABLE IF NOT EXISTS public.files (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  source_id TEXT,
+  source_id TEXT NOT NULL,
   name TEXT NOT NULL,
   mime_type TEXT,
   url TEXT,
@@ -45,15 +53,16 @@ CREATE TABLE IF NOT EXISTS public.files (
   viewed_by_me_time TIMESTAMPTZ,
   size BIGINT,
   owner TEXT,
-  permissions JSONB,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
+  permissions JSONB
 );
 DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='files' and column_name='created_at') THEN ALTER TABLE public.files ADD COLUMN "created_at" timestamptz DEFAULT now(); END IF;
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='files' and column_name='updated_at') THEN ALTER TABLE public.files ADD COLUMN "updated_at" timestamptz DEFAULT now(); END IF;
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='files' and column_name='last_modifying_user') THEN ALTER TABLE public.files ADD COLUMN "last_modifying_user" text; END IF;
+  ALTER TABLE public.files ALTER COLUMN source_id SET NOT NULL;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'files_user_id_source_id_key' AND conrelid = 'public.files'::regclass) THEN
     ALTER TABLE public.files ADD UNIQUE(user_id, source_id);
   END IF;
-  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='files' and column_name='last_modifying_user') THEN ALTER TABLE public.files ADD COLUMN "last_modifying_user" text; END IF;
 END $$;
 
 
@@ -62,10 +71,12 @@ CREATE TABLE IF NOT EXISTS public.notes (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   title TEXT,
-  content TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
+  content TEXT NOT NULL
 );
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='notes' and column_name='created_at') THEN ALTER TABLE public.notes ADD COLUMN "created_at" timestamptz DEFAULT now(); END IF;
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='notes' and column_name='updated_at') THEN ALTER TABLE public.notes ADD COLUMN "updated_at" timestamptz DEFAULT now(); END IF;
+END $$;
 
 
 -- 4. Таблица событий календаря (calendar_events)
@@ -78,18 +89,18 @@ CREATE TABLE IF NOT EXISTS public.calendar_events (
     start_time TIMESTAMPTZ,
     end_time TIMESTAMPTZ,
     event_link TEXT,
-    meet_link TEXT,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
+    meet_link TEXT
 );
 DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='calendar_events' and column_name='created_at') THEN ALTER TABLE public.calendar_events ADD COLUMN "created_at" timestamptz DEFAULT now(); END IF;
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='calendar_events' and column_name='updated_at') THEN ALTER TABLE public.calendar_events ADD COLUMN "updated_at" timestamptz DEFAULT now(); END IF;
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='calendar_events' and column_name='attendees') THEN ALTER TABLE public.calendar_events ADD COLUMN "attendees" jsonb; END IF;
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='calendar_events' and column_name='status') THEN ALTER TABLE public.calendar_events ADD COLUMN "status" text; END IF;
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='calendar_events' and column_name='creator_email') THEN ALTER TABLE public.calendar_events ADD COLUMN "creator_email" text; END IF;
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='calendar_events' and column_name='is_all_day') THEN ALTER TABLE public.calendar_events ADD COLUMN "is_all_day" boolean DEFAULT false; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'calendar_events_user_id_source_id_key' AND conrelid = 'public.calendar_events'::regclass) THEN
     ALTER TABLE public.calendar_events ADD UNIQUE(user_id, source_id);
   END IF;
-  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='calendar_events' and column_name='attendees') THEN ALTER TABLE public.calendar_events ADD COLUMN "attendees" jsonb; END IF;
-  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='calendar_events' and column_name='status') THEN ALTER TABLE public.calendar_events ADD COLUMN "status" text; END IF;
-  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='calendar_events' and column_name='creator_email') THEN ALTER TABLE public.calendar_events ADD COLUMN "creator_email" text; END IF;
-  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='calendar_events' and column_name='is_all_day') THEN ALTER TABLE public.calendar_events ADD COLUMN "is_all_day" boolean DEFAULT false; END IF;
 END $$;
 
 
@@ -101,16 +112,16 @@ CREATE TABLE IF NOT EXISTS public.tasks (
     title TEXT,
     notes TEXT,
     due_date TIMESTAMPTZ,
-    status TEXT,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
+    status TEXT
 );
 DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='tasks' and column_name='created_at') THEN ALTER TABLE public.tasks ADD COLUMN "created_at" timestamptz DEFAULT now(); END IF;
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='tasks' and column_name='updated_at') THEN ALTER TABLE public.tasks ADD COLUMN "updated_at" timestamptz DEFAULT now(); END IF;
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='tasks' and column_name='completed_at') THEN ALTER TABLE public.tasks ADD COLUMN "completed_at" timestamptz; END IF;
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='tasks' and column_name='parent_task_id') THEN ALTER TABLE public.tasks ADD COLUMN "parent_task_id" text; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tasks_user_id_source_id_key' AND conrelid = 'public.tasks'::regclass) THEN
     ALTER TABLE public.tasks ADD UNIQUE(user_id, source_id);
   END IF;
-  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='tasks' and column_name='completed_at') THEN ALTER TABLE public.tasks ADD COLUMN "completed_at" timestamptz; END IF;
-  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='tasks' and column_name='parent_task_id') THEN ALTER TABLE public.tasks ADD COLUMN "parent_task_id" text; END IF;
 END $$;
 
 
@@ -134,11 +145,11 @@ CREATE TABLE IF NOT EXISTS public.emails (
     snippet TEXT,
     received_at TIMESTAMPTZ,
     full_body TEXT,
-    attachments_metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
+    attachments_metadata JSONB
 );
 DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='emails' and column_name='created_at') THEN ALTER TABLE public.emails ADD COLUMN "created_at" timestamptz DEFAULT now(); END IF;
+  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='emails' and column_name='updated_at') THEN ALTER TABLE public.emails ADD COLUMN "updated_at" timestamptz DEFAULT now(); END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'emails_user_id_source_id_key' AND conrelid = 'public.emails'::regclass) THEN
     ALTER TABLE public.emails ADD UNIQUE(user_id, source_id);
   END IF;
