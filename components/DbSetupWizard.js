@@ -270,7 +270,7 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                     });
                     const responseText = await response.text();
                     if (!response.ok) {
-                        throw new Error(\`Воркер вернул ошибку ${response.status}: ${responseText}\`);
+                        throw new Error(`Воркер вернул ошибку ${response.status}: ${responseText}`);
                     }
                     const data = JSON.parse(responseText);
                     // Supabase returns an array for a successful query

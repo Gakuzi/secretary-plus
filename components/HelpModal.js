@@ -22,11 +22,11 @@ const PROXY_SETUP_MD = `
 1.  Войдите в [панель управления Cloudflare](https://dash.cloudflare.com/).
 2.  В меню слева выберите **Workers & Pages**.
 3.  Нажмите **Create application** > **Create Worker**.
-4.  Дайте воркеру уникальное имя (например, \`my-gemini-proxy-123\`) и нажмите **Deploy**.
+4.  Дайте воркеру уникальное имя (например, \\\`my-gemini-proxy-123\\\`) и нажмите **Deploy**.
 ### Шаг 2: Редактирование кода воркера
 1.  После развертывания нажмите **Configure Worker** (или **Edit code**).
 2.  Удалите весь существующий код и вставьте следующий:
-\`\`\`javascript
+\\\`\\\`\\\`javascript
 // Адрес API Gemini
 const GEMINI_API_HOST = "generativelanguage.googleapis.com";
 
@@ -54,7 +54,7 @@ async function handleRequest(request) {
 
   return newResponse;
 }
-\`\`\`
+\\\`\\\`\\\`
 3.  Нажмите **Save and Deploy**.
 4.  **Скопируйте URL** этого воркера (например, \`https://my-gemini-proxy-123.workers.dev\`).
 5.  Вставьте этот URL в соответствующее поле в **Менеджере прокси** в приложении "Секретарь+".
@@ -71,7 +71,7 @@ const SUPABASE_SETUP_MD = `
 ### Шаг 2: Выполнение SQL-скрипта
 1.  В меню вашего нового проекта выберите **SQL Editor** (редактор SQL).
 2.  Нажмите **"+ New query"**.
-3.  Скопируйте и вставьте весь SQL-скрипт из файла \`SUPABASE_SETUP.md\` (находится в корне проекта) в редактор.
+3.  Скопируйте и вставьте весь SQL-скрипт из файла \\\`SUPABASE_SETUP.md\\\` (находится в корне проекта) в редактор.
 4.  Нажмите **"RUN"**. Этот скрипт создаст все необходимые таблицы и настроит политики безопасности.
 `;
 
