@@ -140,8 +140,8 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
                 <div class="w-5 h-5 flex-shrink-0 mt-0.5">${Icons.AlertTriangleIcon}</div>
                 <div>
                     <p class="font-bold">Обнаружена проблема с базой данных!</p>
-                    <p class="text-sm">Вероятно, структура вашей базы данных устарела, что вызывает ошибки синхронизации. Пожалуйста, запустите мастер настройки, чтобы обновить схему.</p>
-                     <button data-action="launch-db-wizard" class="mt-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-semibold">Запустить мастер настройки БД</button>
+                    <p class="text-sm">Вероятно, структура вашей базы данных устарела. Пожалуйста, обновите схему в настройках.</p>
+                     <button data-action="launch-db-wizard" class="mt-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-semibold">Перейти к обновлению БД</button>
                 </div>
             </div>
         ` : '';

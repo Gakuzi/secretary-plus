@@ -8,12 +8,11 @@ import { createSettingsModal } from './components/SettingsModal.js';
 import { createProfileModal } from './components/ProfileModal.js';
 import { createStatsModal } from './components/StatsModal.js';
 import { createHelpModal } from './components/HelpModal.js';
-import { createDbSetupWizard } from './components/DbSetupWizard.js';
 import { createProxySetupWizard } from './components/ProxySetupWizard.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
-import { SettingsIcon, ChartBarIcon, QuestionMarkCircleIcon, AppLogoIcon } from './components/icons/Icons.js';
+import { SettingsIcon, ChartBarIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 import { SUPABASE_CONFIG, GOOGLE_CLIENT_ID } from './config.js';
 
@@ -28,7 +27,6 @@ const APP_STRUCTURE_CONTEXT = `
 - components/SetupWizard.js: Мастер первоначальной настройки.
 - components/SettingsModal.js: Окно для управления настройками после входа.
 - components/ProfileModal.js: Окно профиля, где отображается статус синхронизации.
-- components/DbSetupWizard.js: Мастер настройки воркера для управления схемой БД.
 - components/ProxySetupWizard.js: Мастер настройки прокси-воркера для Gemini.
 `;
 
@@ -437,26 +435,6 @@ function showSetupWizard(resumeState = null) {
     wizardContainer.appendChild(wizard);
 }
 
-function showDbSetupWizard() {
-    modalContainer.innerHTML = '';
-    const onSave = async (newSettings) => {
-        state.settings = newSettings;
-        saveSettings(newSettings);
-        if (state.isSupabaseReady && supabaseService) {
-            await supabaseService.saveUserSettings(newSettings);
-        }
-        modalContainer.innerHTML = '';
-        await initializeAppServices();
-    };
-    const modal = createDbSetupWizard({
-        settings: state.settings,
-        supabaseConfig: SUPABASE_CONFIG,
-        onClose: () => modalContainer.innerHTML = '',
-        onSave,
-    });
-    modalContainer.appendChild(modal);
-}
-
 function showProxySetupWizard() {
     modalContainer.innerHTML = '';
     const modal = createProxySetupWizard({
@@ -465,7 +443,7 @@ function showProxySetupWizard() {
     modalContainer.appendChild(modal);
 }
 
-function showSettingsModal() {
+function showSettingsModal(options = {}) {
     modalContainer.innerHTML = '';
     const onSave = async (newSettings) => {
         state.settings = newSettings;
@@ -481,10 +459,7 @@ function showSettingsModal() {
         supabaseService: supabaseService,
         onClose: () => modalContainer.innerHTML = '',
         onSave,
-        onLaunchDbWizard: () => {
-            modalContainer.innerHTML = ''; // Close settings modal first
-            showDbSetupWizard();
-        },
+        initialTab: options.initialTab || 'connections',
     });
     modalContainer.appendChild(modal);
 }
@@ -526,7 +501,7 @@ function showProfileModal() {
 
     const onLaunchDbWizard = () => {
         modalContainer.innerHTML = ''; // Close profile modal first
-        showDbSetupWizard();
+        showSettingsModal({ initialTab: 'database' });
     };
 
     const modal = createProfileModal(
@@ -572,16 +547,18 @@ function showHelpModal(options = {}) {
             proxyUrl: await getActiveProxy()
         });
      };
+     
+    const onOpenDbSettings = () => {
+        modalContainer.innerHTML = ''; // Close help modal first
+        showSettingsModal({ initialTab: 'database' });
+    };
 
     const modal = createHelpModal({
         onClose: () => modalContainer.innerHTML = '',
         settings: state.settings,
         analyzeErrorFn,
         onRelaunchWizard,
-        onLaunchDbWizard: () => {
-            modalContainer.innerHTML = ''; // Close help modal first
-            showDbSetupWizard();
-        },
+        onLaunchDbWizard: onOpenDbSettings,
         onLaunchProxyWizard: () => {
             modalContainer.innerHTML = ''; // Close help modal first
             showProxySetupWizard();
@@ -707,13 +684,13 @@ function showInitialScreen() {
 // Setup header buttons
 const headerLogoContainer = document.getElementById('header-logo-container');
 if (headerLogoContainer) {
-    headerLogoContainer.innerHTML = AppLogoIcon;
+    headerLogoContainer.innerHTML = `<img src="https://cdn3.iconfinder.com/data/icons/user-icon-1/100/06-1User-512.png" alt="Секретарь+ Логотип" class="w-full h-full rounded-full">`;
 }
 settingsButton.innerHTML = SettingsIcon;
 statsButton.innerHTML = ChartBarIcon;
 helpButton.innerHTML = QuestionMarkCircleIcon;
 
-settingsButton.addEventListener('click', showSettingsModal);
+settingsButton.addEventListener('click', () => showSettingsModal());
 statsButton.addEventListener('click', showStatsModal);
 helpButton.addEventListener('click', () => showHelpModal());
 

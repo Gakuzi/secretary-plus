@@ -1,7 +1,6 @@
 import { MessageSender } from '../types.js';
 import { createResultCardElement } from './ResultCard.js';
 import * as Icons from './icons/Icons.js';
-import { AppLogoIcon } from './icons/Icons.js';
 
 // A simple markdown to HTML converter
 function markdownToHTML(text) {
@@ -25,22 +24,22 @@ export function createMessageElement(message) {
     let bubbleClass;
 
     const avatar = document.createElement('div');
+    avatar.className = 'w-10 h-10 flex-shrink-0';
 
     if (isUser) {
         authorNameText = 'Вы';
         bubbleClass = 'bg-blue-500 text-white';
-        avatar.className = 'w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0 bg-blue-500 text-white';
+        avatar.classList.add('rounded-full', 'flex', 'items-center', 'justify-center', 'font-bold', 'text-lg', 'bg-blue-500', 'text-white');
         avatar.textContent = 'ВЫ';
     } else if (isSystem) {
         authorNameText = 'Система';
         bubbleClass = 'bg-amber-50 border border-amber-200 text-amber-900 dark:bg-amber-900/20 dark:border-amber-800/50 dark:text-amber-200';
-        avatar.className = 'w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0 bg-amber-400 text-amber-900';
+        avatar.classList.add('rounded-full', 'flex', 'items-center', 'justify-center', 'font-bold', 'text-lg', 'bg-amber-400', 'text-amber-900');
         avatar.textContent = '!';
     } else {
         authorNameText = 'Секретарь+';
         bubbleClass = 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-100';
-        avatar.className = 'w-10 h-10 flex-shrink-0';
-        avatar.innerHTML = AppLogoIcon;
+        avatar.innerHTML = `<img src="https://cdn3.iconfinder.com/data/icons/user-icon-1/100/06-1User-512.png" alt="Аватар ассистента" class="w-10 h-10 rounded-full">`;
     }
     
     const contentContainer = document.createElement('div');

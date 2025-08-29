@@ -508,33 +508,4 @@ export class SupabaseService {
         if (error) throw error;
         return { success: true };
     }
-
-    // --- Schema Management ---
-    async executeSql(managementWorkerUrl, sqlScript) {
-        if (!managementWorkerUrl) {
-            throw new Error("Management Worker URL is not configured.");
-        }
-        
-        const { data: { session } } = await this.client.auth.getSession();
-        if (!session || !session.provider_token) {
-            throw new Error("User is not authenticated or provider token is missing.");
-        }
-
-        const response = await fetch(managementWorkerUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                // Pass the Google token to the worker for potential validation if needed
-                'Authorization': `Bearer ${session.provider_token}`
-            },
-            body: JSON.stringify({ query: sqlScript }),
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Schema update failed with status ${response.status}: ${errorText}`);
-        }
-
-        return await response.json();
-    }
 }

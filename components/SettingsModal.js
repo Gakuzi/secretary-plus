@@ -268,7 +268,7 @@ END;
 $$;`;
 
 
-export function createSettingsModal({ settings, supabaseService, onClose, onSave, onLaunchDbWizard }) {
+export function createSettingsModal({ settings, supabaseService, onClose, onSave, initialTab = 'connections' }) {
     const modalElement = document.createElement('div');
     modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
 
@@ -608,29 +608,23 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                         <!-- Database Tab -->
                         <div id="tab-database" class="settings-tab-content hidden space-y-6">
                              <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-3">Управление схемой</h3>
-                                <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Для добавления новых функций приложению может потребоваться обновление структуры базы данных. Запустите мастер, чтобы настроить безопасное автоматическое обновление.</p>
-                                <button data-action="launch-db-wizard" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold transition-colors">
-                                    ${Icons.DatabaseIcon} <span>Запустить мастер настройки БД</span>
-                                </button>
-                             </div>
-                             <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                                <div class="flex justify-between items-center">
-                                    <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">SQL-скрипт схемы</h3>
-                                    <button data-action="toggle-sql" class="text-sm text-blue-500 dark:text-blue-400 hover:underline">${state.isShowingSql ? 'Скрыть' : 'Показать'}</button>
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Обновление Базы Данных</h3>
+                                <p class="text-sm text-slate-600 dark:text-slate-400 my-4">Для добавления новых функций и исправления ошибок, иногда требуется обновить структуру вашей базы данных Supabase. Это простой и безопасный процесс.</p>
+                                <div class="text-sm p-3 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 text-blue-800 dark:text-blue-200">
+                                    <p class="font-bold mb-2">Процесс обновления (2 клика):</p>
+                                    <ol class="list-decimal list-inside space-y-1">
+                                        <li>Нажмите кнопку **"Копировать SQL-скрипт"** ниже.</li>
+                                        <li>Нажмите кнопку **"Открыть Редактор Supabase"**.</li>
+                                        <li>В открывшейся вкладке Supabase вставьте скопированный скрипт и нажмите **"RUN"**.</li>
+                                    </ol>
+                                    <p class="mt-2 text-xs">Это безопасно. Скрипт только добавляет новые таблицы и поля, не удаляя ваши данные.</p>
                                 </div>
-                                <div id="sql-script-container" class="mt-4" style="display: ${sqlSectionDisplay};">
-                                    <div class="text-xs text-slate-500 mb-2 flex justify-between items-center">
-                                        <span>Этот скрипт можно выполнить в SQL-редакторе Supabase для ручного обновления таблиц.</span>
-                                        ${sqlEditorLink ? `<a href="${sqlEditorLink}" target="_blank" rel="noopener noreferrer" class="text-blue-500 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1 whitespace-nowrap">${Icons.ExternalLinkIcon.replace('width="24" height="24"', 'width="14" height="14"')} <span>Открыть редактор</span></a>` : ''}
-                                    </div>
-                                    <div class="rounded-md border border-slate-200 dark:border-slate-700">
-                                        <div class="flex justify-between items-center bg-slate-100 dark:bg-slate-900 px-4 py-2 text-xs text-slate-500 dark:text-slate-400 rounded-t-md">
-                                            <span>POSTGRESQL (SUPABASE)</span>
-                                            <button class="text-xs font-semibold bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 px-2 py-1 rounded-md transition-colors" data-action="copy-sql">Копировать</button>
-                                        </div>
-                                        <pre class="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-b-md max-h-60 overflow-y-auto"><code class="text-xs whitespace-pre font-mono">${SUPABASE_SCHEMA_SQL}</code></pre>
-                                    </div>
+                                <div class="flex flex-col sm:flex-row gap-3 mt-4">
+                                    <button data-action="copy-sql" class="w-full flex-1 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2">
+                                        ${Icons.CodeIcon}
+                                        <span>Копировать SQL-скрипт</span>
+                                    </button>
+                                    ${sqlEditorLink ? `<a href="${sqlEditorLink}" target="_blank" rel="noopener noreferrer" class="w-full flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2">${Icons.ExternalLinkIcon} <span>Открыть Редактор Supabase</span></a>` : `<button class="w-full flex-1 px-4 py-2 bg-slate-400 text-white rounded-md font-semibold text-sm cursor-not-allowed" disabled>Редактор Supabase (настройте Supabase)</button>`}
                                 </div>
                             </div>
                         </div>
@@ -699,20 +693,24 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
             case 'manage-proxies':
                 showProxyManagerModal();
                 break;
-            case 'toggle-sql':
-                state.isShowingSql = !state.isShowingSql;
-                modalElement.querySelector('#sql-script-container').style.display = state.isShowingSql ? 'block' : 'none';
-                target.textContent = state.isShowingSql ? 'Скрыть' : 'Показать';
-                break;
             case 'copy-sql':
                 navigator.clipboard.writeText(SUPABASE_SCHEMA_SQL).then(() => {
-                    target.textContent = 'Скопировано!';
-                    setTimeout(() => { target.textContent = 'Копировать'; }, 2000);
+                    const originalText = target.innerHTML;
+                    target.innerHTML = `✓ Скопировано!`;
+                    setTimeout(() => { target.innerHTML = originalText; }, 2000);
                 });
                 break;
-            case 'launch-db-wizard':
-                onLaunchDbWizard();
-                break;
+        }
+    };
+
+    const activateInitialTab = () => {
+        modalElement.querySelectorAll('.settings-tab-button').forEach(btn => btn.classList.remove('active'));
+        modalElement.querySelectorAll('.settings-tab-content').forEach(content => content.classList.add('hidden'));
+
+        modalElement.querySelectorAll(`.settings-tab-button[data-tab="${initialTab}"]`).forEach(btn => btn.classList.add('active'));
+        const initialTabContent = modalElement.querySelector(`#tab-${initialTab}`);
+        if (initialTabContent) {
+            initialTabContent.classList.remove('hidden');
         }
     };
 
@@ -738,5 +736,6 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
 
     render();
     loadAppInfo();
+    activateInitialTab();
     return modalElement;
 }

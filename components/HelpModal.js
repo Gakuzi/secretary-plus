@@ -94,10 +94,10 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                     <div id="tab-instructions" class="settings-tab-content hidden space-y-6">
                         <div class="p-4 bg-white dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
                              <h3 class="text-lg font-semibold">Настройка базы данных и синхронизации</h3>
-                             <p class="text-sm text-slate-600 dark:text-slate-400 mt-1 mb-4">Для работы облачной синхронизации и автоматического обновления схемы БД необходим "Управляющий воркер". Наш мастер поможет вам его настроить.</p>
+                             <p class="text-sm text-slate-600 dark:text-slate-400 mt-1 mb-4">Для работы облачной синхронизации необходимо периодически обновлять структуру базы данных Supabase. Это можно сделать в Настройках.</p>
                              <button data-action="launch-db-wizard" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold transition-colors">
                                 ${Icons.DatabaseIcon}
-                                <span>Запустить мастер настройки БД</span>
+                                <span>Перейти к обновлению БД</span>
                             </button>
                         </div>
                         <div class="p-4 bg-white dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -113,13 +113,13 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                     <!-- Tools Tab -->
                     <div id="tab-tools" class="settings-tab-content hidden space-y-6">
                          <div class="p-4 bg-white dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">Мастер настройки базы данных</h3>
+                            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">Обновление Базы Данных</h3>
                              <p class="text-sm text-slate-600 dark:text-slate-400 mt-1 mb-4">
-                                Запустите интерактивный мастер для пошаговой настройки "Управляющего воркера", который необходим для безопасного обновления схемы вашей базы данных.
+                                Если вы столкнулись с ошибками синхронизации, скорее всего, вам нужно обновить структуру базы данных до последней версии.
                             </p>
                              <button data-action="launch-db-wizard" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold transition-colors">
                                 ${Icons.SettingsIcon}
-                                <span>Запустить мастер настройки БД</span>
+                                <span>Перейти к обновлению БД</span>
                             </button>
                         </div>
                          <div class="p-4 bg-white dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
