@@ -1,6 +1,7 @@
 import { MessageSender } from '../types.js';
 import { createResultCardElement } from './ResultCard.js';
 import * as Icons from './icons/Icons.js';
+import { AppLogoIcon } from './icons/Icons.js';
 
 // A simple markdown to HTML converter
 function markdownToHTML(text) {
@@ -20,26 +21,27 @@ export function createMessageElement(message) {
     wrapper.className = `flex items-start space-x-3 message-item ${isUser ? 'justify-end' : ''}`;
     wrapper.dataset.messageId = message.id;
 
-    let avatarClass = 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200';
-    let avatarText = 'S+';
-    let authorNameText = 'Секретарь+';
-    let bubbleClass = 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-100';
-
-    if (isUser) {
-        avatarClass = 'bg-blue-500 text-white';
-        avatarText = 'ВЫ';
-        authorNameText = 'Вы';
-        bubbleClass = 'bg-blue-500 text-white';
-    } else if (isSystem) {
-        avatarClass = 'bg-amber-400 text-amber-900';
-        avatarText = '!';
-        authorNameText = 'Система';
-        bubbleClass = 'bg-amber-50 border border-amber-200 text-amber-900 dark:bg-amber-900/20 dark:border-amber-800/50 dark:text-amber-200';
-    }
+    let authorNameText;
+    let bubbleClass;
 
     const avatar = document.createElement('div');
-    avatar.className = `w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0 ${avatarClass}`;
-    avatar.textContent = avatarText;
+
+    if (isUser) {
+        authorNameText = 'Вы';
+        bubbleClass = 'bg-blue-500 text-white';
+        avatar.className = 'w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0 bg-blue-500 text-white';
+        avatar.textContent = 'ВЫ';
+    } else if (isSystem) {
+        authorNameText = 'Система';
+        bubbleClass = 'bg-amber-50 border border-amber-200 text-amber-900 dark:bg-amber-900/20 dark:border-amber-800/50 dark:text-amber-200';
+        avatar.className = 'w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0 bg-amber-400 text-amber-900';
+        avatar.textContent = '!';
+    } else {
+        authorNameText = 'Секретарь+';
+        bubbleClass = 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-100';
+        avatar.className = 'w-10 h-10 flex-shrink-0';
+        avatar.innerHTML = AppLogoIcon;
+    }
     
     const contentContainer = document.createElement('div');
     contentContainer.className = `max-w-xl ${isUser ? 'order-first' : ''}`;

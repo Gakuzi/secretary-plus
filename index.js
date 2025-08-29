@@ -13,7 +13,7 @@ import { createProxySetupWizard } from './components/ProxySetupWizard.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
-import { SettingsIcon, ChartBarIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
+import { SettingsIcon, ChartBarIcon, QuestionMarkCircleIcon, AppLogoIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 import { SUPABASE_CONFIG, GOOGLE_CLIENT_ID } from './config.js';
 
@@ -705,6 +705,10 @@ function showInitialScreen() {
 }
 
 // Setup header buttons
+const headerLogoContainer = document.getElementById('header-logo-container');
+if (headerLogoContainer) {
+    headerLogoContainer.innerHTML = AppLogoIcon;
+}
 settingsButton.innerHTML = SettingsIcon;
 statsButton.innerHTML = ChartBarIcon;
 helpButton.innerHTML = QuestionMarkCircleIcon;
