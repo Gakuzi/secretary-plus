@@ -541,10 +541,13 @@ export const callGemini = async ({
                         let results = [];
                         
                         if (name === 'get_recent_files') {
-                            const googleProvider = serviceProviders.google;
-                             if (googleProvider && await googleProvider.isAuthenticated()) {
-                                results = await googleProvider.getRecentFiles(args);
-                             }
+                             results = await provider.getRecentFiles(args);
+                             if (results.length === 0 && provider.getId() === 'supabase') {
+                                const googleProvider = serviceProviders.google;
+                                if (googleProvider && await googleProvider.isAuthenticated()) {
+                                     results = await googleProvider.getRecentFiles(args);
+                                }
+                            }
                         } else { // find_documents
                             results = await provider.findDocuments(args.query);
                              if (results.length === 0 && provider.getId() === 'supabase') {

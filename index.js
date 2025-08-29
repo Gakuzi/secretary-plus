@@ -365,5 +365,219 @@ async function handleCardAction(e) {
 async function handleQuickReply(e) {
     const target = e.target.closest('.quick-reply-button');
     if (!target || target.disabled) return;
-    target.closest('.quick-replies-container').remove();
-    await handleSendMessage(target.dataset.
+
+    const replyText = target.dataset.replyText;
+    const container = target.closest('.quick-replies-container');
+
+    if (container) {
+        container.querySelectorAll('.quick-reply-button').forEach(btn => {
+            btn.disabled = true;
+            if (btn === target) {
+                btn.classList.add('clicked');
+            }
+        });
+    }
+
+    if (replyText) {
+        await handleSendMessage(replyText);
+    }
+
+    // Wait a bit before removing to show feedback
+    setTimeout(() => {
+        container?.remove();
+    }, 300);
+}
+
+// --- EMAIL POLLING ---
+function setupEmailPolling() {
+    if (emailCheckInterval) clearInterval(emailCheckInterval);
+    if (!state.settings.enableEmailPolling || !state.isGoogleConnected) return;
+
+    emailCheckInterval = setInterval(async () => {
+        try {
+            const emails = await googleProvider.getRecentEmails({ max_results: 1 });
+            if (emails && emails.length > 0) {
+                const latestEmail = emails[0];
+                if (latestEmail.id !== state.lastSeenEmailId) {
+                    state.lastSeenEmailId = latestEmail.id;
+                    const prompt = `Только что пришло новое письмо от ${latestEmail.from} с темой "${latestEmail.subject}". Проанализируй его содержимое и предложи действия. Содержимое: ${latestEmail.body}`;
+                    await handleSendMessage(prompt, null, { silent: true });
+                }
+            }
+        } catch (error) {
+            console.error("Email polling failed:", error);
+            // Don't show system error for background task
+        }
+    }, 60 * 1000); // Check every 60 seconds
+}
+
+// --- MODAL HANDLERS ---
+function showProfileModal() {
+    modalContainer.innerHTML = '';
+    const profileModal = createProfileModal(
+        state.userProfile,
+        state.settings,
+        {
+            onClose: () => modalContainer.innerHTML = '',
+            onSave: async (newSettings) => {
+                state.settings = newSettings;
+                saveSettings(newSettings);
+                if (supabaseService && state.isSupabaseReady) {
+                    await supabaseService.saveUserSettings(newSettings);
+                }
+                modalContainer.innerHTML = '';
+                // Re-initialize services that depend on settings
+                await initializeAppServices();
+            },
+            onLogout: handleLogout,
+            onDelete: async () => {
+                if (confirm('Вы уверены, что хотите удалить все свои данные из облака? Это действие необратимо.')) {
+                    await supabaseService.deleteUserSettings();
+                    alert('Данные удалены.');
+                }
+            },
+            onForceSync: async () => {
+                 await runAllSyncs();
+            },
+            onAnalyzeError: async ({ context, error }) => {
+                return await analyzeSyncErrorWithGemini({
+                    errorMessage: error,
+                    context: context,
+                    appStructure: APP_STRUCTURE_CONTEXT,
+                    apiKey: state.settings.geminiApiKey,
+                    proxyUrl: await getActiveProxy()
+                });
+            },
+            onViewData: async ({ tableName }) => {
+                if (!supabaseService) return { error: 'Supabase не подключен.' };
+                return await supabaseService.getSampleData(tableName);
+            }
+        },
+        state.syncStatus,
+        syncTasks,
+        supabaseService?.url
+    );
+    modalContainer.appendChild(profileModal);
+}
+
+function showSettingsModal() {
+    modalContainer.innerHTML = '';
+    const settingsModal = createSettingsModal({
+        settings: state.settings,
+        supabaseService,
+        onClose: () => modalContainer.innerHTML = '',
+        onSave: async (newSettings) => {
+            const shouldReload = state.settings.isSupabaseEnabled !== newSettings.isSupabaseEnabled ||
+                               state.settings.geminiApiKey !== newSettings.geminiApiKey;
+
+            state.settings = newSettings;
+            saveSettings(newSettings);
+            
+            if (supabaseService && state.isSupabaseReady) {
+               await supabaseService.saveUserSettings(newSettings);
+            }
+
+            modalContainer.innerHTML = '';
+            
+            if (shouldReload) {
+                window.location.reload();
+            } else {
+                await initializeAppServices(); // Re-init with new settings
+            }
+        }
+    });
+    modalContainer.appendChild(settingsModal);
+}
+
+
+function showStatsModal() {
+    modalContainer.innerHTML = '';
+    const statsModal = createStatsModal(state.actionStats, () => modalContainer.innerHTML = '');
+    modalContainer.appendChild(statsModal);
+}
+
+function showHelpModal() {
+    modalContainer.innerHTML = '';
+    const helpModal = createHelpModal({
+        onClose: () => modalContainer.innerHTML = '',
+        settings: state.settings,
+        analyzeErrorFn: async (errorMessage) => {
+            return analyzeSyncErrorWithGemini({
+                errorMessage,
+                context: 'Пользователь анализирует ошибку вручную через Центр Помощи.',
+                appStructure: APP_STRUCTURE_CONTEXT,
+                apiKey: state.settings.geminiApiKey,
+                proxyUrl: await getActiveProxy(),
+            });
+        },
+        onRelaunchWizard: () => {
+             if (confirm('Вы уверены? Это сотрет текущие настройки в браузере и перезапустит мастер настройки.')) {
+                localStorage.removeItem('secretary-plus-settings-v4');
+                window.location.reload();
+             }
+        }
+    });
+    modalContainer.appendChild(helpModal);
+}
+
+
+function showCameraView() {
+    cameraViewContainer.innerHTML = '';
+    const cameraView = createCameraView(
+        (image) => {
+            handleSendMessage('Что на этом фото?', image);
+        },
+        () => {
+            cameraViewContainer.classList.add('hidden');
+        }
+    );
+    cameraViewContainer.appendChild(cameraView);
+    cameraViewContainer.classList.remove('hidden');
+}
+
+
+// --- INITIALIZATION ---
+async function init() {
+    // Inject icons
+    settingsButton.innerHTML = SettingsIcon;
+    statsButton.innerHTML = ChartBarIcon;
+    helpButton.innerHTML = QuestionMarkCircleIcon;
+
+    // Add main event listeners
+    settingsButton.addEventListener('click', showSettingsModal);
+    statsButton.addEventListener('click', showStatsModal);
+    helpButton.addEventListener('click', showHelpModal);
+    document.body.addEventListener('click', handleCardAction);
+    document.body.addEventListener('click', handleQuickReply);
+
+    const onWizardComplete = async (finalSettings) => {
+        saveSettings(finalSettings);
+        sessionStorage.removeItem('wizardState');
+        wizardContainer.innerHTML = '';
+        await initializeAppServices();
+        renderMainContent();
+    };
+
+    const onWizardExit = () => {
+        sessionStorage.removeItem('wizardState');
+        wizardContainer.innerHTML = '';
+        renderMainContent(); // Show welcome screen if not configured
+    };
+    
+    const resumeStateJSON = sessionStorage.getItem('wizardState');
+    if (resumeStateJSON) {
+        sessionStorage.removeItem('wizardState'); // Clear it immediately
+        const resumeState = JSON.parse(resumeStateJSON);
+        const wizard = createSetupWizard({ onComplete: onWizardComplete, onExit: onWizardExit, googleProvider, supabaseConfig: SUPABASE_CONFIG, googleClientId: GOOGLE_CLIENT_ID, resumeState });
+        wizardContainer.appendChild(wizard);
+    } else if (!state.settings.geminiApiKey) {
+        const wizard = createSetupWizard({ onComplete: onWizardComplete, onExit: onWizardExit, googleProvider, supabaseConfig: SUPABASE_CONFIG, googleClientId: GOOGLE_CLIENT_ID });
+        wizardContainer.appendChild(wizard);
+    } else {
+        await initializeAppServices();
+        renderMainContent();
+    }
+}
+
+// Start the application
+init();

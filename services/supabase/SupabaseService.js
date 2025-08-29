@@ -29,6 +29,10 @@ export class SupabaseService {
         this.url = supabaseUrl;
     }
 
+    getId() {
+        return "supabase";
+    }
+
     // --- Auth ---
     async signInWithGoogle() {
         const { error } = await this.client.auth.signInWithOAuth({
@@ -270,6 +274,18 @@ export class SupabaseService {
             .order('modified_time', { ascending: false, nullsFirst: false })
             .limit(10);
             
+        if (error) throw error;
+        return data;
+    }
+
+    async getRecentFiles({ max_results = 10 }) {
+        const { data, error } = await this.client
+            .from('files')
+            .select('*')
+            .eq('is_deleted', false)
+            .order('modified_time', { ascending: false, nullsFirst: false })
+            .limit(max_results);
+
         if (error) throw error;
         return data;
     }
