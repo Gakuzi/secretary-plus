@@ -37,7 +37,7 @@ export class SupabaseService {
             provider: 'google',
             options: {
                 scopes: GOOGLE_SCOPES,
-                redirectTo: window.location.href, // Use full current href for reliable redirects
+                redirectTo: window.location.origin + window.location.pathname,
             },
         });
         if (error) throw error;
@@ -428,10 +428,16 @@ export class SupabaseService {
     async addProxy(proxyData) {
         const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
+
+        const priorityValue = proxyData.priority;
         
         const { data, error } = await this.client
             .from('proxies')
-            .insert({ ...proxyData, user_id: user.id })
+            .insert({ 
+                ...proxyData, 
+                user_id: user.id,
+                priority: !isNaN(priorityValue) ? priorityValue : 0,
+            })
             .select()
             .single();
 
@@ -459,35 +465,5 @@ export class SupabaseService {
 
         if (error) throw error;
         return { success: true };
-    }
-    
-    async upsertProxies(proxies) {
-        const { data: { user } } = await this.client.auth.getUser();
-        if (!user) throw new Error("User not authenticated.");
-
-        const formattedProxies = proxies.map(p => ({
-            user_id: user.id,
-            url: p.url,
-            alias: p.alias,
-            priority: p.priority,
-            is_active: p.is_active,
-            geolocation: p.geolocation,
-        }));
-
-        const { data, error } = await this.client
-            .from('proxies')
-            .upsert(formattedProxies, { onConflict: 'user_id, url' })
-            .select();
-
-        if (error) throw error;
-        return data;
-    }
-    
-    async updateProxyPriorities(updates) {
-        const { error } = await this.client.rpc('update_proxy_priorities', { updates });
-        if (error) {
-            console.error('Error updating proxy priorities:', error);
-            throw error;
-        }
     }
 }

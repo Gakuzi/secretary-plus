@@ -9,123 +9,579 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="setup-guide.css">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script type="importmap">
-    {
-      "imports": {
-        "@google/genai": "https://esm.sh/@google/genai"
-      }
-    }
-    </script>
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans">
-    <main class="flex-1 p-4 sm:p-8 md:p-12 w-full">
-        <div class="max-w-4xl mx-auto">
-            <header class="text-center mb-12">
-                 <h1 class="text-3xl font-bold text-white">Мастер Настройки Секретарь+</h1>
-                 <p class="text-gray-400 mt-2">Следуйте шагам, чтобы подключить и настроить вашего ассистента.</p>
-            </header>
-            
-            <section id="step-auth" class="setup-step" data-step="1">
-                <div class="step-header">
-                    <div class="step-indicator">1</div>
-                    <h2 class="step-title">Аутентификация</h2>
-                </div>
-                <div class="step-content">
-                    <p class="mb-6">Начните с входа в ваш аккаунт Google. Это позволит безопасно сохранять ваши настройки в облаке.</p>
-                     <div id="auth-status-container" class="mt-4 text-sm mb-4" style="display: none;"></div>
-                    <button id="connect-login-button" class="wizard-nav-button next-button w-full text-center justify-center mt-4">
-                        Войти через Google
-                    </button>
-                    <div id="user-profile-display" class="mt-6 p-4 bg-gray-800 border border-gray-700 rounded-lg" style="display: none;">
-                        <!-- User profile info will be rendered here -->
-                        <div id="auth-actions" class="step-navigation" style="display: none; border-top: none; padding-top: 1rem;">
-                            <button id="wizard-logout-button" class="wizard-nav-button prev-button">Выйти</button>
-                            <button id="auth-continue-button" class="wizard-nav-button next-button">Продолжить</button>
+    <div class="flex min-h-screen">
+        <!-- Sidebar Navigation -->
+        <aside class="w-64 bg-gray-800 p-6 border-r border-gray-700 fixed top-0 left-0 h-full overflow-y-auto">
+            <h1 class="text-xl font-bold text-white mb-8">Мастер Настройки</h1>
+            <nav>
+                <ul class="space-y-2" id="wizard-nav">
+                    <li><a href="#introduction" class="nav-link active" data-step="0">Введение</a></li>
+                    <li><a href="#auth-choice" class="nav-link" data-step="1">1. Выбор способа</a></li>
+                    <li><a href="#supabase-setup" class="nav-link" data-step="2">2. Настройка Supabase</a></li>
+                    <li><a href="#google-cloud-setup" class="nav-link" data-step="3">3. Настройка Google Cloud</a></li>
+                    <li><a href="#proxy-setup" class="nav-link" data-step="4">4. (Опц.) Настройка Прокси</a></li>
+                    <li><a href="#gemini-setup" class="nav-link" data-step="5">5. Настройка Gemini API</a></li>
+                    <li><a href="#final-step" class="nav-link" data-step="6">6. Завершение</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="ml-64 p-8 md:p-12 w-full">
+            <div class="max-w-4xl mx-auto">
+                
+                <!-- Introduction -->
+                <section id="introduction" class="wizard-step">
+                    <h2 class="section-title">Введение</h2>
+                    <p>Добро пожаловать в руководство по настройке «Секретарь+»! Это приложение использует несколько внешних сервисов Google для своей работы. Следуйте этой инструкции шаг за шагом, чтобы получить все необходимые ключи и настроить приложение.</p>
+                    <p>После выполнения всех шагов вы получите набор ключей, которые нужно будет ввести в самом приложении.</p>
+                     <footer class="wizard-footer">
+                        <button class="wizard-nav-button next-button" data-next="1">Начать настройку</button>
+                    </footer>
+                </section>
+                
+                 <!-- Auth Choice -->
+                <section id="auth-choice" class="wizard-step" style="display: none;">
+                    <h2 class="section-title">1. Выбор способа аутентификации</h2>
+                    <p class="mb-6">Приложение поддерживает два способа подключения к сервисам Google. Выберите один из них. <strong>Рекомендуется использовать Supabase.</strong></p>
+
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div class="choice-card" data-choice="supabase">
+                            <h3 class="choice-title">Supabase (Рекомендуется)</h3>
+                            <p class="choice-description">Использует Supabase для безопасной аутентификации и хранения данных (контакты, файлы). Это обеспечивает лучшую производительность и функциональность, включая синхронизацию.</p>
+                            <ul class="choice-features">
+                                <li>✅ Безопасный вход через Google</li>
+                                <li>✅ Синхронизация контактов и файлов</li>
+                                <li>✅ Быстрый поиск по данным</li>
+                            </ul>
+                        </div>
+                         <div class="choice-card" data-choice="direct">
+                            <h3 class="choice-title">Прямое подключение Google</h3>
+                            <p class="choice-description">Простой способ, подключающий приложение напрямую к Google API без использования базы данных. Функции синхронизации и быстрого поиска по контактам будут недоступны.</p>
+                             <ul class="choice-features">
+                                <li>✅ Простая настройка</li>
+                                <li>❌ Без синхронизации данных</li>
+                                <li>❌ Поиск только по Google Drive</li>
+                            </ul>
                         </div>
                     </div>
-                </div>
-            </section>
+                     <footer class="wizard-footer">
+                        <button class="wizard-nav-button back-button" data-back="0">Назад</button>
+                    </footer>
+                </section>
 
-            <section id="step-keys" class="setup-step" data-step="2" style="display: none;">
-                 <div class="step-header">
-                    <div class="step-indicator">2</div>
-                    <h2 class="step-title">Конфигурация API Ключей</h2>
-                </div>
-                <div class="step-content">
-                    <p class="mb-6">Введите ключи для Gemini API. Они будут безопасно сохранены в вашем аккаунте.</p>
-                    <div class="input-group">
-                        <label for="gemini-api-key">Gemini API Key</label>
-                        <input type="password" id="gemini-api-key" placeholder="Вставьте ваш Gemini API Key">
-                        <p class="note-text"><a href="https://aistudio.google.com/app/apikey" target="_blank">Получить ключ в Google AI Studio</a></p>
-                    </div>
-                    <div class="input-group">
-                        <label for="google-client-id">Google Client ID (опционально)</label>
-                        <input type="text" id="google-client-id" placeholder="Вставьте ваш Google Client ID (для резервного подключения)">
-                         <p class="note-text"><a href="https://console.cloud.google.com/apis/credentials" target="_blank">Получить Client ID в Google Cloud</a></p>
-                    </div>
-                    <div id="keys-status-container" class="mt-4 text-sm" style="display: none;"></div>
-                    <div class="step-navigation">
-                        <button class="wizard-nav-button prev-button" data-nav-target="auth">Назад</button>
-                        <button id="save-keys-button" class="wizard-nav-button next-button">Сохранить и продолжить</button>
-                    </div>
-                </div>
-            </section>
+                <!-- Supabase Setup -->
+                <section id="supabase-setup" class="wizard-step" style="display: none;">
+                    <h2 class="section-title">2. Настройка Supabase</h2>
+                    <p class="mb-6">Supabase используется как безопасная база данных и сервис аутентификации. Если вы включите его, пользователи смогут входить через Google, а их контакты и файлы будут синхронизироваться для быстрого доступа.</p>
 
-            <section id="step-proxy" class="setup-step" data-step="3" style="display: none;">
-                <div class="step-header">
-                    <div class="step-indicator">3</div>
-                    <h2 class="step-title">Настройка Прокси (опционально)</h2>
-                </div>
-                 <div class="step-content">
-                    <p class="mb-4">Если доступ к Gemini API ограничен, найдите, добавьте и протестируйте рабочие прокси-серверы. Рабочие прокси будут добавлены в список активных.</p>
-                    <div class="flex flex-wrap gap-2 mb-4">
-                        <button id="find-proxies-ai" class="wizard-nav-button find-button">Найти прокси с помощью ИИ</button>
-                        <button id="add-proxy-manual" class="wizard-nav-button prev-button">Добавить вручную</button>
+                    <div class="step">
+                        <h3 class="step-title">Шаг 2.1: Создание проекта</h3>
+                        <ol>
+                            <li><a href="https://supabase.com/dashboard/projects" target="_blank" rel="noopener noreferrer">Откройте панель управления Supabase</a> и нажмите <strong>"New project"</strong>.</li>
+                            <li>Придумайте имя проекта, сгенерируйте и сохраните надежный пароль от базы данных.</li>
+                            <li>Выберите регион и нажмите <strong>"Create new project"</strong>.</li>
+                        </ol>
                     </div>
-                    <div id="proxy-finder-status" class="mt-2 text-sm mb-4"></div>
-                    <div id="proxy-editor-container" class="mb-4"></div>
-                    
-                    <div class="grid md:grid-cols-2 gap-6 mt-6">
-                        <div>
-                            <h3 class="step-subtitle">Все известные прокси</h3>
-                            <div id="all-proxies-container" class="proxy-list-container">
-                                <p class="text-gray-400 text-center py-4">Здесь появятся все ваши прокси...</p>
-                            </div>
+
+                    <div class="step">
+                        <h3 class="step-title">Шаг 2.2: Выполнение SQL-скрипта</h3>
+                        <ol>
+                            <li>В меню проекта выберите <strong>SQL Editor</strong>, затем <strong>"+ New query"</strong>.</li>
+                            <li>Скопируйте и вставьте весь SQL-скрипт ниже, затем нажмите <strong>"RUN"</strong>. Этот скрипт можно безопасно выполнять повторно для обновления схемы.</li>
+                        </ol>
+                        <div class="code-block">
+                            <pre><code id="sql-script-content">-- =================================================================
+--  Скрипт настройки базы данных "Секретарь+"
+--  Версия: 1.8.0
+--  Этот скрипт является идемпотентным. Его можно безопасно 
+--  запускать несколько раз для создания или обновления схемы.
+-- =================================================================
+
+-- 1. Таблица контактов (contacts)
+CREATE TABLE IF NOT EXISTS public.contacts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL;
+ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS source TEXT NOT NULL;
+ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS source_id TEXT;
+ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS display_name TEXT;
+ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+DO $$ BEGIN
+  IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint 
+      WHERE conname = 'contacts_user_id_source_source_id_key' AND conrelid = 'public.contacts'::regclass
+  ) THEN
+      ALTER TABLE public.contacts ADD UNIQUE(user_id, source, source_id);
+  END IF;
+END $$;
+
+
+-- 2. Таблица файлов (files)
+CREATE TABLE IF NOT EXISTS public.files (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.files ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL;
+ALTER TABLE public.files ADD COLUMN IF NOT EXISTS source TEXT NOT NULL;
+ALTER TABLE public.files ADD COLUMN IF NOT EXISTS source_id TEXT;
+ALTER TABLE public.files ADD COLUMN IF NOT EXISTS name TEXT NOT NULL;
+ALTER TABLE public.files ADD COLUMN IF NOT EXISTS mime_type TEXT;
+ALTER TABLE public.files ADD COLUMN IF NOT EXISTS url TEXT;
+ALTER TABLE public.files ADD COLUMN IF NOT EXISTS icon_link TEXT;
+ALTER TABLE public.files ADD COLUMN IF NOT EXISTS created_time TIMESTAMPTZ;
+ALTER TABLE public.files ADD COLUMN IF NOT EXISTS modified_time TIMESTAMPTZ;
+ALTER TABLE public.files ADD COLUMN IF NOT EXISTS viewed_by_me_time TIMESTAMPTZ;
+ALTER TABLE public.files ADD COLUMN IF NOT EXISTS size BIGINT;
+ALTER TABLE public.files ADD COLUMN IF NOT EXISTS owner TEXT;
+DO $$ BEGIN
+  IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint 
+      WHERE conname = 'files_user_id_source_source_id_key' AND conrelid = 'public.files'::regclass
+  ) THEN
+      ALTER TABLE public.files ADD UNIQUE(user_id, source, source_id);
+  END IF;
+END $$;
+
+
+-- 3. Таблица заметок (notes)
+CREATE TABLE IF NOT EXISTS public.notes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL;
+ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS title TEXT;
+ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS content TEXT NOT NULL;
+
+
+-- 4. Таблица событий календаря (calendar_events)
+CREATE TABLE IF NOT EXISTS public.calendar_events (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    synced_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL;
+ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS source_id TEXT NOT NULL;
+ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS title TEXT;
+ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS start_time TIMESTAMPTZ;
+ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS end_time TIMESTAMPTZ;
+ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS event_link TEXT;
+ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS meet_link TEXT;
+DO $$ BEGIN
+  IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint 
+      WHERE conname = 'calendar_events_user_id_source_id_key' AND conrelid = 'public.calendar_events'::regclass
+  ) THEN
+      ALTER TABLE public.calendar_events ADD UNIQUE(user_id, source_id);
+  END IF;
+END $$;
+
+
+-- 5. Таблица задач (tasks)
+CREATE TABLE IF NOT EXISTS public.tasks (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    synced_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS source_id TEXT NOT NULL;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS title TEXT;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS due_date TIMESTAMPTZ;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS status TEXT;
+DO $$ BEGIN
+  IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint 
+      WHERE conname = 'tasks_user_id_source_id_key' AND conrelid = 'public.tasks'::regclass
+  ) THEN
+      ALTER TABLE public.tasks ADD UNIQUE(user_id, source_id);
+  END IF;
+END $$;
+
+
+-- 6. Таблица долговременной памяти (chat_memory)
+CREATE TABLE IF NOT EXISTS public.chat_memory (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.chat_memory ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL;
+ALTER TABLE public.chat_memory ADD COLUMN IF NOT EXISTS summary TEXT NOT NULL;
+ALTER TABLE public.chat_memory ADD COLUMN IF NOT EXISTS keywords TEXT[];
+
+
+-- 7. Таблица метаданных почты (emails)
+CREATE TABLE IF NOT EXISTS public.emails (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    synced_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL;
+ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS source_id TEXT NOT NULL;
+ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS subject TEXT;
+ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS sender TEXT;
+ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS snippet TEXT;
+ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS received_at TIMESTAMPTZ;
+DO $$ BEGIN
+  IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint 
+      WHERE conname = 'emails_user_id_source_id_key' AND conrelid = 'public.emails'::regclass
+  ) THEN
+      ALTER TABLE public.emails ADD UNIQUE(user_id, source_id);
+  END IF;
+END $$;
+
+-- 8. Таблица статистики действий (action_stats)
+CREATE TABLE IF NOT EXISTS public.action_stats (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    function_name TEXT NOT NULL,
+    call_count INT DEFAULT 1 NOT NULL
+);
+DO $$ BEGIN
+  IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint 
+      WHERE conname = 'action_stats_user_id_function_name_key' AND conrelid = 'public.action_stats'::regclass
+  ) THEN
+      ALTER TABLE public.action_stats ADD UNIQUE(user_id, function_name);
+  END IF;
+END $$;
+
+-- 9. Таблица настроек пользователя (user_settings)
+CREATE TABLE IF NOT EXISTS public.user_settings (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  settings JSONB NOT NULL
+);
+
+-- 10. Таблица прокси-серверов (proxies)
+CREATE TABLE IF NOT EXISTS public.proxies (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    alias TEXT,
+    url TEXT NOT NULL,
+    priority INT DEFAULT 0 NOT NULL,
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    last_status TEXT DEFAULT 'untested' NOT NULL, -- 'untested', 'ok', 'error'
+    last_checked_at TIMESTAMPTZ,
+    last_speed_ms INT,
+    geolocation TEXT
+);
+DO $$ BEGIN
+  IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint 
+      WHERE conname = 'proxies_user_id_url_key' AND conrelid = 'public.proxies'::regclass
+  ) THEN
+      ALTER TABLE public.proxies ADD UNIQUE(user_id, url);
+  END IF;
+END $$;
+
+
+-- 11. Включение Row Level Security (RLS) для всех таблиц
+ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.files ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.calendar_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_memory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.emails ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.action_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.proxies ENABLE ROW LEVEL SECURITY;
+
+
+-- 12. Создание политик безопасности (удаляем старые, если они есть, чтобы избежать ошибок)
+DROP POLICY IF EXISTS "Allow users to manage their own contacts" ON public.contacts;
+CREATE POLICY "Allow users to manage their own contacts" ON public.contacts FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to manage their own files" ON public.files;
+CREATE POLICY "Allow users to manage their own files" ON public.files FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to manage their own notes" ON public.notes;
+CREATE POLICY "Allow users to manage their own notes" ON public.notes FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to manage their own calendar events" ON public.calendar_events;
+CREATE POLICY "Allow users to manage their own calendar events" ON public.calendar_events FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to manage their own tasks" ON public.tasks;
+CREATE POLICY "Allow users to manage their own tasks" ON public.tasks FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to manage their own chat memory" ON public.chat_memory;
+CREATE POLICY "Allow users to manage their own chat memory" ON public.chat_memory FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to manage their own emails" ON public.emails;
+CREATE POLICY "Allow users to manage their own emails" ON public.emails FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to manage their own stats" ON public.action_stats;
+CREATE POLICY "Allow users to manage their own stats" ON public.action_stats FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can manage their own settings" ON public.user_settings;
+CREATE POLICY "Users can manage their own settings" ON public.user_settings FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to manage their own proxies" ON public.proxies;
+CREATE POLICY "Allow users to manage their own proxies" ON public.proxies FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+
+-- 13. RPC-функции
+CREATE OR REPLACE FUNCTION increment_stat(fn_name TEXT)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  INSERT INTO public.action_stats (user_id, function_name, call_count)
+  VALUES (auth.uid(), fn_name, 1)
+  ON CONFLICT (user_id, function_name)
+  DO UPDATE SET call_count = action_stats.call_count + 1;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION upsert_user_settings(new_settings JSONB)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  INSERT INTO public.user_settings (user_id, settings)
+  VALUES (auth.uid(), new_settings)
+  ON CONFLICT (user_id)
+  DO UPDATE SET settings = EXCLUDED.settings, updated_at = now();
+END;
+$$;
+</code></pre>
+                            <button class="copy-button" data-copy-target="sql-script-content">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                                <span class="copy-text">Копировать</span>
+                            </button>
                         </div>
-                        <div>
-                            <h3 class="step-subtitle">Активные прокси</h3>
-                             <div id="active-proxies-container" class="proxy-list-container">
-                                <p class="text-gray-400 text-center py-4">Принятые рабочие прокси появятся здесь.</p>
-                            </div>
+                        <div class="note warning">
+                            <h4 class="font-bold text-lg mb-2">Устранение неполадок с базой данных</h4>
+                           <p>Если приложение не работает, а в чате появляются ошибки, связанные с базой данных (например, `column "..." does not exist`, `relation "..." does not exist` или ошибки синхронизации), это почти всегда означает, что структура вашей базы данных устарела.</p>
+                           <p><strong>Решение:</strong> Скопируйте и выполните обновленный скрипт выше еще раз. Он специально разработан для безопасного обновления вашей базы данных до последней версии без удаления существующих данных.</p>
                         </div>
                     </div>
-                    <div id="proxy-status-container" class="mt-4 text-sm" style="display: none;"></div>
-                    <div class="step-navigation">
-                         <button class="wizard-nav-button prev-button" data-nav-target="keys">Назад</button>
-                         <button id="finish-setup-button" class="wizard-nav-button next-button">Завершить настройку</button>
-                    </div>
-                 </div>
-            </section>
-            
-            <section id="step-final" class="setup-step" data-step="4" style="display: none;">
-                 <div class="step-header">
-                    <div class="step-indicator">✓</div>
-                    <h2 class="step-title">Настройка завершена!</h2>
-                </div>
-                <div class="step-content text-center">
-                    <p>Поздравляем! Ваш ассистент полностью настроен и готов к работе. Все данные сохранены в вашем облачном аккаунте.</p>
-                    <button id="go-to-app-button" class="wizard-nav-button next-button inline-flex text-center justify-center mt-6">
-                        Перейти в приложение
-                    </button>
-                </div>
-            </section>
-        </div>
-    </main>
 
-    <!-- Modal Container -->
-    <div id="proxy-test-modal-container"></div>
+                    <div class="step">
+                        <h3 class="step-title">Шаг 2.3: Получение ключей Supabase</h3>
+                        <ol>
+                             <li>В меню проекта выберите <strong>Project Settings</strong> (значок шестеренки) &gt; <strong>API</strong>.</li>
+                            <li>Скопируйте <strong>Project URL</strong> и <strong>anon public key</strong>. Их нужно будет вставить в настройки приложения.</li>
+                        </ol>
+                    </div>
+                     <footer class="wizard-footer">
+                        <button class="wizard-nav-button back-button" data-back="1">Назад</button>
+                        <button class="wizard-nav-button next-button" data-next="3">Далее</button>
+                    </footer>
+                </section>
+
+                <!-- Google Cloud Setup -->
+                <section id="google-cloud-setup" class="wizard-step" style="display: none;">
+                    <h2 class="section-title">3. Настройка Google Cloud</h2>
+                    <p class="mb-6">Вам нужен проект в Google Cloud, чтобы разрешить приложению доступ к API Календаря, Диска и Контактов.</p>
+
+                    <div class="step">
+                        <h3 class="step-title">Шаг 3.1: Проект и экран согласия</h3>
+                        <ol>
+                            <li><a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener noreferrer">Создайте новый проект</a> в Google Cloud Console (или выберите существующий).</li>
+                            <li>Перейдите в <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" rel="noopener noreferrer"><strong>APIs & Services &gt; OAuth consent screen</strong></a>.</li>
+                            <li>Выберите <strong>External</strong> и нажмите "Create". Заполните обязательные поля (имя приложения, email).</li>
+                            <li>На шаге "Scopes" ничего не добавляйте.</li>
+                            <li>На шаге "Test users" добавьте свой Google аккаунт, с которого будете входить в приложение.</li>
+                            <li>Вернитесь на страницу OAuth consent screen и нажмите <strong>"Publish App"</strong>, чтобы приложение стало доступно.</li>
+                        </ol>
+                    </div>
+
+                    <div class="step">
+                        <h3 class="step-title">Шаг 3.2: Включение API</h3>
+                        <p>Перейдите в <a href="https://console.cloud.google.com/apis/library" target="_blank" rel="noopener noreferrer"><strong>библиотеку API</strong></a> и включите (Enable) следующие 8 API:</p>
+                        <ul class="list-disc list-inside mt-2 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
+                           <li><a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noopener noreferrer">Google Calendar API</a></li>
+                            <li><a href="https://console.cloud.google.com/apis/library/people.googleapis.com" target="_blank" rel="noopener noreferrer">Google People API</a></li>
+                            <li><a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener noreferrer">Google Drive API</a></li>
+                            <li><a href="https://console.cloud.google.com/apis/library/docs.googleapis.com" target="_blank" rel="noopener noreferrer">Google Docs API</a></li>
+                            <li><a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener noreferrer">Google Sheets API</a></li>
+                            <li><a href="https://console.cloud.google.com/apis/library/tasks.googleapis.com" target="_blank" rel="noopener noreferrer">Google Tasks API</a></li>
+                            <li><a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noopener noreferrer">Gmail API</a> (для отправки и чтения писем)</li>
+                            <li><a href="https://console.cloud.google.com/apis/library/cloudidentity.googleapis.com" target="_blank" rel="noopener noreferrer">Cloud Identity API</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="step">
+                        <h3 class="step-title">Шаг 3.3: Создание OAuth 2.0 Client ID</h3>
+                        <ol>
+                            <li>Перейдите в <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer"><strong>Credentials</strong></a>, нажмите <strong>+ CREATE CREDENTIALS &gt; OAuth client ID</strong>.</li>
+                            <li>Выберите тип <strong>Web application</strong>.</li>
+                        </ol>
+                        
+                        <div id="google-supabase-instructions" style="display: none;">
+                            <p class="mt-4"><strong>Инструкция для Supabase:</strong></p>
+                            <ol>
+                                <li>В панели Supabase перейдите в <strong>Authentication &gt; Providers &gt; Google</strong>. Скопируйте <strong>Redirect URI</strong>.</li>
+                                <li>Вернитесь в Google Cloud. Вставьте скопированный URI в поле <strong>"Authorized redirect URIs"</strong>.</li>
+                                <li>Нажмите <strong>CREATE</strong>. Скопируйте <strong>Client ID</strong> и <strong>Client Secret</strong>.</li>
+                                <li>Вернитесь в Supabase и вставьте их в соответствующие поля, затем нажмите <strong>Save</strong>.</li>
+                            </ol>
+                        </div>
+                        
+                        <div id="google-direct-instructions" style="display: none;">
+                             <p class="mt-4"><strong>Инструкция для прямого подключения:</strong></p>
+                             <ol>
+                                <li>В поле <strong>"Authorized JavaScript origins"</strong> добавьте URL, где размещено ваше приложение (например, `https://username.github.io`).</li>
+                                 <li>В поле <strong>"Authorized redirect URIs"</strong> также добавьте этот URL.</li>
+                                <li>Нажмите <strong>CREATE</strong>. Скопируйте только <strong>Client ID</strong> и сохраните его для вставки в настройки приложения.</li>
+                            </ol>
+                        </div>
+                    </div>
+                     <footer class="wizard-footer">
+                        <button class="wizard-nav-button back-button" data-back="2">Назад</button>
+                        <button class="wizard-nav-button next-button" data-next="4">Далее</button>
+                    </footer>
+                </section>
+                
+                <!-- Proxy Setup -->
+                <section id="proxy-setup" class="wizard-step" style="display: none;">
+                    <h2 class="section-title">4. (Опционально) Настройка Прокси-сервера</h2>
+                    <p class="mb-6">Если доступ к API Gemini ограничен в вашем регионе (например, в России), вы можете настроить бесплатный прокси-сервер. Он будет перенаправлять запросы от приложения к серверам Google, обходя блокировки. Это безопасно, так как код сервера будет принадлежать вам.</p>
+                    <p>Ниже приведены инструкции для двух популярных и надежных сервисов. Выберите один из них.</p>
+                
+                    <div class="step">
+                        <h3 class="step-title">Вариант A: Cloudflare Workers (Рекомендуется)</h3>
+                        <p>Cloudflare предоставляет очень щедрый бесплатный тариф, которого более чем достаточно для личного использования.</p>
+                        <ol>
+                            <li><a href="https://dash.cloudflare.com/sign-up" target="_blank" rel="noopener noreferrer">Зарегистрируйтесь</a> или войдите в аккаунт Cloudflare.</li>
+                            <li>В левом меню выберите <strong>Workers & Pages</strong>.</li>
+                            <li>Нажмите <strong>Create application</strong> > <strong>Create Worker</strong>.</li>
+                            <li>Придумайте имя для вашего worker (например, `gemini-proxy`) и нажмите <strong>Deploy</strong>.</li>
+                            <li>После развертывания нажмите <strong>Edit code</strong>.</li>
+                            <li>Полностью замените существующий код на тот, что указан ниже.</li>
+                        </ol>
+                        <div class="code-block">
+                            <pre><code id="cloudflare-script-content">export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const targetUrl = 'https://generativelanguage.googleapis.com' + url.pathname + url.search;
     
-    <script type="module" src="setup-guide.js"></script>
+    const newRequest = new Request(targetUrl, {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+      redirect: 'follow',
+    });
+
+    return fetch(newRequest);
+  },
+};
+</code></pre>
+                            <button class="copy-button" data-copy-target="cloudflare-script-content">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                                <span class="copy-text">Копировать</span>
+                            </button>
+                        </div>
+                        <ol start="7">
+                            <li>Нажмите <strong>Save and deploy</strong>.</li>
+                            <li>Вернитесь на страницу вашего worker. Сверху вы найдете его URL (например, `https://gemini-proxy.your-username.workers.dev`). <strong>Скопируйте этот URL.</strong></li>
+                            <li>Вставьте скопированный URL в поле "Прокси-сервер для Gemini API" в настройках приложения.</li>
+                        </ol>
+                    </div>
+
+                    <div class="step">
+                        <h3 class="step-title">Вариант B: Vercel Edge Functions</h3>
+                         <p>Vercel также предоставляет отличный бесплатный тариф и простую настройку.</p>
+                        <ol>
+                            <li><a href="https://vercel.com/signup" target="_blank" rel="noopener noreferrer">Зарегистрируйтесь</a> на Vercel, удобнее всего через GitHub.</li>
+                            <li>Создайте новый пустой репозиторий на <a href="https://github.com/new" target="_blank">GitHub</a> (например, `gemini-proxy`).</li>
+                            <li>В этом репозитории создайте папку `api`, а внутри нее — файл `proxy.js`.</li>
+                            <li>Вставьте в файл `proxy.js` следующий код:</li>
+                        </ol>
+                         <div class="code-block">
+                            <pre><code id="vercel-script-content">export const config = {
+  runtime: 'edge',
+};
+
+export default async function handler(request) {
+  const url = new URL(request.url);
+  const targetUrl = `https://generativelanguage.googleapis.com${url.pathname.replace('/api/proxy', '')}${url.search}`;
+
+  return fetch(targetUrl, {
+    headers: request.headers,
+    method: request.method,
+    body: request.body,
+    redirect: 'follow',
+  });
+}
+</code></pre>
+                            <button class="copy-button" data-copy-target="vercel-script-content">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                                <span class="copy-text">Копировать</span>
+                            </button>
+                        </div>
+                         <ol start="5">
+                             <li><a href="https://vercel.com/new" target="_blank" rel="noopener noreferrer">Создайте новый проект на Vercel</a>, импортировав созданный репозиторий с GitHub. Vercel автоматически определит настройки. Нажмите <strong>Deploy</strong>.</li>
+                            <li>После развертывания перейдите в панель управления проектом. В разделе <strong>Domains</strong> вы найдете URL вашего проекта (например, `https://gemini-proxy.vercel.app`).</li>
+                            <li>К этому URL добавьте `/api/proxy`. Ваш полный URL для настроек будет выглядеть так: `https://gemini-proxy.vercel.app/api/proxy`. <strong>Скопируйте его.</strong></li>
+                             <li>Вставьте этот URL в поле "Прокси-сервер для Gemini API" в настройках приложения.</li>
+                        </ol>
+                    </div>
+
+                    <footer class="wizard-footer">
+                        <button class="wizard-nav-button back-button" data-back="3">Назад</button>
+                        <button class="wizard-nav-button next-button" data-next="5">Далее</button>
+                    </footer>
+                </section>
+                
+                <!-- Gemini Setup -->
+                <section id="gemini-setup" class="wizard-step" style="display: none;">
+                    <h2 class="section-title">5. Настройка Gemini API</h2>
+                    <p class="mb-6">Gemini — это модель искусственного интеллекта от Google, которая является "мозгом" ассистента. Вам нужен API-ключ для отправки запросов.</p>
+                    <div class="step">
+                         <ol>
+                            <li><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Откройте Google AI Studio</a>.</li>
+                            <li>Нажмите <strong>"Create API key in new project"</strong>.</li>
+                            <li>Скопируйте сгенерированный ключ и сохраните его.</li>
+                        </ol>
+                        <p class="note">Ваш ключ будет храниться только локально в вашем браузере и никуда не передается.</p>
+                    </div>
+                     <footer class="wizard-footer">
+                        <button class="wizard-nav-button back-button" data-back="4">Назад</button>
+                        <button class="wizard-nav-button next-button" data-next="6">Далее</button>
+                    </footer>
+                </section>
+                
+                 <!-- Final -->
+                <section id="final-step" class="wizard-step" style="display: none;">
+                    <h2 class="section-title">6. Завершение</h2>
+                    <p>Поздравляем! Вы получили все необходимые ключи. Теперь откройте настройки приложения «Секретарь+» и вставьте их в соответствующие поля.</p>
+                    <div id="final-supabase-instructions" style="display: none;">
+                        <ol class="list-decimal list-inside space-y-2 mt-4">
+                            <li>На вкладке "Подключения" включите переключатель <strong>"Использовать Supabase"</strong>.</li>
+                            <li>Вставьте <strong>Project URL</strong> и <strong>Anon Key</strong> из <a href="#supabase-setup" class="nav-link-inline" data-step="2">Шага 2</a>.</li>
+                            <li>(Опционально) Настройте прокси-серверы на вкладке "Прокси" используя URL из <a href="#proxy-setup" class="nav-link-inline" data-step="4">Шага 4</a>.</li>
+                            <li>На вкладке "API Ключи" вставьте <strong>Gemini API Key</strong> из <a href="#gemini-setup" class="nav-link-inline" data-step="5">Шага 5</a>.</li>
+                        </ol>
+                    </div>
+                     <div id="final-direct-instructions" style="display: none;">
+                        <ol class="list-decimal list-inside space-y-2 mt-4">
+                            <li>На вкладке "Подключения" выключите переключатель <strong>"Использовать Supabase"</strong>.</li>
+                            <li>Вставьте <strong>Google Client ID</strong> из <a href="#google-cloud-setup" class="nav-link-inline" data-step="3">Шага 3</a>.</li>
+                            <li>(Опционально) Вставьте URL вашего прокси-сервера из <a href="#proxy-setup" class="nav-link-inline" data-step="4">Шага 4</a>.</li>
+                             <li>На вкладке "API Ключи" вставьте <strong>Gemini API Key</strong> из <a href="#gemini-setup" class="nav-link-inline" data-step="5">Шага 5</a>.</li>
+                        </ol>
+                    </div>
+                    <p class="mt-4">После сохранения настроек приложение будет полностью готово к работе. Вы можете войти в свой аккаунт Google и начать использовать ассистента.</p>
+                     <footer class="wizard-footer">
+                        <button class="wizard-nav-button back-button" data-back="5">Назад</button>
+                        <button class="wizard-nav-button next-button" onclick="window.close()">Закрыть</button>
+                    </footer>
+                </section>
+
+            </div>
+        </main>
+    </div>
+    <script src="setup-guide.js"></script>
 </body>
 </html>

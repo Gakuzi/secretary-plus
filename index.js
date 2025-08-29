@@ -1,7 +1,7 @@
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
-import { callGemini, analyzeGenericErrorWithGemini, testProxyConnection, findProxiesWithGemini } from './services/geminiService.js';
+import { callGemini, analyzeGenericErrorWithGemini, testProxyConnection } from './services/geminiService.js';
 import { getSettings, saveSettings, getSyncStatus, saveSyncStatus } from './utils/storage.js';
 import { createSettingsModal } from './components/SettingsModal.js';
 import { createStatsModal } from './components/StatsModal.js';
@@ -11,7 +11,6 @@ import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadin
 import { createCameraView } from './components/CameraView.js';
 import { SettingsIcon, ChartBarIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './constants.js';
 
 // Add a guard to prevent the script from running multiple times
 // if it's loaded by both the HTML and the TSX entry point.
@@ -28,14 +27,16 @@ if (!window.isSecretaryPlusAppInitialized) {
     const APP_STRUCTURE_CONTEXT = `
     - index.html: Главный HTML-файл.
     - index.js: Основная логика приложения, управление состоянием, обработчики событий.
-    - utils/storage.js: Хранит настройки пользователя, включая ключи API.
-    - constants.js: Хранит жестко заданные учетные данные для подключения к Supabase.
+    - utils/storage.js: Хранит настройки пользователя, включая ключи API и Supabase.
     - services/geminiService.js: Обрабатывает все вызовы к Gemini API для чата и анализа.
     - services/google/GoogleServiceProvider.js: Управляет всеми взаимодействиями с Google API (Календарь, Диск, Gmail и т.д.).
     - services/supabase/SupabaseService.js: Управляет всеми взаимодействиями с базой данных Supabase (аутентификация, синхронизация данных, запросы).
     - components/Chat.js: Рендерит интерфейс чата и панель ввода.
-    - components/SettingsModal.js: Рендерит UI настроек. Используется как для модального окна, так и для полноэкранного мастера настройки.
+    - components/Message.js: Рендерит отдельные сообщения в чате.
+    - components/ResultCard.js: Рендерит интерактивные карточки в сообщениях чата.
+    - components/SettingsModal.js: Рендерит UI настроек, где пользователь вводит все ключи.
     - components/HelpModal.js: Рендерит UI 'Центра помощи' с ИИ-анализом ошибок.
+    - setup-guide.html: Содержит SQL-скрипт для настройки базы данных Supabase. Ошибка типа 'column does not exist' часто означает, что пользователю нужно повторно запустить скрипт из этого файла.
     `;
 
 
@@ -53,8 +54,6 @@ if (!window.isSecretaryPlusAppInitialized) {
         syncStatus: getSyncStatus(),
         isSyncing: false,
         proxies: [], // User-defined proxy servers
-        currentView: 'loading', // 'loading', 'setup', 'chat'
-        initialSetupTab: 'profile',
     };
 
     // --- SERVICE INSTANCES ---
@@ -73,7 +72,6 @@ if (!window.isSecretaryPlusAppInitialized) {
 
 
     // --- DOM ELEMENTS ---
-    const appHeader = document.querySelector('header');
     const authContainer = document.getElementById('auth-container');
     const mainContent = document.getElementById('main-content');
     const settingsButton = document.getElementById('settings-button');
@@ -92,78 +90,7 @@ if (!window.isSecretaryPlusAppInitialized) {
     function showSystemError(text) {
         const errorMessage = { sender: MessageSender.SYSTEM, text: `Ошибка: ${text}`, id: Date.now() };
         // We don't push system errors to history to avoid confusing the AI model.
-        if (state.currentView === 'chat') {
-            addMessageToChat(errorMessage);
-        } else {
-            alert(`Ошибка: ${text}`);
-        }
-    }
-
-
-    // --- VIEW MANAGEMENT ---
-
-    function renderScreen() {
-        mainContent.innerHTML = '';
-        if (state.currentView === 'setup') {
-            appHeader.classList.add('hidden');
-            const setupView = createSettingsModal(
-                state.settings,
-                {
-                    isGoogleConnected: state.isGoogleConnected,
-                    isSupabaseReady: state.isSupabaseReady,
-                    userProfile: state.userProfile,
-                    proxies: state.proxies,
-                },
-                {
-                    onSave: handleSaveSettingsAndTransition,
-                    onClose: () => {}, // No-op in setup mode
-                    onNavigateBack: showChatView,
-                    onLogin: handleLogin,
-                    onLogout: handleLogout,
-                    isSyncing: state.isSyncing,
-                    onForceSync: () => runAllSyncs(true),
-                    syncStatus: state.syncStatus,
-                    onProxyAdd: handleProxyAdd,
-                    onProxyUpdate: handleProxyUpdate,
-                    onProxyDelete: handleProxyDelete,
-                    onProxyTest: handleProxyTest,
-                    onFindAndUpdateProxies: handleFindAndUpdateProxies,
-                    onCleanupProxies: handleCleanupProxies,
-                    onProxyReorder: handleProxyReorder,
-                    onProxyRefresh: handleProxyRefresh,
-                },
-                true, // isSetupMode = true
-                state.initialSetupTab
-            );
-            mainContent.appendChild(setupView);
-        } else if (state.currentView === 'chat') {
-            appHeader.classList.remove('hidden');
-            renderChatInterface();
-        } else { // loading
-            appHeader.classList.add('hidden');
-            mainContent.innerHTML = `<div class="flex items-center justify-center h-full text-gray-400">Загрузка...</div>`;
-        }
-    }
-
-    function showSetupView(initialTab = 'profile') {
-        state.currentView = 'setup';
-        state.initialSetupTab = initialTab;
-        renderScreen();
-    }
-    
-    function showChatView() {
-        if (!state.isGoogleConnected) {
-             showSystemError('Для доступа к приложению необходимо войти в аккаунт.');
-             showSetupView('profile');
-             return;
-        }
-        if (!state.settings.geminiApiKey) {
-            showSystemError('Необходимо указать Gemini API ключ в настройках для продолжения.');
-            showSetupView('api-keys');
-            return;
-        }
-        state.currentView = 'chat';
-        renderScreen();
+        addMessageToChat(errorMessage);
     }
 
 
@@ -172,34 +99,44 @@ if (!window.isSecretaryPlusAppInitialized) {
         authContainer.innerHTML = '';
         if (state.isGoogleConnected && state.userProfile) {
             const profileElement = document.createElement('div');
-            profileElement.className = 'flex items-center space-x-2 cursor-pointer';
+            profileElement.className = 'flex items-center space-x-2';
             profileElement.innerHTML = `
                 <div class="relative">
                     <img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full ring-2 ring-gray-600 ring-offset-2 ring-offset-gray-800">
                 </div>
             `;
-            profileElement.addEventListener('click', () => showSettings('profile'));
             authContainer.appendChild(profileElement);
         } else {
-             // Header is empty when logged out. Login is initiated from Welcome or Settings.
+            const loginButton = document.createElement('button');
+            loginButton.id = 'login-button';
+            loginButton.className = 'px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors text-sm font-semibold';
+            loginButton.textContent = 'Войти';
+            
+            authContainer.appendChild(loginButton);
+            loginButton.addEventListener('click', handleLogin);
         }
     }
 
-    function renderChatInterface() {
+    function renderMainContent() {
+        mainContent.innerHTML = '';
         const chatContainer = createChatInterface(handleSendMessage, showCameraView, showSystemError, handleNewChat);
         mainContent.appendChild(chatContainer);
-        renderAuth();
 
         const chatLog = document.getElementById('chat-log');
         if (state.messages.length === 0) {
             chatLog.appendChild(createWelcomeScreen({
                 isGoogleConnected: state.isGoogleConnected,
-                isSupabaseReady: state.isSupabaseReady, 
+                isSupabaseEnabled: state.isSupabaseReady, // Use this as the indicator
             }));
             renderContextualActions(undefined); 
         } else {
             state.messages.forEach(msg => addMessageToChat(msg));
         }
+    }
+
+    function render() {
+        renderAuth();
+        renderMainContent();
     }
     
     // --- AUTO-SYNC LOGIC ---
@@ -219,19 +156,16 @@ if (!window.isSecretaryPlusAppInitialized) {
             return;
         }
         if (!state.isGoogleConnected || !state.isSupabaseReady || !supabaseService) {
-            console.log("Cannot sync: Not connected to Google or Supabase is unavailable.");
+            console.log("Cannot sync: Not connected to Google or Supabase is disabled/unavailable.");
             return;
         }
 
         console.log("Starting background sync...");
         state.isSyncing = true;
-        
-        const reRenderSettings = () => {
-            if (state.currentView === 'setup') renderScreen();
-            else if (!settingsModalContainer.classList.contains('hidden')) showSettings('sync');
-        };
-
-        reRenderSettings();
+        // Re-render the settings modal if it's open to show loading state
+        if (document.getElementById('settings-content')) {
+            showSettings();
+        }
 
         for (const task of syncTasks) {
             try {
@@ -244,13 +178,19 @@ if (!window.isSecretaryPlusAppInitialized) {
                 console.error(`Failed to sync ${task.name}:`, error);
                 state.syncStatus[task.name] = { error: error.message };
             }
+            // Save status after each task to ensure progress is saved even if one fails
             saveSyncStatus(state.syncStatus);
-            reRenderSettings();
+            // Re-render modal to update status line by line
+            if (document.getElementById('settings-content')) {
+                showSettings();
+            }
         }
 
         state.isSyncing = false;
         console.log("Background sync finished.");
-        reRenderSettings();
+        if (document.getElementById('settings-content')) {
+            showSettings();
+        }
     }
 
     function startAutoSync() {
@@ -275,135 +215,238 @@ if (!window.isSecretaryPlusAppInitialized) {
     // --- AUTHENTICATION & INITIALIZATION ---
 
     async function initializeSupabase() {
+        const { supabaseUrl, supabaseAnonKey } = state.settings;
+        if (!supabaseUrl || !supabaseAnonKey) {
+            console.warn("Supabase credentials are not configured in settings. Skipping Supabase initialization.");
+            state.isSupabaseReady = false;
+            return;
+        }
+        
         try {
-            supabaseService = new SupabaseService(SUPABASE_URL, SUPABASE_ANON_KEY);
+            supabaseService = new SupabaseService(supabaseUrl, supabaseAnonKey);
             serviceProviders.supabase = supabaseService;
 
+            // The onAuthStateChange listener also fires on initial load, making
+            // a separate call to getSession() redundant and a potential source of race conditions.
+            // We rely on this single listener to handle all auth state.
             supabaseService.onAuthStateChange(async (event, session) => {
                 console.log(`Supabase auth event: ${event}`);
                 await handleAuthStateChange(session);
             });
             
+            // Supabase client is ready now, even if the user is not authenticated yet.
             state.isSupabaseReady = true;
 
         } catch (error) {
             console.error("Supabase initialization failed:", error);
+            showSystemError(`Не удалось подключиться к Supabase. Проверьте URL и ключ в настройках. Функции синхронизации будут недоступны.`);
             state.isSupabaseReady = false;
             supabaseService = null;
             serviceProviders.supabase = null;
-            // Show an alert because the chat UI isn't ready for a system message.
-            // Then switch to the setup view which will show the disconnected state.
-            showSystemError(`Не удалось подключиться к облачному хранилищу: ${error.message}`);
-            showSetupView('profile');
         }
     }
 
     async function handleAuthStateChange(session) {
-        try {
-            // Clear local settings on auth change to ensure DB is the source of truth
-            localStorage.removeItem('secretary-plus-settings-v4');
-            state.settings = getSettings(); // Reset to defaults
-
-            if (session) {
-                state.supabaseUser = session.user;
-                const providerToken = session.provider_token;
-                googleProvider.setAuthToken(providerToken);
+        if (session) {
+            state.supabaseUser = session.user;
+            const providerToken = session.provider_token;
+            googleProvider.setAuthToken(providerToken);
+            
+            try {
+                // Load settings from DB and merge with local
+                const dbSettings = await supabaseService.getUserSettings();
+                const localSettings = getSettings();
                 
-                try {
-                    const dbSettings = await supabaseService.getUserSettings();
-                    if (dbSettings) {
-                        console.log("Loaded settings from Supabase.");
-                        state.settings = { ...getSettings(), ...dbSettings };
-                        saveSettings(state.settings); // Update local cache with DB settings
-                    }
-
-                    googleProvider.setTimezone(state.settings.timezone);
-                    await googleProvider.initClient(state.settings.googleClientId, () => {});
-                    
-                    state.userProfile = await googleProvider.getUserProfile();
-                    state.isGoogleConnected = true;
-                    state.actionStats = await supabaseService.getActionStats();
-                    state.proxies = await supabaseService.getProxies();
-                    startAutoSync();
-
-                    if (!state.settings.geminiApiKey) {
-                        showSetupView('api-keys');
-                    } else {
-                        showChatView();
-                    }
-
-                } catch (error) {
-                    console.error("Failed to fetch Google user profile or settings via Supabase:", error);
-                    showSystemError(`Не удалось получить профиль Google после аутентификации. Ошибка: ${error.message}`);
-                    await handleLogout();
+                if (dbSettings) {
+                    console.log("Loaded settings from Supabase.");
+                    // Database is the source of truth, but we keep local values for anything not in the DB
+                    const mergedSettings = { ...localSettings, ...dbSettings };
+                    state.settings = mergedSettings;
+                } else {
+                    console.log("No settings found in Supabase for this user. Using local settings.");
+                    state.settings = localSettings;
+                    // On first login, save local settings to the cloud to start sync
+                    await supabaseService.saveUserSettings(localSettings);
+                    console.log("Initial local settings saved to Supabase.");
                 }
-            } else {
-                // User is logged out
-                state.supabaseUser = null;
-                state.isGoogleConnected = false;
-                state.userProfile = null;
-                state.actionStats = {};
-                state.proxies = [];
-                googleProvider.setAuthToken(null);
-                stopAutoSync();
-                showSetupView('profile');
+                saveSettings(state.settings); // Update local cache with merged/latest settings
+
+                // Re-apply critical settings from the potentially new settings object
+                googleProvider.setTimezone(state.settings.timezone);
+                await googleProvider.initClient(state.settings.googleClientId, handleGoogleTokenResponse);
+                
+                state.userProfile = await googleProvider.getUserProfile();
+                state.isGoogleConnected = true;
+                state.actionStats = await supabaseService.getActionStats(); // Load stats on login
+                state.proxies = await supabaseService.getProxies(); // Load proxies on login
+                startAutoSync();
+
+            } catch (error) {
+                console.error("Failed to fetch Google user profile or settings via Supabase:", error);
+                showSystemError(`Не удалось получить профиль Google после аутентификации. Ошибка: ${error.message}`);
+                await handleLogout(); // Log out on critical failure to avoid inconsistent state
             }
-        } catch (e) {
-            console.error("FATAL: Unhandled error in authentication flow.", e);
-            // We're stuck in 'loading'. We need to show *something*.
-            // The setup screen is the safest bet.
-            mainContent.innerHTML = ''; // Clear loading message
-            showSystemError(`Критическая ошибка при инициализации: ${e.message}. Попробуйте очистить кеш и перезагрузить страницу.`);
-            showSetupView('profile');
+        } else {
+            // User is logged out
+            state.supabaseUser = null;
+            state.isGoogleConnected = false;
+            state.userProfile = null;
+            state.actionStats = {}; // Clear stats on logout
+            state.proxies = []; // Clear proxies on logout
+            googleProvider.setAuthToken(null);
+            stopAutoSync();
+            // On logout, revert to whatever is in local storage.
+            state.settings = getSettings();
+        }
+        
+        renderAuth();
+        setupEmailPolling();
+
+        // Always re-render main content on auth change if no messages exist
+        // to correctly show/hide welcome prompts.
+        if (state.messages.length === 0) {
+            renderMainContent();
         }
     }
     
+    // Callback for direct Google Sign-In (when Supabase is disabled/failed)
+    async function handleGoogleTokenResponse(tokenResponse) {
+        if (tokenResponse.error) {
+            console.error("Direct Google Auth Error:", tokenResponse.error);
+            showSystemError(`Ошибка авторизации Google: ${tokenResponse.error_description || tokenResponse.error}`);
+            return;
+        }
+        
+        // This is called when NOT using Supabase. So we set state directly.
+        googleProvider.setAuthToken(tokenResponse.access_token);
+        
+        try {
+            state.userProfile = await googleProvider.getUserProfile();
+            state.isGoogleConnected = true;
+            // In direct mode, we don't sync settings or stats from a DB.
+            state.actionStats = {}; // No stats in direct mode.
+        } catch (error) {
+            console.error("Failed to fetch Google user profile directly:", error);
+            showSystemError(`Не удалось получить профиль Google: ${error.message}`);
+            state.isGoogleConnected = false;
+            state.userProfile = null;
+            googleProvider.setAuthToken(null);
+        }
+        
+        renderAuth();
+        setupEmailPolling();
+        if (state.messages.length === 0) {
+            renderMainContent();
+        }
+    }
+
+
     async function initializeAppServices() {
-        await initializeSupabase();
+        if (state.settings.isSupabaseEnabled) {
+            await initializeSupabase();
+        } else {
+            state.isSupabaseReady = false;
+            console.log("Supabase is disabled in settings. Running in direct Google mode.");
+        }
+        
+        // Initialize Google client for direct auth fallback, regardless of Supabase status.
+        await googleProvider.initClient(state.settings.googleClientId, handleGoogleTokenResponse);
         googleProvider.setTimezone(state.settings.timezone);
+        renderAuth();
     }
 
     // --- EVENT HANDLERS & LOGIC ---
 
     async function handleLogin() {
-        await supabaseService.signInWithGoogle();
+        // If Supabase is the chosen method
+        if (state.settings.isSupabaseEnabled) {
+            // But it's not ready (e.g., missing keys)
+            if (!state.isSupabaseReady) {
+                showSystemError('Подключение к Supabase не настроено. Пожалуйста, укажите URL и ключ в настройках.');
+                showSettings();
+                return;
+            }
+            // If it is ready, proceed with Supabase auth
+            await supabaseService.signInWithGoogle();
+        } 
+        // Otherwise, use the direct Google method
+        else {
+             if (!state.settings.googleClientId) {
+                showSystemError('Резервное подключение не настроено. Пожалуйста, укажите Google Client ID в настройках.');
+                showSettings();
+                return;
+            }
+            try {
+                await googleProvider.authenticate();
+            } catch (error) {
+                showSystemError(error.message);
+                showSettings();
+            }
+        }
     }
 
     async function handleLogout() {
-        if (state.supabaseUser) { 
+        if (state.supabaseUser) { // Logged in via Supabase
             await supabaseService.signOut();
-        } else { 
+        } else { // Logged in directly
             await googleProvider.disconnect();
+            // Manually reset state since there's no authStateChange event
+            state.isGoogleConnected = false;
+            state.userProfile = null;
+            state.actionStats = {};
+            state.supabaseUser = null;
+            renderAuth();
+            if (state.messages.length === 0) {
+                renderMainContent();
+            }
         }
-        // onAuthStateChange will handle the UI reset
     }
-    
+
     async function handleSaveSettings(newSettings) {
+        const oldSettings = { ...state.settings };
         state.settings = newSettings;
         saveSettings(newSettings);
 
+        hideSettings(); // Close modal immediately for better UX
+
         try {
+            // Re-check if we need to initialize Supabase
+            // This handles the case where user adds Supabase credentials and saves.
+            if (newSettings.isSupabaseEnabled && !oldSettings.isSupabaseEnabled) {
+                // If Supabase mode was just enabled, we need to re-initialize it. A reload is simplest.
+                const app = document.getElementById('app');
+                app.innerHTML = `<div class="flex items-center justify-center h-full text-lg">Переключение режима подключения, перезагрузка...</div>`;
+                setTimeout(() => window.location.reload(), 1500);
+                return; // Prevent further execution
+            }
+
+            // If logged into Supabase, save to the database as well
             if (state.supabaseUser && supabaseService) {
                 await supabaseService.saveUserSettings(newSettings);
                 console.log("Settings saved to Supabase.");
             }
+
+            // Re-apply settings immediately
             googleProvider.setTimezone(newSettings.timezone);
+            await googleProvider.initClient(newSettings.googleClientId, handleGoogleTokenResponse);
+            
+            // Handle changes that require restarting services
+            if (newSettings.enableAutoSync !== oldSettings.enableAutoSync) {
+                newSettings.enableAutoSync ? startAutoSync() : stopAutoSync();
+            }
+            if (newSettings.enableEmailPolling !== oldSettings.enableEmailPolling) {
+                setupEmailPolling();
+            }
+            
+            // If Supabase mode was toggled off, reload the app to re-initialize correctly
+            if (newSettings.isSupabaseEnabled !== oldSettings.isSupabaseEnabled) {
+                const app = document.getElementById('app');
+                app.innerHTML = `<div class="flex items-center justify-center h-full text-lg">Переключение режима подключения, перезагрузка...</div>`;
+                setTimeout(() => window.location.reload(), 1500);
+            }
         } catch (error) {
             console.error("Error applying new settings:", error);
             showSystemError(`Ошибка при применении настроек: ${error.message}`);
-        }
-    }
-
-    async function handleSaveSettingsAndTransition(newSettings) {
-        await handleSaveSettings(newSettings);
-        if (settingsModalContainer.classList.contains('hidden')) { // From setup view
-            if (state.settings.geminiApiKey) {
-                showChatView();
-            } else {
-                showSetupView('api-keys');
-            }
-        } else { // From modal
-            hideSettings();
         }
     }
     
@@ -413,10 +456,16 @@ if (!window.isSecretaryPlusAppInitialized) {
         if (confirm('Вы уверены, что хотите начать новый чат? Вся текущая история будет удалена.')) {
             state.messages = [];
             state.lastSeenEmailId = null;
-            renderChatInterface();
+            renderMainContent();
         }
     }
 
+    /**
+     * Central function to process a prompt (from user or system), call Gemini, and display the response.
+     * @param {string} prompt - The text prompt to send to the Gemini model.
+     * @param {object|null} image - An optional image object to send.
+     * @param {boolean} isSystemInitiated - Flag to indicate if this is a proactive message.
+     */
     async function processBotResponse(prompt, image = null, isSystemInitiated = false) {
         state.isLoading = true;
         showLoadingIndicator();
@@ -427,7 +476,7 @@ if (!window.isSecretaryPlusAppInitialized) {
             }
             const sorted = [...state.proxies]
                 .filter(p => p.is_active)
-                .sort((a, b) => a.priority - b.priority);
+                .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
             
             const ok = sorted.find(p => p.last_status === 'ok');
             if (ok) return ok.url;
@@ -435,10 +484,13 @@ if (!window.isSecretaryPlusAppInitialized) {
             const untested = sorted.find(p => p.last_status === 'untested');
             if (untested) return untested.url;
             
+            // Return highest priority one as a last resort, even if it has an error
             return sorted.length > 0 ? sorted[0].url : null;
         };
 
         try {
+            // If the message is system-initiated, it doesn't get added to history beforehand.
+            // History is the state of messages *before* the current prompt.
             const history = isSystemInitiated ? state.messages : state.messages.slice(0, -1);
             
             const response = await callGemini({
@@ -450,388 +502,488 @@ if (!window.isSecretaryPlusAppInitialized) {
                 isGoogleConnected: state.isGoogleConnected,
                 image,
                 apiKey: state.settings.geminiApiKey,
-                proxyUrl: state.settings.useProxy ? findBestProxy() : null,
+                proxyUrl: findBestProxy(), // Use the new priority logic
             });
 
             if (response.functionCallName) {
+                // Update local state for immediate UI feedback
                 state.actionStats[response.functionCallName] = (state.actionStats[response.functionCallName] || 0) + 1;
-                if (supabaseService) {
-                    supabaseService.incrementActionStat(response.functionCallName);
+                // Persist the stat change to the database in the background if available
+                if (supabaseService && state.isSupabaseReady) {
+                    await supabaseService.incrementActionStat(response.functionCallName);
                 }
             }
             
+            // If the assistant provides system context (like email content), add it to history
+            // but don't display it. This enriches the next turn's context.
+            if (response.systemContext) {
+                 state.messages.push({ sender: MessageSender.SYSTEM, text: response.systemContext, id: Date.now() });
+            }
+
+            // If system initiated, add a special message indicating this.
+            if (isSystemInitiated) {
+                const systemPromptMessage = { sender: MessageSender.SYSTEM, text: prompt, id: Date.now() };
+                state.messages.push(systemPromptMessage);
+                 // We don't display this system message, but it's in history for context.
+            }
+
+            state.messages.push(response);
             addMessageToChat(response);
-            if (response.contextualActions) {
+
+            if (response.contextualActions && response.contextualActions.length > 0) {
                 renderContextualActions(response.contextualActions);
             }
-            
         } catch (error) {
-            console.error('Error processing bot response:', error);
-            showSystemError(`Не удалось получить ответ от ассистента: ${error.message}`);
+            console.error("Error calling Gemini:", error);
+            showSystemError(`Произошла ошибка: ${error.message}`);
         } finally {
             state.isLoading = false;
             hideLoadingIndicator();
         }
     }
 
-    async function handleSendMessage(prompt, image = null) {
-        if (state.isLoading) return;
 
+    async function handleSendMessage(prompt, image = null) {
+        if (state.isLoading || (!prompt && !image)) return;
+
+        renderContextualActions(null); // Clear previous actions before sending
+
+        if (!state.settings.geminiApiKey) {
+            showSystemError("Ключ Gemini API не указан. Пожалуйста, добавьте его в настройках.");
+            return;
+        }
+        
+        const chatLog = document.getElementById('chat-log');
+        const welcomeScreen = chatLog?.querySelector('.welcome-screen-container');
+        if (welcomeScreen) {
+             chatLog.innerHTML = '';
+        }
+        
+        // Add the user's message to history first
         const userMessage = { sender: MessageSender.USER, text: prompt, image, id: Date.now() };
         state.messages.push(userMessage);
         addMessageToChat(userMessage);
-        renderContextualActions(undefined); // Clear actions on new user message
+        
+        // Then process the response
+        await processBotResponse(prompt, image);
+    }
 
-        // Use a short timeout to allow the UI to update before the potentially long API call
-        setTimeout(() => processBotResponse(prompt, image), 50);
+    async function handleCardAction(e) {
+        const target = e.target.closest('[data-action]');
+        if (!target) return;
+
+        e.preventDefault();
+
+        const action = target.dataset.action;
+        const payload = JSON.parse(target.dataset.payload);
+
+        let promptToSend = '';
+
+        switch (action) {
+             case 'use_item_context':
+                promptToSend = payload.prompt;
+                break;
+            case 'analyze_event': {
+                const { summary, description, startTime, endTime } = payload;
+                const start = new Date(startTime).toLocaleString('ru-RU');
+                const end = new Date(endTime).toLocaleString('ru-RU');
+                promptToSend = `Проанализируй это событие календаря и предложи релевантные действия (например, "удалить", "создать задачу для подготовки", "написать участникам").
+
+---
+**ДАННЫЕ СОБЫТИЯ**
+- **ID:** ${payload.id}
+- **Название:** ${summary}
+- **Описание:** ${description || 'Нет'}
+- **Время:** ${start} - ${end}`;
+                break;
+            }
+            case 'analyze_task': {
+                const { id, title, notes, due } = payload;
+                const dueDate = due ? new Date(due).toLocaleString('ru-RU') : 'Не указан';
+                promptToSend = `Проанализируй эту задачу и предложи релевантные действия (например, "изменить", "удалить", "создать событие в календаре").
+
+---
+**ДАННЫЕ ЗАДАЧИ**
+- **ID:** ${id}
+- **Название:** ${title}
+- **Заметки:** ${notes || 'Нет'}
+- **Срок выполнения:** ${dueDate}`;
+                break;
+            }
+            case 'analyze_email': {
+                const attachmentText = payload.attachments?.length > 0
+                    ? payload.attachments.map(a => `${a.filename} (${a.mimeType})`).join(', ')
+                    : 'Нет';
+                
+                promptToSend = `Проанализируй полное содержимое этого письма.
+                
+Твой ответ должен включать:
+1.  **Сводка:** Краткое и ясное изложение сути письма. Если есть вложения, упомяни их.
+2.  **Ссылка:** Обязательно включи ссылку на оригинал в Gmail.
+3.  **Действия:** Предложи релевантные действия в виде кнопок [CONTEXT_ACTIONS], включая стандартные "Удалить" и "Ответить".
+
+---
+**ДАННЫЕ ПИСЬМА**
+- **От кого:** ${payload.from}
+- **Тема:** ${payload.subject}
+- **Ссылка:** ${payload.gmailLink}
+- **Вложения:** ${attachmentText}
+- **Содержимое:**
+${payload.body}`;
+                break;
+            }
+            case 'analyze_contact': {
+                const { display_name, email, phone } = payload;
+                promptToSend = `Проанализируй этот контакт и предложи релевантные действия (позвонить, написать, создать встречу).
+
+---
+**ДАННЫЕ КОНТАКТА**
+- **Имя:** ${display_name || 'Не указано'}
+- **Email:** ${email || 'Не указан'}
+- **Телефон:** ${phone || 'Не указан'}`;
+                break;
+            }
+            case 'analyze_document':
+                promptToSend = `Я выбрал документ "${payload.name}". Ссылка для открытия: ${payload.url}. Предложи действия, которые можно с ним совершить (например, "отправить по почте", "создать задачу на его основе").`;
+                break;
+            case 'create_document_prompt':
+                promptToSend = `Да, создать новый документ с названием "${payload.query}".`;
+                break;
+            case 'create_meet_with':
+                promptToSend = `Создай видеовстречу с ${payload.name} (${payload.email}) на ближайшее удобное время, продолжительностью 30 минут.`;
+                break;
+            case 'send_meeting_link':
+                // This prompt tells the model to execute the action it just proposed.
+                promptToSend = `Да, отправь ссылку участникам встречи.`;
+                break;
+            case 'create_prep_task':
+                // Same here, confirming the proposed action.
+                promptToSend = `Да, создай задачу для подготовки к встрече.`;
+                break;
+            case 'request_delete': {
+                const { id, type } = payload;
+                let typeText = '';
+                if (type === 'event') {
+                    typeText = `событие с ID ${id}`;
+                } else if (type === 'task') {
+                    typeText = `задачу с ID ${id}`;
+                } else if (type === 'email') {
+                    typeText = `письмо с ID ${id}`;
+                }
+                if(typeText) {
+                    promptToSend = `Да, я подтверждаю удаление: ${typeText}.`;
+                }
+                break;
+            }
+            case 'create_doc_with_content':
+                promptToSend = `Да, создай документ "${payload.title}" с предложенным тобой содержанием.`;
+                break;
+            case 'create_empty_doc':
+                promptToSend = `Нет, просто создай пустой документ с названием "${payload.title}".`;
+                break;
+            case 'download_ics':
+                const link = document.createElement('a');
+                link.href = `data:text/calendar;charset=utf-8;base64,${payload.data}`;
+                link.download = payload.filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                return; // Client-side action, no bot call needed.
+        }
+
+        if (promptToSend) {
+            await handleSendMessage(promptToSend);
+        }
+    }
+
+    async function handleQuickReply(e) {
+        const target = e.target.closest('.quick-reply-button');
+        if (!target || target.disabled) return;
+
+        const replyText = target.dataset.replyText;
+
+        const container = target.closest('.quick-replies-container');
+        container.querySelectorAll('button').forEach(btn => {
+            btn.disabled = true;
+            if (btn !== target) {
+                btn.style.opacity = '0.5';
+            }
+        });
+        target.classList.add('clicked');
+
+        await handleSendMessage(replyText);
     }
     
-    async function handleCardAction(action, payload) {
-        if (state.isLoading) return;
-        console.log(`Card action triggered: ${action}`, payload);
-        let systemPrompt = '';
+    async function handleActionPrompt(e) {
+        const target = e.target.closest('[data-action-prompt]');
+        if (!target) return;
+        
+        const promptText = target.dataset.actionPrompt;
+        if (promptText) {
+            await handleSendMessage(promptText);
+        }
+    }
+
+    async function handleForceSync() {
+        await runAllSyncs(true);
+    }
+
+    // --- PROACTIVE FEATURES ---
+
+    async function checkForNewEmail() {
+        if (!state.isGoogleConnected || document.hidden || state.isLoading) {
+            return; // Don't check if not connected, tab is not visible, or app is busy
+        }
 
         try {
-            switch(action) {
-                case 'analyze_event':
-                case 'analyze_task':
-                case 'analyze_email':
-                case 'analyze_document':
-                case 'analyze_contact':
-                    systemPrompt = `Проанализируй этот элемент и предложи контекстные действия: ${JSON.stringify(payload)}`;
-                    break;
-                case 'download_ics':
-                    const blob = new Blob([atob(payload.data)], { type: 'text/calendar' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = payload.filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
+            const recentEmails = await googleProvider.getRecentEmails({ max_results: 1 });
+            if (recentEmails && recentEmails.length > 0) {
+                const latestEmail = recentEmails[0];
+                if (state.lastSeenEmailId === null) {
+                    // On first load, just set the ID and don't notify
+                    state.lastSeenEmailId = latestEmail.id;
                     return;
-                case 'create_meet_with':
-                    systemPrompt = `Создай событие в календаре для видеовстречи с ${payload.name} (${payload.email}) на ближайшее удобное время.`;
-                    break;
-                case 'request_delete':
-                    systemPrompt = `Я хочу удалить этот элемент (ID: ${payload.id}, Тип: ${payload.type}). Пожалуйста, запроси у меня подтверждение перед вызовом инструмента удаления.`;
-                    break;
-                case 'send_meeting_link':
-                    systemPrompt = `Отправь письмо участникам (${payload.to.join(', ')}) с темой "${payload.subject}" и содержанием "${payload.body}".`;
-                    break;
-                 case 'create_prep_task':
-                    systemPrompt = `Создай задачу с названием "${payload.title}" и описанием "${payload.notes}".`;
-                    break;
-                case 'create_google_doc_with_content':
-                    systemPrompt = `Создай Google документ с названием "${payload.title}" и содержимым: "${payload.content}"`;
-                    break;
-                case 'open_proxy_settings':
-                    showSettings('proxies');
-                    return;
-                default:
-                    console.warn(`Unknown card action: ${action}`);
-                    return;
+                }
+
+                if (latestEmail.id !== state.lastSeenEmailId) {
+                    console.log("New email detected:", latestEmail.subject);
+                    state.lastSeenEmailId = latestEmail.id;
+
+                    const chatLog = document.getElementById('chat-log');
+                    const welcomeScreen = chatLog?.querySelector('.welcome-screen-container');
+                    if (welcomeScreen) {
+                        chatLog.innerHTML = '';
+                    }
+
+                    // The assistant "speaks first"
+                    const systemPrompt = `Пришло новое письмо от "${latestEmail.from}" с темой "${latestEmail.subject}". Содержимое: "${latestEmail.snippet}". Проанализируй и кратко сообщи мне об этом, предложив релевантные действия (ответить, удалить, создать задачу и т.д.).`;
+                    await processBotResponse(systemPrompt, null, true);
+                }
             }
         } catch (error) {
-            console.error("Error handling card action:", error);
-            showSystemError(`Ошибка обработки действия: ${error.message}`);
-            return;
-        }
-
-        if (systemPrompt) {
-            const systemMessage = { sender: MessageSender.SYSTEM, text: systemPrompt, id: Date.now(), isHidden: true };
-            state.messages.push(systemMessage); // Add to history for context
-            processBotResponse(systemPrompt, null, true);
+            console.error("Error checking for new email:", error);
+            // Don't alert the user, just log it.
         }
     }
-    
-    // --- PROACTIVE FEATURES ---
+
     function setupEmailPolling() {
-        if (emailCheckInterval) clearInterval(emailCheckInterval);
-        if (!state.settings.enableEmailPolling || !state.isGoogleConnected) return;
+        if (emailCheckInterval) {
+            clearInterval(emailCheckInterval);
+            emailCheckInterval = null;
+        }
 
-        const checkEmails = async () => {
-            if (state.isLoading) return; // Don't interrupt user
-            try {
-                const recentEmails = await googleProvider.getRecentEmails({ max_results: 1 });
-                if (recentEmails.length > 0) {
-                    const latestEmail = recentEmails[0];
-                    if (latestEmail.id !== state.lastSeenEmailId) {
-                        state.lastSeenEmailId = latestEmail.id;
-                        if (latestEmail.from.includes(state.userProfile.email)) return;
-                        
-                        const notificationPrompt = `Только что пришло новое письмо от ${latestEmail.from} с темой "${latestEmail.subject}". Хочешь, я его проанализирую?`;
-                        const systemMessage = { sender: MessageSender.SYSTEM, text: notificationPrompt, id: Date.now() };
-                        state.messages.push(systemMessage);
-                        addMessageToChat(systemMessage);
-                    }
-                }
-            } catch (error) {
-                console.error("Error polling emails:", error);
-            }
-        };
-
-        emailCheckInterval = setInterval(checkEmails, 60 * 1000); // Check every minute
+        if (state.settings.enableEmailPolling && state.isGoogleConnected) {
+            // Check immediately, then start the interval
+            setTimeout(checkForNewEmail, 2000);
+            emailCheckInterval = setInterval(checkForNewEmail, 60000); // Check every 60 seconds
+        }
     }
 
-    // --- MODAL & VIEW MANAGEMENT ---
-    function showSettings(initialTab = 'profile') {
+
+    // --- UI MODALS & VIEWS ---
+
+    function showSettings() {
+        const modal = createSettingsModal(
+            state.settings,
+            {
+                isSupabaseReady: state.isSupabaseReady,
+                isGoogleConnected: state.isGoogleConnected,
+                userProfile: state.userProfile,
+                proxies: state.proxies, // Pass proxies to the modal
+            },
+            {
+                onSave: handleSaveSettings, 
+                onClose: hideSettings,
+                onLogin: handleLogin, 
+                onLogout: handleLogout,
+                onForceSync: handleForceSync,
+                isSyncing: state.isSyncing,
+                syncStatus: state.syncStatus,
+                // Pass proxy handlers
+                onProxyAdd: handleProxyAdd,
+                onProxyUpdate: handleProxyUpdate,
+                onProxyDelete: handleProxyDelete,
+                onProxyTest: handleProxyTest,
+            }
+        );
         settingsModalContainer.innerHTML = '';
-        const modal = createSettingsModal(state.settings, {
-            isGoogleConnected: state.isGoogleConnected,
-            isSupabaseReady: state.isSupabaseReady,
-            userProfile: state.userProfile,
-            proxies: state.proxies,
-        }, {
-            onSave: handleSaveSettingsAndTransition,
-            onClose: hideSettings,
-            onLogin: handleLogin,
-            onLogout: handleLogout,
-            isSyncing: state.isSyncing,
-            onForceSync: () => runAllSyncs(true),
-            syncStatus: state.syncStatus,
-            onProxyAdd: handleProxyAdd,
-            onProxyUpdate: handleProxyUpdate,
-            onProxyDelete: handleProxyDelete,
-            onProxyTest: handleProxyTest,
-            onFindAndUpdateProxies: handleFindAndUpdateProxies,
-            onCleanupProxies: handleCleanupProxies,
-            onProxyReorder: handleProxyReorder,
-            onProxyRefresh: handleProxyRefresh,
-        }, false, initialTab);
         settingsModalContainer.appendChild(modal);
         settingsModalContainer.classList.remove('hidden');
     }
-    
-    function hideSettings() { settingsModalContainer.classList.add('hidden'); }
-    
-    function showHelp() {
-        helpModalContainer.innerHTML = '';
-        const analyzeErrorFn = (errorMessage) => {
-            return analyzeGenericErrorWithGemini({
-                errorMessage,
-                appStructure: APP_STRUCTURE_CONTEXT,
-                apiKey: state.settings.geminiApiKey,
-                proxyUrl: null,
-            });
-        };
-        const modal = createHelpModal(hideHelp, state.settings, analyzeErrorFn);
-        helpModalContainer.appendChild(modal);
-        helpModalContainer.classList.remove('hidden');
-    }
-    function hideHelp() { helpModalContainer.classList.add('hidden'); }
-    
-    function showStats() {
-        statsModalContainer.innerHTML = '';
-        const modal = createStatsModal(state.actionStats, hideStats);
-        statsModalContainer.appendChild(modal);
-        statsModalContainer.classList.remove('hidden');
-    }
-    function hideStats() { statsModalContainer.classList.add('hidden'); }
 
-    function showCameraView() {
-        cameraViewContainer.innerHTML = '';
-        const cameraView = createCameraView(
-            (image) => handleSendMessage('', image),
-            hideCameraView
-        );
-        cameraViewContainer.appendChild(cameraView);
-        cameraViewContainer.classList.remove('hidden');
+    function hideSettings() {
+        settingsModalContainer.classList.add('hidden');
+        settingsModalContainer.innerHTML = '';
     }
-    function hideCameraView() { cameraViewContainer.classList.add('hidden'); }
     
-    // --- Proxy Handlers for Settings Modal ---
+    // --- Proxy Management Handlers ---
     async function handleProxyAdd(proxyData) {
+        if (!supabaseService) return;
         try {
             const newProxy = await supabaseService.addProxy(proxyData);
             state.proxies.push(newProxy);
-            state.proxies.sort((a,b) => a.priority - b.priority);
-            renderScreen(); // Re-render setup or settings view
+            showSettings(); // Re-render modal with new proxy
         } catch (error) {
-            console.error("Error adding proxy:", error);
             showSystemError(`Не удалось добавить прокси: ${error.message}`);
         }
     }
-
+    
     async function handleProxyUpdate(id, updateData) {
+        if (!supabaseService) return;
         try {
             const updatedProxy = await supabaseService.updateProxy(id, updateData);
-            state.proxies = state.proxies.map(p => p.id === id ? updatedProxy : p);
-            renderScreen(); // Re-render
+            const index = state.proxies.findIndex(p => p.id === id);
+            if (index !== -1) {
+                state.proxies[index] = updatedProxy;
+            }
+            showSettings(); // Re-render modal
         } catch (error) {
-            console.error("Error updating proxy:", error);
             showSystemError(`Не удалось обновить прокси: ${error.message}`);
         }
     }
-    
+
     async function handleProxyDelete(id) {
-        if (confirm("Вы уверены, что хотите удалить этот прокси-сервер?")) {
-            try {
-                await supabaseService.deleteProxy(id);
-                state.proxies = state.proxies.filter(p => p.id !== id);
-                renderScreen();
-            } catch (error) {
-                console.error("Error deleting proxy:", error);
-                showSystemError(`Не удалось удалить прокси: ${error.message}`);
-            }
+        if (!supabaseService) return;
+        if (!confirm('Вы уверены, что хотите удалить этот прокси-сервер?')) return;
+        try {
+            await supabaseService.deleteProxy(id);
+            state.proxies = state.proxies.filter(p => p.id !== id);
+            showSettings(); // Re-render modal
+        } catch (error) {
+            showSystemError(`Не удалось удалить прокси: ${error.message}`);
         }
     }
     
     async function handleProxyTest(proxy) {
-        const { status, message, speed } = await testProxyConnection({
-            proxyUrl: proxy.url,
-            apiKey: state.settings.geminiApiKey,
-        });
-        
+        if (!supabaseService) return;
+
+        // Optimistically update UI
+        const index = state.proxies.findIndex(p => p.id === proxy.id);
+        if (index !== -1) {
+            state.proxies[index].last_status = 'testing';
+            state.proxies[index].last_checked_at = new Date().toISOString();
+        }
+        showSettings();
+
+        const startTime = performance.now();
+        const result = await testProxyConnection({ proxyUrl: proxy.url, apiKey: state.settings.geminiApiKey });
+        const endTime = performance.now();
+
         const updateData = {
-            last_status: status,
+            last_status: result.status,
+            last_speed_ms: result.status === 'ok' ? Math.round(endTime - startTime) : null,
             last_checked_at: new Date().toISOString(),
-            last_speed_ms: speed,
         };
-        
-        await handleProxyUpdate(proxy.id, updateData);
-        return { status, message, speed };
-    }
-    
-    async function handleFindAndUpdateProxies(event) {
-        if (!state.supabaseUser) {
-            showSystemError("Необходимо войти в аккаунт для поиска прокси.");
-            return;
-        }
-        const button = event.target;
-        button.disabled = true;
-        button.textContent = 'Поиск...';
-        try {
-            const found = await findProxiesWithGemini({ apiKey: state.settings.geminiApiKey });
-            const newProxies = found.map(p => ({
-                url: p.url,
-                geolocation: `${p.country}, ${p.city || ''}`.replace(/, $/, ''),
-                user_id: state.supabaseUser.id,
-            }));
-            await supabaseService.upsertProxies(newProxies);
-            state.proxies = await supabaseService.getProxies();
-            renderScreen();
-        } catch (error) {
-            console.error("Error finding and updating proxies:", error);
-            showSystemError(`Ошибка поиска прокси: ${error.message}`);
-        } finally {
-            button.disabled = false;
-            button.textContent = 'Найти ИИ';
-        }
-    }
-    
-    async function handleCleanupProxies(event) {
-        const button = event.target;
-        button.disabled = true;
-        button.textContent = 'Тестирование...';
-        let failedCount = 0;
-        for (const proxy of state.proxies) {
-            const { status } = await testProxyConnection({ proxyUrl: proxy.url, apiKey: state.settings.geminiApiKey });
-            if (status !== 'ok') {
-                failedCount++;
-            }
-        }
-        if (failedCount > 0 && confirm(`${failedCount} прокси не отвечают. Удалить их из списка?`)) {
-            const tests = state.proxies.map(p => testProxyConnection({ proxyUrl: p.url, apiKey: state.settings.geminiApiKey }));
-            const results = await Promise.all(tests);
-            const failedIds = results.reduce((acc, result, index) => {
-                if (result.status !== 'ok') {
-                    acc.push(state.proxies[index].id);
-                }
-                return acc;
-            }, []);
-            for (const id of failedIds) {
-                await supabaseService.deleteProxy(id);
-            }
-            state.proxies = await supabaseService.getProxies();
-        }
-        renderScreen();
-        button.disabled = false;
-        button.textContent = 'Проверить все и удалить нерабочие';
+
+        await handleProxyUpdate(proxy.id, updateData); // This will save and re-render
     }
 
-    async function handleProxyReorder(reorderedProxies) {
-        try {
-            await supabaseService.updateProxyPriorities(reorderedProxies);
-            const priorityMap = new Map(reorderedProxies.map(p => [p.id, p.priority]));
-            state.proxies.forEach(p => {
-                if(priorityMap.has(p.id.toString())) {
-                    p.priority = priorityMap.get(p.id.toString());
-                }
+    function handleRelaunchWizard() {
+        if (confirm('Вы уверены, что хотите перезапустить мастер настройки? Все локально сохраненные данные, включая ключи API, будут удалены. Настройки, сохраненные в Supabase, останутся без изменений.')) {
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.href = './setup-guide.html';
+        }
+    }
+
+    function showHelpModal() {
+        const handleAnalyzeError = (errorMessage) => {
+            return analyzeGenericErrorWithGemini({
+                errorMessage,
+                appStructure: APP_STRUCTURE_CONTEXT,
+                apiKey: state.settings.geminiApiKey,
+                proxyUrl: findBestProxy(),
             });
-            state.proxies.sort((a, b) => a.priority - b.priority);
-        } catch (error) {
-            console.error("Failed to reorder proxies:", error);
-            showSystemError("Не удалось обновить порядок прокси.");
-            state.proxies = await supabaseService.getProxies();
-        } finally {
-            renderScreen();
-        }
+        };
+
+        const modal = createHelpModal({
+            onClose: hideHelpModal, 
+            settings: state.settings, 
+            analyzeErrorFn: handleAnalyzeError,
+            onRelaunchWizard: handleRelaunchWizard
+        });
+        helpModalContainer.innerHTML = '';
+        helpModalContainer.appendChild(modal);
+        helpModalContainer.classList.remove('hidden');
     }
 
-    async function handleProxyRefresh() {
-        try {
-           state.proxies = await supabaseService.getProxies();
-           renderScreen();
-        } catch (error) {
-           console.error("Failed to refresh proxies:", error);
-           showSystemError("Не удалось обновить список прокси.");
-        }
+    function hideHelpModal() {
+        helpModalContainer.classList.add('hidden');
+        helpModalContainer.innerHTML = '';
     }
-
-
-    // --- GLOBAL EVENT LISTENERS ---
     
-    document.addEventListener('click', (e) => {
-        const actionButton = e.target.closest('[data-action-prompt]');
-        if (actionButton) {
-            handleSendMessage(actionButton.dataset.actionPrompt);
-            return;
-        }
+     function showStatsModal() {
+        const modal = createStatsModal(state.actionStats, hideStatsModal);
+        statsModalContainer.innerHTML = '';
+        statsModalContainer.appendChild(modal);
+        statsModalContainer.classList.remove('hidden');
+    }
 
-        const cardActionButton = e.target.closest('[data-action]');
-        if (cardActionButton && !cardActionButton.hasAttribute('data-action-prompt')) {
-             const payload = cardActionButton.dataset.payload ? JSON.parse(cardActionButton.dataset.payload) : {};
-             handleCardAction(cardActionButton.dataset.action, payload);
-             return;
-        }
+    function hideStatsModal() {
+        statsModalContainer.classList.add('hidden');
+        statsModalContainer.innerHTML = '';
+    }
 
-        const quickReplyButton = e.target.closest('.quick-reply-button');
-        if (quickReplyButton) {
-            const replyText = quickReplyButton.dataset.replyText;
-            quickReplyButton.classList.add('clicked');
-            quickReplyButton.closest('.quick-replies-container').querySelectorAll('button').forEach(btn => btn.disabled = true);
-            handleSendMessage(replyText);
-        }
+    function showCameraView() {
+        const onCapture = (image) => {
+            const prompt = document.getElementById('chat-input')?.value.trim() || 'Что на этом изображении?';
+            handleSendMessage(prompt, image);
+        };
+        const cameraView = createCameraView(onCapture, hideCameraView);
+        cameraViewContainer.innerHTML = '';
+        cameraViewContainer.appendChild(cameraView);
+        cameraViewContainer.classList.remove('hidden');
+    }
 
-        const welcomePromptButton = e.target.closest('[data-action="welcome_prompt"]');
-        if (welcomePromptButton) {
-             const payload = JSON.parse(welcomePromptButton.dataset.payload);
-             handleSendMessage(payload.prompt);
+    function hideCameraView() {
+        cameraViewContainer.classList.add('hidden');
+        cameraViewContainer.innerHTML = '';
+    }
+
+    // --- INITIALIZATION ---
+    async function main() {
+        const settings = getSettings();
+        if (!settings.geminiApiKey) {
+            if (!sessionStorage.getItem('setupAttempted')) {
+                sessionStorage.setItem('setupAttempted', 'true');
+                window.location.href = './setup-guide.html';
+                return; // Stop execution to allow redirect
+            }
         }
         
-        const launchSetupButton = e.target.closest('[data-action="launch_setup"]');
-        if (launchSetupButton) {
-            showSetupView('profile');
-        }
+        settingsButton.innerHTML = SettingsIcon;
+        helpButton.innerHTML = QuestionMarkCircleIcon;
+        statsButton.innerHTML = ChartBarIcon;
 
-        const launchSetupFromHelpButton = e.target.closest('[data-action="launch_setup_from_help"]');
-        if (launchSetupFromHelpButton) {
-            hideHelp();
-            showSetupView('profile');
-        }
+        settingsButton.addEventListener('click', showSettings);
+        helpButton.addEventListener('click', showHelpModal);
+        statsButton.addEventListener('click', showStatsModal);
+        
+        document.body.addEventListener('click', handleCardAction);
+        document.body.addEventListener('click', handleQuickReply);
+        document.body.addEventListener('click', handleActionPrompt);
+
+        // Handle clicks on welcome prompts, delegating from the main content area
+        mainContent.addEventListener('click', (e) => {
+            const target = e.target.closest('[data-action="welcome_prompt"]');
+            if (target) {
+                const payload = JSON.parse(target.dataset.payload);
+                if (payload.prompt) {
+                    handleSendMessage(payload.prompt);
+                }
+            }
+            const settingsTarget = e.target.closest('#open-settings-from-welcome');
+            if (settingsTarget) {
+                showSettings();
+            }
+        });
+
+        await initializeAppServices();
+        render(); // Initial render
+    }
+
+    main().catch(error => {
+        console.error("An unhandled error occurred during app initialization:", error);
+        showSystemError(`Критическая ошибка при запуске: ${error.message}. Попробуйте обновить страницу.`);
     });
-
-    // --- APP INITIALIZATION ---
-    settingsButton.innerHTML = SettingsIcon;
-    helpButton.innerHTML = QuestionMarkCircleIcon;
-    statsButton.innerHTML = ChartBarIcon;
-
-    settingsButton.addEventListener('click', () => showSettings());
-    helpButton.addEventListener('click', showHelp);
-    statsButton.addEventListener('click', showStats);
-
-    renderScreen();
-    initializeAppServices();
 }
