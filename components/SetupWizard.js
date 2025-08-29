@@ -1,7 +1,7 @@
 import { getSettings } from '../utils/storage.js';
 import { SupabaseService } from '../services/supabase/SupabaseService.js';
-import { testProxyConnection, findProxiesWithGemini } from '../services/geminiService.js';
 import * as Icons from './icons/Icons.js';
+import { createProxyManagerModal } from './ProxyManagerModal.js';
 
 export function createSetupWizard({ onComplete, onExit, googleProvider, supabaseConfig, googleClientId, resumeState = null }) {
     const wizardElement = document.createElement('div');
@@ -40,218 +40,19 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
     };
     
     const showProxyManagerModal = () => {
-        const managerContainer = document.createElement('div');
-        managerContainer.className = 'fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[51]'; // Higher z-index
-        
-        let proxyState = {
-            saved: [],
-            found: [],
-            isLoading: false,
-            draggedItemId: null
-        };
-
-        const renderManager = () => {
-            const savedProxiesHtml = proxyState.saved.map((p, index) => {
-                 let statusIndicatorClass = 'status-untested';
-                 if (p.last_status === 'ok') statusIndicatorClass = 'status-ok';
-                 if (p.last_status === 'error') statusIndicatorClass = 'status-error';
-
-                return `
-                <div class="proxy-list-item bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-700" draggable="true" data-id="${p.id}" data-index="${index}">
-                    <div class="flex-shrink-0 cursor-grab text-slate-400 dark:text-slate-500" title="Перетащить для изменения приоритета">${Icons.MenuIcon}</div>
-                     <label class="toggle-switch" style="transform: scale(0.7); margin: 0 -4px;">
-                        <input type="checkbox" data-action="toggle-proxy" data-id="${p.id}" ${p.is_active ? 'checked' : ''}>
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <div class="status-indicator ${statusIndicatorClass}" title="Статус: ${p.last_status || 'untested'}"></div>
-                    <div class="flex-1 font-mono text-xs truncate" title="${p.url}">${p.url}</div>
-                    ${p.last_status === 'ok' && p.last_speed_ms ? `<span class="text-xs text-slate-500 dark:text-slate-400">${p.last_speed_ms}ms</span>` : ''}
-                    <div class="flex items-center gap-1">
-                        <button data-action="retest-proxy" data-id="${p.id}" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded">Тест</button>
-                        <button data-action="delete-proxy" data-id="${p.id}" class="p-1 text-xs bg-red-700 dark:bg-red-800 hover:bg-red-600 dark:hover:bg-red-700 text-white rounded-full leading-none">${Icons.TrashIcon.replace('width="24" height="24"', 'width="12" height="12"')}</button>
-                    </div>
-                </div>`;
-            }).join('');
-
-            const foundProxiesHtml = proxyState.found.map(p => `
-                 <div class="proxy-list-item bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-700">
-                    <div class="status-indicator status-untested"></div>
-                    <div class="flex-1 font-mono text-xs truncate" title="${p.url}">${p.location ? `${p.location}: ` : ''}${p.url}</div>
-                    <div class="flex items-center gap-1">
-                        <button data-action="test-found-proxy" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded">Тест</button>
-                        <button data-action="add-proxy-from-found" data-url="${p.url}" data-location="${p.location || ''}" class="px-2 py-0.5 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded">Добавить</button>
-                    </div>
-                </div>`).join('');
-            
-            managerContainer.innerHTML = `
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl w-full max-w-2xl flex flex-col h-full sm:h-auto sm:max-h-[80vh] animate-fadeIn">
-                    <header class="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                        <h3 class="text-lg font-bold">Менеджер прокси-серверов</h3>
-                        <button data-action="close-manager" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">&times;</button>
-                    </header>
-                    <main class="p-4 space-y-4 overflow-y-auto bg-slate-50 dark:bg-slate-900/70">
-                        <div>
-                            <h4 class="font-semibold mb-2">Мои прокси (приоритет сверху вниз)</h4>
-                            <div id="saved-proxy-list-dnd" class="space-y-2 p-2 bg-slate-100 dark:bg-slate-900/50 rounded-md min-h-[80px]">
-                                ${proxyState.isLoading && proxyState.saved.length === 0 ? '<p class="text-center text-sm text-slate-500">Загрузка...</p>' : proxyState.saved.length === 0 ? '<p class="text-center text-sm text-slate-500">Список пуст.</p>' : savedProxiesHtml}
-                            </div>
-                        </div>
-                        <div>
-                            <h4 class="font-semibold mb-2">Поиск прокси</h4>
-                            <div id="found-proxy-list" class="space-y-2">
-                                ${proxyState.isLoading && proxyState.found.length > 0 ? '<p class="text-center text-sm text-slate-500">Поиск...</p>' : proxyState.found.length > 0 ? foundProxiesHtml : ''}
-                            </div>
-                        </div>
-                    </main>
-                    <footer class="p-4 bg-slate-100 dark:bg-slate-700/50 flex justify-between items-center">
-                        <button data-action="add-proxy-manual" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md font-semibold text-sm">Добавить вручную</button>
-                        <button data-action="find-proxies-ai" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold text-sm" ${proxyState.isLoading ? 'disabled' : ''}>${proxyState.isLoading ? 'Поиск...' : 'Найти с помощью ИИ'}</button>
-                    </footer>
-                </div>
-            `;
-        };
-
-        const loadSavedProxies = async () => {
-            proxyState.isLoading = true;
-            renderManager();
-            try {
-                proxyState.saved = await supabaseService.getProxies();
-            } catch(e) { alert(`Ошибка загрузки прокси: ${e.message}`); }
-            finally { 
-                proxyState.isLoading = false;
-                renderManager();
-            }
-        };
-
-        const handleManagerAction = async (e) => {
-            const target = e.target.closest('[data-action]');
-            if (!target) return;
-            const action = target.dataset.action;
-            const id = target.dataset.id;
-            const url = target.dataset.url;
-
-            switch(action) {
-                case 'close-manager': managerContainer.remove(); break;
-                case 'toggle-proxy':
-                    const is_active = e.target.checked;
-                    await supabaseService.updateProxy(id, { is_active });
-                    await loadSavedProxies();
-                    break;
-                case 'delete-proxy':
-                    if (confirm('Удалить этот прокси?')) {
-                        await supabaseService.deleteProxy(id);
-                        await loadSavedProxies();
-                    }
-                    break;
-                case 'find-proxies-ai':
-                    collectInputs();
-                    if (!state.config.geminiApiKey) {
-                        alert('Пожалуйста, сначала укажите ваш Gemini API ключ на предыдущем шаге.');
-                        return;
-                    }
-                    proxyState.isLoading = true;
-                    proxyState.found = [];
-                    renderManager();
-                    try {
-                        const proxies = await findProxiesWithGemini({ apiKey: state.config.geminiApiKey });
-                        proxyState.found = proxies;
-                    } catch(err) { alert(`Ошибка: ${err.message}`); }
-                    finally {
-                        proxyState.isLoading = false;
-                        renderManager();
-                    }
-                    break;
-                case 'add-proxy-manual': {
-                    const newUrl = prompt('Введите URL прокси:');
-                    if (newUrl) {
-                        try {
-                            new URL(newUrl);
-                            await supabaseService.addProxy({ url: newUrl.trim(), is_active: true, priority: proxyState.saved.length });
-                            await loadSavedProxies();
-                        } catch(err) { alert(`Ошибка: ${err.message}`); }
-                    }
-                    break;
-                }
-                 case 'add-proxy-from-found':
-                    try {
-                        await supabaseService.addProxy({ url: url, is_active: true, geolocation: target.dataset.location, priority: proxyState.saved.length });
-                        proxyState.found = proxyState.found.filter(p => p.url !== url);
-                        await loadSavedProxies();
-                    } catch(err) { alert(`Ошибка: ${err.message}`); }
-                    break;
-                case 'retest-proxy':
-                case 'test-found-proxy':
-                    target.textContent = '...';
-                    target.disabled = true;
-                    collectInputs();
-                    const result = await testProxyConnection({ proxyUrl: url, apiKey: state.config.geminiApiKey });
-                     if (id) {
-                        await supabaseService.updateProxy(id, { last_status: result.status, last_speed_ms: result.speed });
-                        await loadSavedProxies();
-                     } else {
-                        alert(`Тест ${result.status === 'ok' ? 'пройден' : 'не пройден'}\nСкорость: ${result.speed || 'N/A'}\n${result.message}`);
-                        target.textContent = 'Тест';
-                        target.disabled = false;
-                     }
-                    break;
-            }
-        };
-        
-        const handleDragAndDrop = (container) => {
-            container.addEventListener('dragstart', e => {
-                proxyState.draggedItemId = e.target.dataset.id;
-                e.target.style.opacity = '0.5';
-            });
-            container.addEventListener('dragend', e => {
-                 e.target.style.opacity = '1';
-                 proxyState.draggedItemId = null;
-            });
-            container.addEventListener('dragover', e => {
-                e.preventDefault();
-                const afterElement = getDragAfterElement(container, e.clientY);
-                const draggable = document.querySelector('[data-id="' + proxyState.draggedItemId + '"]');
-                if (afterElement == null) {
-                    container.appendChild(draggable);
-                } else {
-                    container.insertBefore(draggable, afterElement);
-                }
-            });
-            container.addEventListener('drop', async e => {
-                e.preventDefault();
-                const orderedIds = [...container.querySelectorAll('[data-id]')].map(el => el.dataset.id);
-                const updates = orderedIds.map((id, index) => ({ id: id, priority: index }));
-                try {
-                     await supabaseService.client.from('proxies').upsert(updates);
-                     await loadSavedProxies();
-                } catch(err) {
-                    alert('Не удалось сохранить новый порядок.');
-                    await loadSavedProxies();
-                }
-            });
-        };
-
-        function getDragAfterElement(container, y) {
-            const draggableElements = [...container.querySelectorAll('[draggable="true"]:not([style*="opacity: 0.5"])')];
-            return draggableElements.reduce((closest, child) => {
-                const box = child.getBoundingClientRect();
-                const offset = y - box.top - box.height / 2;
-                if (offset < 0 && offset > closest.offset) {
-                    return { offset: offset, element: child };
-                } else {
-                    return closest;
-                }
-            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        initSupabase();
+        if (!supabaseService) {
+            alert("Ошибка: Сервис Supabase не инициализирован. Невозможно открыть менеджер прокси.");
+            return;
         }
 
-        managerContainer.addEventListener('click', handleManagerAction);
-        managerContainer.addEventListener('change', (e) => {
-            if(e.target.closest('[data-action="toggle-proxy"]')) handleManagerAction(e);
+        const manager = createProxyManagerModal({
+            supabaseService: supabaseService,
+            onClose: () => {
+                manager.remove();
+            },
         });
-        
-        renderManager();
-        wizardElement.appendChild(managerContainer);
-        handleDragAndDrop(managerContainer.querySelector('#saved-proxy-list-dnd'));
-        loadSavedProxies();
+        wizardElement.appendChild(manager);
     };
 
     const renderStepContent = () => {
