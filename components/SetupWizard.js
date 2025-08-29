@@ -72,7 +72,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                     ${state.savedProxies.length === 0 ? `<p class="text-sm text-gray-500 text-center py-4">Нет сохраненных прокси.</p>` :
                      state.savedProxies.map(p => `
                         <div class="proxy-list-item">
-                            <div class="status-indicator ${p.last_status === 'ok' ? 'status-ok' : p.last_status === 'error' ? 'status-error' : 'status-untested'}"></div>
+                            <div class="status-indicator ${p.last_status === 'ok' ? 'status-ok' : p.last_status === 'error' ? 'status-error' : 'status-untested'}" title="Статус: ${p.last_status}"></div>
                             <div class="flex-1 font-mono text-xs truncate" title="${p.url}">${p.url}</div>
                         </div>
                      `).join('')
@@ -192,11 +192,11 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                         <h1 class="text-xl font-bold">Мастер Настройки Секретарь+</h1>
                         <p class="text-sm text-gray-400">Шаг ${stepIndex + 1} из ${STEPS.length}: ${stepConfig.title}</p>
                     </div>
-                    <button data-action="exit" class="p-2 rounded-full hover:bg-gray-700">${Icons.HomeIcon}</button>
+                    <button data-action="exit" class="p-2 rounded-full hover:bg-gray-700"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></button>
                 </header>
                 <main class="flex-1 p-6 overflow-y-auto" id="wizard-content"></main>
                 <footer class="p-4 border-t border-gray-700 flex justify-between items-center" id="wizard-footer"></footer>
-                <div id="proxy-test-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                <div id="proxy-test-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
                     <div id="proxy-test-modal-content" class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 flex flex-col items-center justify-center text-center"></div>
                 </div>
             </div>`;
@@ -214,18 +214,21 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         collectInputs();
         
         let nextStepIndex = state.currentStep + 1;
-        let nextStep = STEPS[nextStepIndex];
-
+        
         // Intelligent skip logic
-        if (nextStep && nextStep.id === 'gemini' && state.config.geminiApiKey) {
+        if (nextStepIndex < STEPS.length && STEPS[nextStepIndex].id === 'gemini' && state.config.geminiApiKey) {
             nextStepIndex++;
         }
-        if (nextStep && nextStep.id === 'proxies' && state.authChoice !== 'supabase') {
+        if (nextStepIndex < STEPS.length && STEPS[nextStepIndex].id === 'proxies' && state.authChoice !== 'supabase') {
             nextStepIndex++;
         }
         
         if (nextStepIndex < STEPS.length) {
             state.currentStep = nextStepIndex;
+            if (STEPS[state.currentStep].id === 'proxies' && state.authChoice === 'supabase') {
+                initSupabase();
+                state.savedProxies = await supabaseService.getProxies();
+            }
             render();
         }
     };
@@ -234,7 +237,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         collectInputs();
         let prevStepIndex = state.currentStep - 1;
         
-        if (STEPS[prevStepIndex].id === 'proxies' && state.authChoice !== 'supabase') {
+        if (prevStepIndex >= 0 && STEPS[prevStepIndex].id === 'proxies' && state.authChoice !== 'supabase') {
             prevStepIndex--;
         }
 
@@ -302,10 +305,10 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             <div class="w-full text-left text-sm mt-4 space-y-2">
                 <div class="test-result-item">
                     <span class="test-result-label">Статус</span>
-                    <span class="test-result-value ${result.status === 'ok' ? 'text-green-400' : 'text-red-400'}">${result.status === 'ok' ? 'Успешно' : 'Ошибка'}</span>
+                    <span class="test-result-value font-bold ${result.status === 'ok' ? 'text-green-400' : 'text-red-400'}">${result.status === 'ok' ? 'УСПЕШНО' : 'ОШИБКА'}</span>
                 </div>
                  ${result.speed !== null ? `<div class="test-result-item">
-                    <span class="test-result-label">Скорость ответа</span>
+                    <span class="test-result-label">Пинг</span>
                     <span class="test-result-value">${result.speed} мс</span>
                 </div>` : ''}
                 ${result.geolocation ? `<div class="test-result-item">
@@ -321,9 +324,9 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             <p class="font-mono text-sm text-gray-400 break-all mb-2">${url}</p>
             ${testResultHtml}
             <div class="flex gap-3 mt-6">
-                <button data-action="retest-proxy" class="px-4 py-2 bg-gray-600 rounded-md">Повторить</button>
-                <button data-action="reject-proxy" class="px-4 py-2 bg-red-600 rounded-md">Отклонить</button>
-                ${result.status === 'ok' ? `<button data-action="use-proxy" data-speed="${result.speed}" data-geo="${result.geolocation}" class="px-4 py-2 bg-blue-600 rounded-md">Использовать</button>` : ''}
+                <button data-action="retest-proxy" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md">Повторить</button>
+                <button data-action="reject-proxy" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md">Отклонить</button>
+                ${result.status === 'ok' ? `<button data-action="use-proxy" data-speed="${result.speed}" data-geo="${result.geolocation || ''}" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md">Использовать</button>` : ''}
             </div>`;
     };
 

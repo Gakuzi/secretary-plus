@@ -808,10 +808,11 @@ export const testProxyConnection = async ({ proxyUrl, apiKey }) => {
         const endTime = performance.now();
         const speed = Math.round(endTime - startTime);
         
-        // If the first call is successful, make a second call to determine geolocation
+        // Use the connection to ask Gemini to report the source IP's location.
+        // This is a "real" test of the proxy's egress location from the target service's perspective.
         const geoResponse = await ai.models.generateContent({
             model: GEMINI_MODEL,
-            contents: "What is my approximate location (city, country) based on my IP address? Respond in 'City, Country' format.",
+            contents: "Analyze the source IP address of this request and return its geolocation. Required format: 'City, Country'. Example: 'Mountain View, United States'. Do not add any other text.",
         });
         const geolocation = geoResponse.text.trim();
 
