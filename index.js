@@ -1,15 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
@@ -772,45 +760,48 @@ async function main() {
 
     // If we are returning from a Supabase OAuth flow, handle it before starting the app.
     if (isAuthCallback && settings.isSupabaseEnabled) {
-        // Display a simple loading message while the session is processed.
-        document.body.innerHTML = `
-            <div class="flex items-center justify-center h-screen bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300">
-                Завершение входа...
-            </div>`;
+        // Display a non-destructive loading overlay instead of replacing the entire body.
+        const loadingOverlay = document.createElement('div');
+        loadingOverlay.className = 'fixed inset-0 bg-slate-900/80 flex items-center justify-center z-50 text-white';
+        loadingOverlay.innerHTML = '<span>Завершение входа...</span>';
+        document.body.appendChild(loadingOverlay);
 
-        // Initialize Supabase early to handle the auth event from the URL hash.
-        const tempSupabaseService = new SupabaseService(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
-        
-        // Wait for the SIGNED_IN event, which confirms Supabase has created the session.
-        await new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error("Authentication timed out. Please try again."));
-            }, 15000); // 15-second timeout for safety.
+        try {
+            // Initialize Supabase early to handle the auth event from the URL hash.
+            const tempSupabaseService = new SupabaseService(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+            
+            // Wait for the SIGNED_IN event, which confirms Supabase has created the session.
+            await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error("Authentication timed out. Please try again."));
+                }, 15000); // 15-second timeout for safety.
 
-            const { data: { subscription } } = tempSupabaseService.onAuthStateChange((event, session) => {
-                if (event === 'SIGNED_IN' && session) {
-                    clearTimeout(timeout);
-                    subscription.unsubscribe(); // Stop listening after success.
-                    resolve(session);
-                }
+                const { data: { subscription } } = tempSupabaseService.onAuthStateChange((event, session) => {
+                    if (event === 'SIGNED_IN' && session) {
+                        clearTimeout(timeout);
+                        subscription.unsubscribe(); // Stop listening after success.
+                        resolve(session);
+                    }
+                });
             });
-        }).catch(error => {
+
+            // Clean the URL hash.
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+            
+            // Remove the overlay and start the app directly without a full reload.
+            loadingOverlay.remove();
+            await startFullApp();
+
+        } catch (error) {
             console.error("OAuth Callback Error:", error);
             // Show error to the user if something goes wrong
-            document.body.innerHTML = `
-                <div class="flex flex-col items-center justify-center h-screen bg-slate-100 dark:bg-slate-900 text-red-500 p-4 text-center">
-                    <p class="font-bold">Ошибка аутентификации</p>
+            loadingOverlay.innerHTML = `
+                <div class="flex flex-col items-center justify-center text-center p-4">
+                    <p class="font-bold text-red-400">Ошибка аутентификации</p>
                     <p class="mt-2">${error.message}</p>
                     <a href="${window.location.pathname}" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded">Попробовать снова</a>
                 </div>`;
-            // Stop further execution
-            return;
-        });
-
-        // Clean the URL hash and reload the page.
-        // The reload ensures a clean application start with the new session stored in localStorage.
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
-        window.location.reload();
+        }
 
     } else {
         // This is a normal app start (not an auth callback).
