@@ -384,7 +384,6 @@ export const callGemini = async ({
     isGoogleConnected,
     image,
     apiKey,
-    isProxyEnabled,
     proxyUrl
 }) => {
     if (!apiKey) {
@@ -396,7 +395,7 @@ export const callGemini = async ({
     }
     
     const clientOptions = { apiKey };
-    if (proxyUrl && isProxyEnabled) {
+    if (proxyUrl) {
         // The SDK constructor expects the endpoint without the protocol.
         clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
     }
@@ -822,12 +821,12 @@ export const testProxyConnection = async ({ proxyUrl, apiKey }) => {
 };
 
 
-export const analyzeSyncErrorWithGemini = async ({ errorMessage, context, apiKey, isProxyEnabled, proxyUrl }) => {
+export const analyzeSyncErrorWithGemini = async ({ errorMessage, context, apiKey, proxyUrl }) => {
     if (!apiKey) {
         throw new Error("Ключ Gemini API не предоставлен.");
     }
     const clientOptions = { apiKey };
-    if (proxyUrl && isProxyEnabled) {
+    if (proxyUrl) {
         // The SDK constructor expects the endpoint without the protocol.
         clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
     }
@@ -862,12 +861,12 @@ ${errorMessage}
     }
 };
 
-export const analyzeGenericErrorWithGemini = async ({ errorMessage, appStructure, apiKey, isProxyEnabled, proxyUrl }) => {
+export const analyzeGenericErrorWithGemini = async ({ errorMessage, appStructure, apiKey, proxyUrl }) => {
     if (!apiKey) {
         throw new Error("Ключ Gemini API не предоставлен.");
     }
     const clientOptions = { apiKey };
-    if (proxyUrl && isProxyEnabled) {
+    if (proxyUrl) {
         // The SDK constructor expects the endpoint without the protocol.
         clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
     }

@@ -309,9 +309,6 @@ export function createSettingsModal(currentSettings, authState, handlers) {
             isSupabaseEnabled: modalOverlay.querySelector('#supabase-enabled-toggle')?.checked ?? true,
             supabaseUrl: modalOverlay.querySelector('#supabase-url')?.value.trim() ?? '',
             supabaseAnonKey: modalOverlay.querySelector('#supabase-anon-key')?.value.trim() ?? '',
-            // Deprecate the old single proxy URL settings. They are now managed in the 'proxies' table.
-            isProxyEnabled: currentSettings.isProxyEnabled, 
-            geminiProxyUrl: currentSettings.geminiProxyUrl,
             timezone: modalOverlay.querySelector('#timezone-select')?.value ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
             enableEmailPolling: modalOverlay.querySelector('#email-polling-toggle')?.checked ?? true,
             enableAutoSync: modalOverlay.querySelector('#auto-sync-enabled-toggle')?.checked ?? true,
@@ -388,8 +385,9 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                 errorMessage,
                 context: errorContext,
                 apiKey,
-                isProxyEnabled: currentSettings.isProxyEnabled,
-                proxyUrl: currentSettings.geminiProxyUrl
+                // We don't know which proxy to use for analysis, so we don't pass one.
+                // It will use the default Gemini endpoint.
+                proxyUrl: null
             });
 
             showErrorAnalysisModal(`Анализ ошибки: ${errorContext}`, analysisPromise);

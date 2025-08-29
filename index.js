@@ -53,7 +53,6 @@ if (!window.isSecretaryPlusAppInitialized) {
         lastSeenEmailId: null, // For proactive email check
         syncStatus: getSyncStatus(),
         isSyncing: false,
-        proxyStatus: 'unknown', // 'unknown', 'testing', 'ok', 'error'
         proxies: [], // User-defined proxy servers
     };
 
@@ -63,7 +62,6 @@ if (!window.isSecretaryPlusAppInitialized) {
     let supabaseService = null;
     let emailCheckInterval = null;
     let syncInterval = null; // Interval timer for auto-sync
-    let proxyCheckTimeout = null;
 
 
     const serviceProviders = {
@@ -100,40 +98,11 @@ if (!window.isSecretaryPlusAppInitialized) {
     function renderAuth() {
         authContainer.innerHTML = '';
         if (state.isGoogleConnected && state.userProfile) {
-            let proxyRingClass = '';
-            let proxyIndicatorTitle = '';
-            if (state.settings.isProxyEnabled) {
-                 if (state.settings.geminiProxyUrl) {
-                    switch (state.proxyStatus) {
-                        case 'ok':
-                            proxyRingClass = 'ring-2 ring-green-500';
-                            proxyIndicatorTitle = 'Прокси-сервер активен и работает корректно.';
-                            break;
-                        case 'testing':
-                            proxyRingClass = 'ring-2 ring-yellow-400 animate-pulse';
-                            proxyIndicatorTitle = 'Идет проверка прокси-сервера...';
-                            break;
-                        case 'error':
-                            proxyRingClass = 'ring-2 ring-red-500';
-                            proxyIndicatorTitle = 'Ошибка подключения к прокси. Проверьте URL и статус сервера в настройках.';
-                            break;
-                        case 'unknown':
-                        default:
-                            proxyRingClass = 'ring-2 ring-gray-400';
-                            proxyIndicatorTitle = 'Статус прокси неизвестен.';
-                            break;
-                    }
-                } else {
-                    proxyRingClass = 'ring-2 ring-red-500';
-                    proxyIndicatorTitle = 'Прокси включен, но URL не указан в настройках.';
-                }
-            }
-
             const profileElement = document.createElement('div');
             profileElement.className = 'flex items-center space-x-2';
             profileElement.innerHTML = `
-                <div class="relative" title="${proxyIndicatorTitle}">
-                    <img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full ${proxyRingClass} ring-offset-2 ring-offset-gray-800">
+                <div class="relative">
+                    <img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full ring-2 ring-gray-600 ring-offset-2 ring-offset-gray-800">
                 </div>
             `;
             authContainer.appendChild(profileElement);
@@ -170,41 +139,6 @@ if (!window.isSecretaryPlusAppInitialized) {
         renderMainContent();
     }
     
-    // --- PROXY STATUS CHECK ---
-    async function checkProxyStatus(force = false) {
-        if (proxyCheckTimeout) clearTimeout(proxyCheckTimeout);
-
-        if (!state.settings.isProxyEnabled || !state.settings.geminiProxyUrl) {
-            state.proxyStatus = 'unknown';
-            renderAuth();
-            return;
-        }
-
-        if (state.proxyStatus === 'ok' && !force) {
-            return;
-        }
-        
-        state.proxyStatus = 'testing';
-        renderAuth();
-
-        proxyCheckTimeout = setTimeout(async () => {
-            try {
-                const result = await testProxyConnection({
-                    proxyUrl: state.settings.geminiProxyUrl,
-                    apiKey: state.settings.geminiApiKey,
-                });
-                state.proxyStatus = result.status;
-                 if (result.status === 'error') {
-                    console.error("Proxy Check Error:", result.message);
-                }
-            } catch (e) {
-                console.error("Fatal error during proxy check:", e);
-                state.proxyStatus = 'error';
-            }
-            renderAuth();
-        }, 500); // 500ms debounce
-    }
-
     // --- AUTO-SYNC LOGIC ---
     const SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -367,7 +301,6 @@ if (!window.isSecretaryPlusAppInitialized) {
         
         renderAuth();
         setupEmailPolling();
-        checkProxyStatus(true); // Check proxy on auth change
 
         // Always re-render main content on auth change if no messages exist
         // to correctly show/hide welcome prompts.
@@ -402,7 +335,6 @@ if (!window.isSecretaryPlusAppInitialized) {
         
         renderAuth();
         setupEmailPolling();
-        checkProxyStatus(true);
         if (state.messages.length === 0) {
             renderMainContent();
         }
@@ -505,11 +437,6 @@ if (!window.isSecretaryPlusAppInitialized) {
             if (newSettings.enableEmailPolling !== oldSettings.enableEmailPolling) {
                 setupEmailPolling();
             }
-
-            // Re-check proxy status if relevant settings changed
-            if (newSettings.geminiProxyUrl !== oldSettings.geminiProxyUrl || newSettings.isProxyEnabled !== oldSettings.isProxyEnabled || newSettings.geminiApiKey !== oldSettings.geminiApiKey) {
-                checkProxyStatus(true);
-            }
             
             // If Supabase mode was toggled off, reload the app to re-initialize correctly
             if (newSettings.isSupabaseEnabled !== oldSettings.isSupabaseEnabled) {
@@ -544,8 +471,8 @@ if (!window.isSecretaryPlusAppInitialized) {
         showLoadingIndicator();
         
         const findBestProxy = () => {
-            if (!state.settings.isSupabaseEnabled || state.proxies.length === 0) {
-                return state.settings.isProxyEnabled ? state.settings.geminiProxyUrl : null;
+            if (!state.isSupabaseReady || state.proxies.length === 0) {
+                return null;
             }
             const sorted = [...state.proxies]
                 .filter(p => p.is_active)
@@ -575,7 +502,6 @@ if (!window.isSecretaryPlusAppInitialized) {
                 isGoogleConnected: state.isGoogleConnected,
                 image,
                 apiKey: state.settings.geminiApiKey,
-                isProxyEnabled: state.settings.isProxyEnabled,
                 proxyUrl: findBestProxy(), // Use the new priority logic
             });
 
@@ -959,8 +885,7 @@ ${payload.body}`;
                 errorMessage,
                 appStructure: APP_STRUCTURE_CONTEXT,
                 apiKey: state.settings.geminiApiKey,
-                isProxyEnabled: state.settings.isProxyEnabled,
-                proxyUrl: state.settings.geminiProxyUrl
+                proxyUrl: findBestProxy(),
             });
         };
 
@@ -1034,7 +959,6 @@ ${payload.body}`;
 
         await initializeAppServices();
         render(); // Initial render
-        checkProxyStatus(); // Initial proxy check
     }
 
     main().catch(error => {

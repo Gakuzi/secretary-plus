@@ -7,8 +7,6 @@ const defaultSettings = {
     isSupabaseEnabled: true, // Master switch for Supabase
     supabaseUrl: '',
     supabaseAnonKey: '',
-    isProxyEnabled: false, // For enabling/disabling proxy usage
-    geminiProxyUrl: '', // URL for Gemini API proxy
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     enableEmailPolling: true, // For proactive email notifications
     enableAutoSync: true, // For background data synchronization
@@ -45,8 +43,6 @@ export function saveSettings(settings) {
             isSupabaseEnabled: settings.isSupabaseEnabled,
             supabaseUrl: settings.supabaseUrl,
             supabaseAnonKey: settings.supabaseAnonKey,
-            isProxyEnabled: settings.isProxyEnabled,
-            geminiProxyUrl: settings.geminiProxyUrl,
             timezone: settings.timezone,
             enableEmailPolling: settings.enableEmailPolling,
             enableAutoSync: settings.enableAutoSync,
