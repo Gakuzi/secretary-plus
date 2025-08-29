@@ -1,9 +1,6 @@
-
 // Этот SQL-скрипт включает защиту на уровне строк (RLS) для всех таблиц
 // и создает политики, гарантирующие, что пользователи могут получить доступ только к своим собственным данным.
 export const FULL_MIGRATION_SQL = `
-BEGIN;
-
 -- Удаляем старые таблицы данных, чтобы начать с чистого листа.
 -- Настройки и прокси не трогаем.
 DROP TABLE IF EXISTS public.calendar_events CASCADE;
@@ -167,6 +164,4 @@ CREATE POLICY "Enable all access for authenticated users" ON public.chat_memory 
 CREATE POLICY "Enable all access for authenticated users" ON public.user_settings FOR ALL TO authenticated USING (auth.uid() = user_id);
 CREATE POLICY "Enable all access for authenticated users" ON public.action_stats FOR ALL TO authenticated USING (auth.uid() = user_id);
 CREATE POLICY "Enable all access for authenticated users" ON public.proxies FOR ALL TO authenticated USING (auth.uid() = user_id);
-
-COMMIT;
 `.trim();

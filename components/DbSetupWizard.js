@@ -1,8 +1,3 @@
-
-
-
-
-
 import * as Icons from './icons/Icons.js';
 import { SupabaseService } from '../services/supabase/SupabaseService.js';
 import { FULL_MIGRATION_SQL } from '../services/supabase/migrations.js';
@@ -33,12 +28,13 @@ serve(async (req) => {
     return new Response('ok', { headers: CORS_HEADERS });
   }
 
+  const sql = postgres(Deno.env.get('DATABASE_URL'));
+
   try {
     // 1. Получаем секреты из переменных окружения
-    const DATABASE_URL = Deno.env.get('DATABASE_URL');
     const ADMIN_SECRET_TOKEN = Deno.env.get('ADMIN_SECRET_TOKEN');
 
-    if (!DATABASE_URL || !ADMIN_SECRET_TOKEN) {
+    if (!Deno.env.get('DATABASE_URL') || !ADMIN_SECRET_TOKEN) {
       throw new Error('Database URL или Admin Token не установлены в секретах функции.');
     }
 
@@ -60,11 +56,12 @@ serve(async (req) => {
       });
     }
 
-    // 4. Выполняем SQL-запрос
-    const sql = postgres(DATABASE_URL);
-    // .unsafe() необходим для выполнения "сырой" SQL строки
-    const result = await sql.unsafe(sqlQuery);
-    await sql.end();
+    // 4. Выполняем SQL-запрос внутри транзакции
+    const result = await sql.begin(async (sql) => {
+        // sql.unsafe() внутри транзакции позволяет выполнять несколько операторов
+        const transactionResult = await sql.unsafe(sqlQuery);
+        return transactionResult;
+    });
 
     // 5. Возвращаем результат
     return new Response(JSON.stringify({ ok: true, result }), {
@@ -77,6 +74,9 @@ serve(async (req) => {
       status: 500,
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
     });
+  } finally {
+      // Гарантируем закрытие соединения
+      await sql.end();
   }
 });
 `.trim();
