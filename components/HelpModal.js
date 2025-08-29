@@ -1,4 +1,4 @@
-import { QuestionMarkCircleIcon, CodeIcon, AlertTriangleIcon, SettingsIcon, TelegramIcon } from './icons/Icons.js';
+import * as Icons from './icons/Icons.js';
 import { getSettings } from '../utils/storage.js';
 import { SUPABASE_CONFIG } from '../config.js';
 
@@ -37,7 +37,7 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
     modalOverlay.innerHTML = `
         <div class="bg-white dark:bg-slate-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-4xl sm:rounded-lg shadow-xl" id="help-content">
             <header class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
-                <h2 class="text-xl sm:text-2xl font-bold flex items-center gap-2">${QuestionMarkCircleIcon} Центр Помощи</h2>
+                <h2 class="text-xl sm:text-2xl font-bold flex items-center gap-2">${Icons.QuestionMarkCircleIcon} Центр Помощи</h2>
                 <button id="close-help" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Закрыть помощь">&times;</button>
             </header>
             
@@ -128,7 +128,7 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                                 Если вы хотите начать настройку с самого начала или считаете, что допустили ошибку, вы можете перезапустить мастер.
                             </p>
                             <div class="text-sm p-3 rounded-md bg-yellow-100/50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300 flex items-start gap-3">
-                                <div class="w-5 h-5 flex-shrink-0 mt-0.5">${AlertTriangleIcon}</div>
+                                <div class="w-5 h-5 flex-shrink-0 mt-0.5">${Icons.AlertTriangleIcon}</div>
                                 <div>
                                     <p class="font-bold">Внимание:</p>
                                     <p>Это действие удалит все ваши текущие настройки, сохраненные в браузере (включая API ключи). Настройки, синхронизированные с Supabase, останутся без изменений.</p>
@@ -146,7 +146,7 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                             <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">Обратная связь</h3>
                             <p class="text-sm text-slate-600 dark:text-slate-400 mt-1 mb-4">Если у вас есть вопросы, предложения или вы столкнулись с ошибкой, которую не удалось решить, вы можете связаться с автором напрямую.</p>
                             <a href="https://t.me/eklimov" target="_blank" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-md font-semibold transition-colors">
-                                ${TelegramIcon.replace('fill="currentColor"', 'fill="white"')}
+                                ${Icons.TelegramIcon.replace('fill="currentColor"', 'fill="white"')}
                                 <span>Написать в Telegram</span>
                             </a>
                              <p class="text-xs text-slate-500 mt-4 text-center">
