@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
         user: null,
         settings: {},
         selectedProxies: [],
+        currentStep: 'auth',
     };
     
     // --- DOM ELEMENTS ---
@@ -48,11 +49,6 @@ document.addEventListener('DOMContentLoaded', () => {
         container.textContent = message;
         container.style.display = 'block';
     };
-
-    const hideStatus = (container) => {
-        container.style.display = 'none';
-        container.textContent = '';
-    };
     
     async function findProxiesWithGemini(apiKey) {
         if (!apiKey) throw new Error("Ключ Gemini API не предоставлен.");
@@ -86,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function testProxyConnection(proxyUrl, apiKey) {
-        if (!proxyUrl || !apiKey) return { status: 'error', speed: null };
+        if (!proxyUrl || !apiKey) return { status: 'error', speed: null, message: 'Missing URL or API Key' };
         const testEndpoint = `${proxyUrl}/v1beta/models?key=${apiKey}`;
         const startTime = performance.now();
         try {
@@ -94,18 +90,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (response.ok) {
                 const data = await response.json();
                 if (data.models && Array.isArray(data.models)) {
-                    return { status: 'ok', speed: Math.round(performance.now() - startTime) };
+                    return { status: 'ok', speed: Math.round(performance.now() - startTime), message: 'OK' };
                 }
             }
-            return { status: 'error', speed: null };
+            return { status: 'error', speed: null, message: `Status: ${response.status}` };
         } catch (error) {
-            return { status: 'error', speed: null };
+            return { status: 'error', speed: null, message: 'Fetch failed' };
         }
     }
 
     // --- UI RENDERING & STATE MANAGEMENT ---
     
     const showStep = (stepKey) => {
+        state.currentStep = stepKey;
         const stepElement = steps[stepKey];
         if (!stepElement) return;
         Object.values(steps).forEach(s => s.style.display = 'none');
@@ -125,6 +122,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p class="text-xs text-gray-400">${state.user.email}</p>
                 </div>
             </div>
+            <div class="step-navigation mt-4">
+                 <div></div> <!-- Spacer -->
+                 <button class="wizard-nav-button next-button" data-nav-target="keys">Продолжить</button>
+            </div>
         `;
         containers.userProfile.style.display = 'block';
         steps.auth.dataset.status = 'completed';
@@ -140,8 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (proxiesError) throw proxiesError;
         state.selectedProxies = proxiesData || [];
         renderSelectedProxies();
-        
-        showStep('keys');
     };
     
     // --- EVENT HANDLERS ---
@@ -200,13 +199,20 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons.findProxies.textContent = 'Поиск...';
 
         try {
-            const proxies = await findProxiesWithGemini(state.settings.geminiApiKey);
+            const foundProxies = await findProxiesWithGemini(state.settings.geminiApiKey);
+            const existingUrls = new Set(state.selectedProxies.map(p => p.url));
+            const newProxies = foundProxies.filter(p => !existingUrls.has(p.url));
+
             containers.foundProxies.innerHTML = '';
-            proxies.forEach(p => {
-                const proxyData = { ...p, geolocation: `${p.country}, ${p.city || ''}`.replace(/, $/, '') };
-                containers.foundProxies.appendChild(renderProxyItem(proxyData, 'found'));
-            });
-            setStatus(containers.proxyFinderStatus, 'success', `Найдено ${proxies.length} прокси. Протестируйте и добавьте лучшие.`);
+            if (newProxies.length === 0) {
+                 containers.foundProxies.innerHTML = `<p class="text-gray-400 text-center py-4">Новых прокси не найдено.</p>`;
+            } else {
+                newProxies.forEach(p => {
+                    const proxyData = { ...p, geolocation: `${p.country}, ${p.city || ''}`.replace(/, $/, '') };
+                    containers.foundProxies.appendChild(renderProxyItem(proxyData, 'found'));
+                });
+            }
+            setStatus(containers.proxyFinderStatus, 'success', `Найдено ${newProxies.length} новых прокси. Протестируйте и добавьте лучшие.`);
         } catch (error) {
             setStatus(containers.proxyFinderStatus, 'error', error.message);
         } finally {
@@ -216,47 +222,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     buttons.saveProxies.addEventListener('click', async () => {
-        setStatus(containers.proxyStatus, 'loading', 'Сохраняем прокси...');
-        buttons.saveProxies.disabled = true;
-
-        const { error: deleteError } = await state.supabaseClient.from('proxies').delete().match({ user_id: state.user.id });
-        if (deleteError) {
-             setStatus(containers.proxyStatus, 'error', `Ошибка очистки старых прокси: ${deleteError.message}`);
-             buttons.saveProxies.disabled = false;
-             return;
-        }
-
-        if (state.selectedProxies.length === 0) {
-             steps.proxy.dataset.status = 'completed';
-             showStep('final');
-             return;
-        }
-        
-        const proxiesToSave = state.selectedProxies.map((p, index) => ({
-            url: p.url,
-            alias: p.alias || p.geolocation,
-            geolocation: p.geolocation,
-            is_active: true,
-            priority: index,
-            user_id: state.user.id,
-            last_status: p.last_status,
-            last_speed_ms: p.last_speed_ms
-        }));
-
-        const { error } = await state.supabaseClient.from('proxies').insert(proxiesToSave);
-        
-        if (error) {
-            setStatus(containers.proxyStatus, 'error', `Ошибка сохранения: ${error.message}`);
-            buttons.saveProxies.disabled = false;
-        } else {
-            setStatus(containers.proxyStatus, 'success', `${proxiesToSave.length} прокси успешно сохранены.`);
-            steps.proxy.dataset.status = 'completed';
-            showStep('final');
-        }
+        showStep('final');
     });
 
-    document.querySelectorAll('.prev-button').forEach(btn => {
-        btn.addEventListener('click', () => showStep(btn.dataset.target));
+    document.body.addEventListener('click', e => {
+        const navButton = e.target.closest('[data-nav-target]');
+        if (navButton) {
+            showStep(navButton.dataset.navTarget);
+        }
     });
 
     // --- PROXY LISTS LOGIC ---

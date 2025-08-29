@@ -13,8 +13,7 @@
     <script type="importmap">
     {
       "imports": {
-        "@google/genai": "https://esm.sh/@google/genai",
-        "./constants.js": "./constants.js"
+        "@google/genai": "https://esm.sh/@google/genai"
       }
     }
     </script>
@@ -62,7 +61,7 @@
                     </div>
                     <div id="keys-status-container" class="mt-4 text-sm" style="display: none;"></div>
                     <div class="step-navigation">
-                        <button class="wizard-nav-button prev-button" data-target="auth">Назад</button>
+                        <button class="wizard-nav-button prev-button" data-nav-target="auth">Назад</button>
                         <button id="save-keys-button" class="wizard-nav-button next-button">Сохранить и продолжить</button>
                     </div>
                 </div>
@@ -94,8 +93,8 @@
                     </div>
                     <div id="proxy-status-container" class="mt-4 text-sm" style="display: none;"></div>
                     <div class="step-navigation">
-                         <button class="wizard-nav-button prev-button" data-target="keys">Назад</button>
-                         <button id="save-proxies-button" class="wizard-nav-button next-button">Завершить настройку</button>
+                         <button class="wizard-nav-button prev-button" data-nav-target="keys">Назад</button>
+                         <button id="save-proxies-button" class="wizard-nav-button next-button">Продолжить</button>
                     </div>
                  </div>
             </section>
