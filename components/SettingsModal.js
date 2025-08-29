@@ -4,7 +4,7 @@ import * as Icons from './icons/Icons.js';
 
 export function createSettingsModal({ settings, supabaseService, onClose, onSave }) {
     const modalElement = document.createElement('div');
-    modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4';
+    modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
 
     let abortController = null; // For cancelling proxy tests
 
@@ -21,13 +21,23 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
     const render = () => {
         modalElement.innerHTML = `
             <div class="bg-gray-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-4xl sm:rounded-lg shadow-xl">
-                <header class="flex justify-between items-center p-4 border-b border-gray-700">
+                <header class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
                     <h2 class="text-xl font-bold flex items-center gap-2">${Icons.SettingsIcon} Настройки</h2>
                     <button data-action="close" class="p-2 rounded-full hover:bg-gray-700">&times;</button>
                 </header>
-                <main class="flex-1 flex overflow-hidden">
-                    <aside class="w-52 border-r border-gray-700 p-4">
-                        <nav class="flex flex-col space-y-2">
+                <main class="flex-1 flex flex-col sm:flex-row overflow-hidden">
+                    <!-- Mobile Tabs -->
+                    <nav class="sm:hidden flex-shrink-0 border-b border-gray-700 p-2 flex items-center justify-around gap-2">
+                         <a href="#api-keys" class="settings-tab-button active text-center flex-1" data-tab="api-keys">Ключи</a>
+                         ${settings.isSupabaseEnabled && supabaseService ? `
+                            <a href="#proxy" class="settings-tab-button text-center flex-1" data-tab="proxy">Прокси</a>
+                            <a href="#database" class="settings-tab-button text-center flex-1" data-tab="database">База данных</a>
+                         ` : ''}
+                    </nav>
+
+                    <!-- Desktop Sidebar -->
+                    <aside class="hidden sm:flex w-52 border-r border-gray-700 p-4 flex-shrink-0">
+                        <nav class="flex flex-col space-y-2 w-full">
                              <a href="#api-keys" class="settings-tab-button active text-left" data-tab="api-keys">Ключи API</a>
                              ${settings.isSupabaseEnabled && supabaseService ? `
                                 <a href="#proxy" class="settings-tab-button text-left" data-tab="proxy">Прокси</a>
@@ -35,7 +45,7 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                              ` : ''}
                         </nav>
                     </aside>
-                    <div class="flex-1 p-6 overflow-y-auto" id="settings-tabs-content">
+                    <div class="flex-1 p-4 sm:p-6 overflow-y-auto" id="settings-tabs-content">
                         <!-- API Keys Tab -->
                         <div id="tab-api-keys" class="settings-tab-content space-y-6">
                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
@@ -106,7 +116,7 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                         </div>
                     </div>
                 </main>
-                <footer class="p-4 border-t border-gray-700 flex justify-end">
+                <footer class="p-4 border-t border-gray-700 flex justify-end flex-shrink-0">
                     <button data-action="save" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold">Сохранить и закрыть</button>
                 </footer>
                 
@@ -270,7 +280,20 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
     };
 
     const handleAction = async (e) => {
-        // Special case for toggle input
+        const tabButton = e.target.closest('.settings-tab-button');
+        if (tabButton) {
+            e.preventDefault();
+            const tabId = tabButton.dataset.tab;
+
+            modalElement.querySelectorAll('.settings-tab-button').forEach(btn => btn.classList.remove('active'));
+            modalElement.querySelectorAll(`.settings-tab-button[data-tab="${tabId}"]`).forEach(btn => btn.classList.add('active'));
+
+            modalElement.querySelectorAll('.settings-tab-content').forEach(content => {
+                content.classList.toggle('hidden', content.id !== `tab-${tabId}`);
+            });
+            return;
+        }
+
         if (e.target.dataset.action === 'toggle-proxy') {
             const id = e.target.dataset.id;
             const is_active = e.target.checked;
@@ -281,11 +304,11 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                     await supabaseService.updateProxy(id, { is_active });
                  } catch(err) {
                     alert('Не удалось обновить статус прокси');
-                    proxy.is_active = !is_active; // revert on fail
-                    render(); // re-render to show reverted state
+                    proxy.is_active = !is_active; 
+                    render();
                  }
             }
-            return; // stop further processing
+            return; 
         }
 
         const target = e.target.closest('[data-action]');
@@ -357,10 +380,9 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 };
 
                 try {
-                    // If we were re-testing a saved proxy
                     if (state.testingProxyId) {
                         await supabaseService.updateProxy(state.testingProxyId, proxyData);
-                    } else { // It's a new proxy from the 'found' list
+                    } else { 
                         await supabaseService.addProxy(proxyData);
                         state.foundProxies = state.foundProxies.filter(p => p.url !== state.testingProxyUrl);
                     }
@@ -399,24 +421,8 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
     };
     
     modalElement.addEventListener('click', handleAction);
-    modalElement.addEventListener('change', handleAction); // Add change listener for the toggle
+    modalElement.addEventListener('change', handleAction);
     
-     // Tab switching logic
-    modalElement.addEventListener('click', (e) => {
-        const button = e.target.closest('.settings-tab-button');
-        if (!button) return;
-
-        e.preventDefault();
-        const tabId = button.dataset.tab;
-
-        modalElement.querySelectorAll('.settings-tab-button').forEach(btn => btn.classList.remove('active'));
-        button.classList.add('active');
-
-        modalElement.querySelectorAll('.settings-tab-content').forEach(content => {
-            content.classList.toggle('hidden', content.id !== `tab-${tabId}`);
-        });
-    });
-
     render();
     loadSavedProxies();
     return modalElement;

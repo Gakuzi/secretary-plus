@@ -71,7 +71,7 @@ export function createProfileModal(userProfile, settings, handlers, syncStatus, 
     };
 
     const modalOverlay = document.createElement('div');
-    modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4';
+    modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
 
     modalOverlay.innerHTML = `
         <div id="profile-modal-content" class="bg-gray-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-lg shadow-xl">
@@ -79,7 +79,7 @@ export function createProfileModal(userProfile, settings, handlers, syncStatus, 
                 <h2 class="text-xl font-bold">Профиль пользователя</h2>
                 <button id="close-profile" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Закрыть профиль">&times;</button>
             </header>
-            <main class="p-6 overflow-y-auto space-y-6 flex-1">
+            <main class="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
                 <!-- User Info -->
                 <div class="flex items-center gap-4 p-4 bg-gray-900/50 rounded-lg">
                     <img src="${userProfile.imageUrl}" alt="${userProfile.name}" class="w-16 h-16 rounded-full">
@@ -92,9 +92,9 @@ export function createProfileModal(userProfile, settings, handlers, syncStatus, 
                 <!-- Sync Status -->
                 ${settings.isSupabaseEnabled ? `
                 <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                    <div class="flex justify-between items-center mb-4">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                         <h3 class="text-lg font-semibold">Синхронизация данных</h3>
-                        <button id="force-sync-button" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold flex items-center gap-2">
+                        <button id="force-sync-button" class="w-full sm:w-auto px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold flex items-center justify-center gap-2">
                             ${Icons.RefreshCwIcon}
                             <span>Синхронизировать сейчас</span>
                         </button>
@@ -120,13 +120,13 @@ export function createProfileModal(userProfile, settings, handlers, syncStatus, 
                      </div>
                 </div>
             </main>
-            <footer class="p-4 bg-gray-800 border-t border-gray-700 flex justify-between items-center flex-shrink-0">
-                <div>
-                     <button id="profile-logout-button" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold">Выйти</button>
+            <footer class="p-4 bg-gray-800 border-t border-gray-700 flex flex-col-reverse sm:flex-row sm:justify-between items-center gap-3 flex-shrink-0">
+                 <div class="w-full sm:w-auto">
+                     <button id="profile-logout-button" class="w-full sm:w-auto px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold">Выйти</button>
                 </div>
-                <div class="flex gap-3">
-                     <button id="profile-delete-settings" class="px-4 py-2 bg-red-800 hover:bg-red-700 rounded-md text-sm font-semibold">Удалить из облака</button>
-                     <button id="profile-save-settings" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm font-semibold">Сохранить</button>
+                <div class="flex flex-col-reverse sm:flex-row w-full sm:w-auto gap-3">
+                     <button id="profile-delete-settings" class="w-full sm:w-auto px-4 py-2 bg-red-800 hover:bg-red-700 rounded-md text-sm font-semibold">Удалить из облака</button>
+                     <button id="profile-save-settings" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm font-semibold">Сохранить</button>
                 </div>
             </footer>
         </div>

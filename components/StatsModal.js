@@ -44,16 +44,16 @@ const ACTION_NAMES = {
 
 export function createStatsModal(statsData, onClose) {
     const modalOverlay = document.createElement('div');
-    modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4';
+    modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
 
     modalOverlay.innerHTML = `
         <div class="bg-gray-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-lg shadow-xl" id="stats-content">
             <header class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
-                <h2 class="text-2xl font-bold flex items-center gap-2">${ChartBarIcon} Статистика использования</h2>
+                <h2 class="text-xl sm:text-2xl font-bold flex items-center gap-2">${ChartBarIcon} Статистика</h2>
                 <button id="close-stats" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Закрыть статистику">&times;</button>
             </header>
             
-            <main class="p-6 flex-1 flex items-center justify-center">
+            <main class="p-4 sm:p-6 flex-1 flex items-center justify-center">
                 <!-- Chart or empty state will be rendered here -->
             </main>
         </div>

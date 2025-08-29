@@ -17,24 +17,31 @@ function markdownToHTML(text) {
 
 export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchWizard }) {
     const modalOverlay = document.createElement('div');
-    modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4';
+    modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
     
     modalOverlay.innerHTML = `
         <div class="bg-gray-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-4xl sm:rounded-lg shadow-xl" id="help-content">
             <header class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
-                <h2 class="text-2xl font-bold flex items-center gap-2">${QuestionMarkCircleIcon} Центр Помощи</h2>
+                <h2 class="text-xl sm:text-2xl font-bold flex items-center gap-2">${QuestionMarkCircleIcon} Центр Помощи</h2>
                 <button id="close-help" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Закрыть помощь">&times;</button>
             </header>
             
-            <main class="flex-1 flex overflow-hidden">
-                <aside class="w-52 border-r border-gray-700 p-4">
-                    <nav class="flex flex-col space-y-2">
+            <main class="flex-1 flex flex-col sm:flex-row overflow-hidden">
+                <!-- Mobile Tabs -->
+                <nav class="sm:hidden flex-shrink-0 border-b border-gray-700 p-2 flex items-center justify-around gap-2">
+                    <a href="#error-analysis" class="settings-tab-button active text-center flex-1" data-tab="error-analysis">Анализ</a>
+                    <a href="#setup-guide" class="settings-tab-button text-center flex-1" data-tab="setup-guide">Инструкция</a>
+                    <a href="#dev-tools" class="settings-tab-button text-center flex-1" data-tab="dev-tools">Инструменты</a>
+                </nav>
+                <!-- Desktop Sidebar -->
+                <aside class="hidden sm:flex w-52 border-r border-gray-700 p-4 flex-shrink-0">
+                    <nav class="flex flex-col space-y-2 w-full">
                         <a href="#error-analysis" class="settings-tab-button active text-left" data-tab="error-analysis">Анализ ошибок</a>
-                        <a href="#setup-guide" class="settings-tab-button" data-tab="setup-guide">Инструкция</a>
-                        <a href="#dev-tools" class="settings-tab-button" data-tab="dev-tools">Инструменты</a>
+                        <a href="#setup-guide" class="settings-tab-button text-left" data-tab="setup-guide">Инструкция</a>
+                        <a href="#dev-tools" class="settings-tab-button text-left" data-tab="dev-tools">Инструменты</a>
                     </nav>
                 </aside>
-                <div class="flex-1 p-6 overflow-y-auto" id="help-tabs-content">
+                <div class="flex-1 p-4 sm:p-6 overflow-y-auto" id="help-tabs-content">
                     
                     <!-- Error Analysis Tab -->
                     <div id="tab-error-analysis" class="settings-tab-content space-y-6">
@@ -89,82 +96,74 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
     `;
 
     // --- Event Listeners ---
-    modalOverlay.querySelector('#close-help').addEventListener('click', onClose);
-    modalOverlay.addEventListener('click', (e) => {
-        if (e.target === modalOverlay) onClose();
-    });
+    modalOverlay.addEventListener('click', async (e) => {
+        // Close modal
+        if (e.target.closest('#close-help') || e.target === modalOverlay) {
+            onClose();
+            return;
+        }
 
-    // Tab switching logic
-    const tabButtons = modalOverlay.querySelectorAll('.settings-tab-button');
-    const tabContents = modalOverlay.querySelectorAll('.settings-tab-content');
-    tabButtons.forEach(button => {
-        button.addEventListener('click', (e) => {
+        // Tab switching logic
+        const tabButton = e.target.closest('.settings-tab-button');
+        if (tabButton) {
             e.preventDefault();
-            const tabId = e.target.dataset.tab;
+            const tabId = tabButton.dataset.tab;
 
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            e.target.classList.add('active');
+            modalOverlay.querySelectorAll('.settings-tab-button').forEach(btn => btn.classList.remove('active'));
+            modalOverlay.querySelectorAll(`.settings-tab-button[data-tab="${tabId}"]`).forEach(btn => btn.classList.add('active'));
 
-            tabContents.forEach(content => {
+            modalOverlay.querySelectorAll('.settings-tab-content').forEach(content => {
                 content.classList.toggle('hidden', content.id !== `tab-${tabId}`);
             });
-        });
-    });
-
-    // Error analysis logic
-    const analyzeButton = modalOverlay.querySelector('#analyze-error-button');
-    const errorInput = modalOverlay.querySelector('#error-input-area');
-    const resultContainer = modalOverlay.querySelector('#error-analysis-result');
-    const validationMessage = modalOverlay.querySelector('#error-validation-message');
-    
-    analyzeButton.addEventListener('click', async () => {
-        validationMessage.textContent = ''; // Clear previous messages
-        const errorMessage = errorInput.value.trim();
-
-        if (!errorMessage) {
-            validationMessage.textContent = "Пожалуйста, вставьте сообщение об ошибке.";
-            return;
-        }
-        if (!settings.geminiApiKey) {
-            validationMessage.textContent = "Ключ Gemini API не настроен. Добавьте его в настройках.";
             return;
         }
 
-        resultContainer.style.display = 'block';
-        resultContainer.innerHTML = `
-            <div class="flex items-center justify-center h-48">
-                <div class="loading-dots">
-                    <div class="dot"></div> <div class="dot"></div> <div class="dot"></div>
-                </div>
-            </div>
-        `;
-        analyzeButton.disabled = true;
-        analyzeButton.textContent = "Анализирую...";
+        // Action buttons
+        const analyzeButton = e.target.closest('#analyze-error-button');
+        const relaunchButton = e.target.closest('#relaunch-wizard-button');
+        const editServiceButton = e.target.closest('#edit-service-button');
 
-        try {
-            const analysis = await analyzeErrorFn(errorMessage);
-            resultContainer.innerHTML = `<div class="prose prose-invert max-w-none">${markdownToHTML(analysis)}</div>`;
-        } catch (error) {
-            resultContainer.innerHTML = `<p class="text-red-400">Не удалось выполнить анализ: ${error.message}</p>`;
-        } finally {
-            analyzeButton.disabled = false;
-            analyzeButton.textContent = "Проанализировать";
+        if (analyzeButton) {
+            const errorInput = modalOverlay.querySelector('#error-input-area');
+            const resultContainer = modalOverlay.querySelector('#error-analysis-result');
+            const validationMessage = modalOverlay.querySelector('#error-validation-message');
+            
+            validationMessage.textContent = '';
+            const errorMessage = errorInput.value.trim();
+
+            if (!errorMessage) {
+                validationMessage.textContent = "Пожалуйста, вставьте сообщение об ошибке.";
+                return;
+            }
+            if (!settings.geminiApiKey) {
+                validationMessage.textContent = "Ключ Gemini API не настроен. Добавьте его в настройках.";
+                return;
+            }
+
+            resultContainer.style.display = 'block';
+            resultContainer.innerHTML = `<div class="flex items-center justify-center h-48"><div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;
+            analyzeButton.disabled = true;
+            analyzeButton.textContent = "Анализирую...";
+
+            try {
+                const analysis = await analyzeErrorFn(errorMessage);
+                resultContainer.innerHTML = `<div class="prose prose-invert max-w-none">${markdownToHTML(analysis)}</div>`;
+            } catch (error) {
+                resultContainer.innerHTML = `<p class="text-red-400">Не удалось выполнить анализ: ${error.message}</p>`;
+            } finally {
+                analyzeButton.disabled = false;
+                analyzeButton.textContent = "Проанализировать";
+            }
         }
-    });
 
-    // Relaunch wizard button
-    const relaunchButton = modalOverlay.querySelector('#relaunch-wizard-button');
-    if (relaunchButton && onRelaunchWizard) {
-        relaunchButton.addEventListener('click', onRelaunchWizard);
-    }
+        if (relaunchButton && onRelaunchWizard) {
+            onRelaunchWizard();
+        }
 
-    // Dev tools button
-    const editServiceButton = modalOverlay.querySelector('#edit-service-button');
-    if (editServiceButton) {
-        editServiceButton.addEventListener('click', () => {
+        if (editServiceButton) {
             window.open('https://aistudio.google.com/app/apps/drive/1-YFIo56NWOtYuQYpZUWiPcMY323lJPuK?showAssistant=true&showPreview=true', '_blank');
-        });
-    }
+        }
+    });
 
     return modalOverlay;
 }
