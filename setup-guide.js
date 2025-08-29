@@ -228,11 +228,14 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons.saveProxies.disabled = true;
         try {
             const proxiesToUpsert = state.selectedProxies.map((p, index) => ({
+                user_id: state.user.id, // CRITICAL FIX for RLS
                 url: p.url,
                 alias: p.alias || p.geolocation,
                 geolocation: p.geolocation,
                 is_active: true,
-                priority: index
+                priority: index,
+                last_status: p.last_status,
+                last_speed_ms: p.last_speed_ms
             }));
 
             if(proxiesToUpsert.length > 0) {

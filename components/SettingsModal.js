@@ -578,10 +578,10 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                 const indicator = proxyListContainer.querySelector('.drag-over-indicator');
                 if (indicator) indicator.remove();
                 
-                const reorderedProxies = Array.from(proxyListContainer.querySelectorAll('.proxy-item')).map((item, index) => {
-                    const proxy = authState.proxies.find(p => p.id.toString() === item.dataset.proxyId);
-                    return { ...proxy, priority: index };
-                });
+                const reorderedProxies = Array.from(proxyListContainer.querySelectorAll('.proxy-item')).map((item, index) => ({
+                    id: item.dataset.proxyId,
+                    priority: index,
+                }));
                 onProxyReorder(reorderedProxies);
             }
         });
