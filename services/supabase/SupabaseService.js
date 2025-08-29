@@ -457,7 +457,7 @@ export class SupabaseService {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${adminToken}`,
+                'x-admin-token': adminToken,
                 'apikey': this.anonKey,
             },
             body: JSON.stringify({ sql: sql }),

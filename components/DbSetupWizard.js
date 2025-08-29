@@ -1,4 +1,5 @@
 
+
 import * as Icons from './icons/Icons.js';
 import { SupabaseService } from '../services/supabase/SupabaseService.js';
 import { FULL_MIGRATION_SQL } from '../services/supabase/migrations.js';
@@ -14,13 +15,12 @@ const WIZARD_STEPS = [
 
 const EDGE_FUNCTION_CODE = `
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-// Используем современную, рекомендованную библиотеку postgres с надежным URL
 import postgres from 'https://deno.land/x/postgresjs@v3.4.2/mod.js';
 
 // Заголовки CORS для preflight и обычных запросов
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-admin-token',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -39,8 +39,8 @@ serve(async (req) => {
       throw new Error('Database URL или Admin Token не установлены в секретах функции.');
     }
 
-    // 2. Проверяем токен администратора в заголовках запроса
-    const requestToken = req.headers.get('Authorization')?.replace('Bearer ', '');
+    // 2. Проверяем токен администратора в кастомном заголовке
+    const requestToken = req.headers.get('x-admin-token');
     if (requestToken !== ADMIN_SECRET_TOKEN) {
       return new Response(JSON.stringify({ error: 'Unauthorized: Неверный токен.' }), {
         status: 401,
