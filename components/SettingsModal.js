@@ -542,6 +542,9 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
         loadSavedProxies();
     };
 
+    const projectRef = supabaseService?.url ? new URL(supabaseService.url).hostname.split('.')[0] : null;
+    const sqlEditorLink = projectRef ? `https://supabase.com/dashboard/project/${projectRef}/sql/new` : null;
+
     const render = () => {
         const sqlSectionDisplay = state.isShowingSql ? 'block' : 'none';
         
@@ -606,7 +609,10 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                                     <button data-action="toggle-sql" class="text-sm text-blue-500 dark:text-blue-400 hover:underline">${state.isShowingSql ? 'Скрыть' : 'Показать'}</button>
                                 </div>
                                 <div id="sql-script-container" class="mt-4" style="display: ${sqlSectionDisplay};">
-                                    <p class="text-xs text-slate-500 mb-2">Этот скрипт можно выполнить в SQL-редакторе Supabase для ручного создания или обновления таблиц.</p>
+                                    <div class="text-xs text-slate-500 mb-2 flex justify-between items-center">
+                                        <span>Этот скрипт можно выполнить в SQL-редакторе Supabase для ручного обновления таблиц.</span>
+                                        ${sqlEditorLink ? `<a href="${sqlEditorLink}" target="_blank" rel="noopener noreferrer" class="text-blue-500 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1 whitespace-nowrap">${Icons.ExternalLinkIcon.replace('width="24" height="24"', 'width="14" height="14"')} <span>Открыть редактор</span></a>` : ''}
+                                    </div>
                                     <div class="rounded-md border border-slate-200 dark:border-slate-700">
                                         <div class="flex justify-between items-center bg-slate-100 dark:bg-slate-900 px-4 py-2 text-xs text-slate-500 dark:text-slate-400 rounded-t-md">
                                             <span>POSTGRESQL (SUPABASE)</span>
