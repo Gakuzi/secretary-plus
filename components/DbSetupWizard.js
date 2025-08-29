@@ -1,6 +1,8 @@
 
 
 
+
+
 import * as Icons from './icons/Icons.js';
 import { SupabaseService } from '../services/supabase/SupabaseService.js';
 import { FULL_MIGRATION_SQL } from '../services/supabase/migrations.js';
@@ -90,6 +92,7 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
         functionUrl: settings.managementWorkerUrl || '',
         adminToken: settings.adminSecretToken || '',
         testStatus: 'idle', // idle, testing, ok, error
+        sqlExecutionSuccess: false,
     };
 
     const render = () => {
@@ -216,10 +219,14 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
         } else if (state.currentStep === 4) { // Test & save step
              footerHtml += `<button data-action="next" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold disabled:bg-slate-500" ${state.testStatus !== 'ok' ? 'disabled' : ''}>Далее</button>`;
         } else if (state.currentStep === 5) { // Execute SQL step
-             footerHtml += `
-                 <button data-action="execute" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold disabled:bg-slate-500" ${state.isLoading ? 'disabled' : ''}>
-                    ${state.isLoading ? '...' : 'Выполнить и завершить'}
-                 </button>`;
+            if (state.sqlExecutionSuccess) {
+                footerHtml += `<button data-action="close" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold">Завершить</button>`;
+            } else {
+                footerHtml += `
+                    <button data-action="execute" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold disabled:bg-slate-500" ${state.isLoading ? 'disabled' : ''}>
+                        ${state.isLoading ? 'Выполнение...' : 'Выполнить и завершить'}
+                    </button>`;
+            }
         }
 
 
@@ -230,7 +237,7 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                         <h2 class="text-xl font-bold">Мастер настройки базы данных</h2>
                         <p class="text-sm text-slate-500 dark:text-slate-400">Шаг ${state.currentStep + 1} / ${WIZARD_STEPS.length}: ${stepConfig.title}</p>
                     </div>
-                    <button data-action="close" class="p-2 rounded-full hover:bg-slate-100 dark:hover-bg-slate-700">&times;</button>
+                    <button data-action="close" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">&times;</button>
                 </header>
                 <main class="flex-1 p-6 overflow-y-auto bg-slate-50 dark:bg-slate-900/50">${contentHtml}</main>
                 <footer class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">${footerHtml}</footer>
@@ -307,14 +314,14 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
             case 'execute':
                  const sqlScript = wizardElement.querySelector('#sql-script-area').value.trim();
                  state.isLoading = true;
+                 state.sqlExecutionSuccess = false;
                  state.logOutput = 'Выполнение миграции...';
                  render();
                  try {
                     const service = new SupabaseService(supabaseConfig.url, supabaseConfig.anonKey);
                     const result = await service.executeSqlViaFunction(state.functionUrl, state.adminToken, sqlScript);
                     state.logOutput = `Успешно! База данных настроена.\nОтвет:\n${JSON.stringify(result, null, 2)}`;
-                    alert('Настройка базы данных успешно завершена!');
-                    onClose();
+                    state.sqlExecutionSuccess = true;
                  } catch(error) {
                     state.logOutput = `Ошибка выполнения:\n\n${error.message}`;
                  } finally {

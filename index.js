@@ -8,6 +8,8 @@
 
 
 
+
+
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
@@ -645,8 +647,8 @@ function showDbSetupWizard() {
                 await supabaseService.saveUserSettings(newSettings);
             }
             saveSettings(newSettings);
-            wizardContainer.innerHTML = '';
-            alert('Настройки администратора БД сохранены!');
+            // DO NOT close the wizard or show an alert here.
+            // The wizard manages its own lifecycle and provides feedback internally.
         }
      });
      wizardContainer.appendChild(wizard);
