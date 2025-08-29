@@ -16,6 +16,7 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
         testingProxyUrl: null,
         testingProxyId: null,
         schemaScript: '',
+        isUpdatingSchema: false,
     };
     
     const render = () => {
@@ -49,11 +50,20 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                         <!-- API Keys Tab -->
                         <div id="tab-api-keys" class="settings-tab-content space-y-6">
                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                                <h3 class="font-semibold text-lg">Ключи API</h3>
+                                <h3 class="font-semibold text-lg">Ключи и Подключения</h3>
                                 <p class="text-xs text-gray-400 mb-4"><a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-400 hover:underline">Получить ключ Gemini API &rarr;</a></p>
-                                <div>
-                                    <label class="text-sm font-medium">Gemini API Key</label>
-                                    <input type="password" id="settings-gemini-api-key" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1" value="${settings.geminiApiKey || ''}">
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="text-sm font-medium">Gemini API Key</label>
+                                        <input type="password" id="settings-gemini-api-key" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1" value="${settings.geminiApiKey || ''}">
+                                    </div>
+                                    ${settings.isSupabaseEnabled && supabaseService ? `
+                                    <div>
+                                        <label class="text-sm font-medium">URL Управляющего Воркера</label>
+                                        <p class="text-xs text-gray-500 mt-1">URL вашего Cloudflare Worker для безопасного управления схемой БД. См. PROXY_INSTRUCTIONS.md.</p>
+                                        <input type="url" id="settings-management-worker-url" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 font-mono text-sm" placeholder="https://my-worker.example.workers.dev" value="${settings.managementWorkerUrl || ''}">
+                                    </div>
+                                    ` : ''}
                                 </div>
                             </div>
                         </div>
@@ -101,17 +111,18 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                         <div id="tab-database" class="settings-tab-content hidden space-y-6">
                            ${settings.isSupabaseEnabled && supabaseService ? `
                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                                <h3 class="text-lg font-semibold">Обновление схемы базы данных</h3>
+                                <h3 class="text-lg font-semibold">Управление схемой базы данных</h3>
                                 <p class="text-sm text-gray-400 mt-1 mb-4">
-                                    При выходе новых версий приложения может потребоваться обновить структуру таблиц в вашей базе данных Supabase. Нажмите кнопку ниже, чтобы получить актуальный SQL-скрипт.
+                                    Эта функция безопасно обновит структуру таблиц в вашей базе Supabase до последней версии, не удаляя данные.
                                 </p>
                                 <div class="text-sm p-3 rounded-md bg-yellow-900/30 border border-yellow-700 text-yellow-300">
-                                    <p class="font-bold">Важно:</p>
-                                    <p>Этот скрипт безопасно выполнять несколько раз. Он не удалит ваши данные, а только добавит недостающие таблицы и столбцы.</p>
+                                    <p class="font-bold">Требование:</p>
+                                    <p>Для работы этой функции необходимо указать "URL Управляющего Воркера" на вкладке "Ключи API".</p>
                                 </div>
-                                <button data-action="show-schema-script" class="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md font-semibold transition-colors">
-                                    Показать скрипт обновления
+                                <button data-action="update-schema" class="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md font-semibold transition-colors disabled:bg-gray-700/50 disabled:cursor-not-allowed" ${state.isUpdatingSchema ? 'disabled' : ''}>
+                                    ${state.isUpdatingSchema ? '<div class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div> Обновление...' : 'Проверить и обновить схему'}
                                 </button>
+                                <div id="schema-update-status" class="text-center text-sm mt-3 h-5"></div>
                             </div>` : ''}
                         </div>
                     </div>
@@ -124,11 +135,6 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 <div id="proxy-test-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
                     <div id="proxy-test-modal-content" class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 flex flex-col items-center justify-center text-center">
                         <!-- Content is rendered dynamically -->
-                    </div>
-                </div>
-                 <!-- Schema Script Modal -->
-                <div id="schema-script-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-                    <div id="schema-script-modal-content" class="bg-gray-900 border border-gray-700 rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[80vh]">
                     </div>
                 </div>
             </div>`;
@@ -200,7 +206,6 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
         const result = await testProxyConnection({ proxyUrl: url, signal });
 
         if (signal.aborted) {
-            // The action was cancelled, so we don't need to update the UI further.
             return;
         }
 
@@ -240,43 +245,6 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
         `;
 
         abortController = null; // Clean up
-    };
-    
-     const showSchemaScript = async () => {
-        const modal = modalElement.querySelector('#schema-script-modal');
-        const content = modalElement.querySelector('#schema-script-modal-content');
-        modal.classList.remove('hidden');
-        content.innerHTML = `<div class="p-6 text-center">Загрузка...</div>`;
-
-        if (!state.schemaScript) {
-            try {
-                const response = await fetch('./SUPABASE_SETUP.md');
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                const markdown = await response.text();
-                const sqlMatch = markdown.match(/```sql\n([\s\S]*?)\n```/);
-                state.schemaScript = sqlMatch ? sqlMatch[1].trim() : 'Не удалось извлечь SQL-скрипт.';
-            } catch (error) {
-                console.error("Error fetching schema script:", error);
-                state.schemaScript = `Ошибка загрузки скрипта: ${error.message}`;
-            }
-        }
-
-        const projectRef = new URL(supabaseService.url).hostname.split('.')[0];
-        const editorLink = `https://supabase.com/dashboard/project/${projectRef}/sql/new`;
-
-        content.innerHTML = `
-            <header class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
-                <h3 class="text-lg font-bold">Скрипт обновления базы данных</h3>
-                <button data-action="close-sub-modal" data-modal-id="schema-script-modal" class="p-2 rounded-full hover:bg-gray-700">&times;</button>
-            </header>
-            <main class="flex-1 p-4 overflow-y-auto">
-                <pre class="bg-gray-800 p-3 rounded-md text-xs whitespace-pre-wrap font-mono"><code id="sql-script-code">${state.schemaScript}</code></pre>
-            </main>
-            <footer class="p-4 border-t border-gray-700 flex justify-between items-center flex-shrink-0">
-                <a href="${editorLink}" target="_blank" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md text-sm font-semibold">Открыть SQL Editor</a>
-                <button data-action="copy-script" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm font-semibold">Копировать скрипт</button>
-            </footer>
-        `;
     };
 
     const handleAction = async (e) => {
@@ -326,6 +294,7 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                     ...settings,
                     geminiApiKey: modalElement.querySelector('#settings-gemini-api-key').value.trim(),
                     useProxy: modalElement.querySelector('#use-proxy-toggle')?.checked || false,
+                    managementWorkerUrl: modalElement.querySelector('#settings-management-worker-url')?.value.trim() || '',
                 };
                 onSave(newSettings);
                 break;
@@ -403,18 +372,45 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 }
                 break;
             }
-            case 'show-schema-script':
-                await showSchemaScript();
-                break;
-            case 'close-sub-modal':
-                modalElement.querySelector(`#${target.dataset.modalId}`).classList.add('hidden');
-                break;
-             case 'copy-script': {
-                const code = modalElement.querySelector('#sql-script-code').textContent;
-                navigator.clipboard.writeText(code).then(() => {
-                    target.textContent = 'Скопировано!';
-                    setTimeout(() => target.textContent = 'Копировать скрипт', 2000);
-                });
+            case 'update-schema': {
+                const statusEl = modalElement.querySelector('#schema-update-status');
+                const workerUrl = modalElement.querySelector('#settings-management-worker-url')?.value.trim();
+
+                if (!workerUrl) {
+                    statusEl.textContent = 'Ошибка: URL Управляющего Воркера не указан.';
+                    statusEl.className = 'text-center text-sm mt-3 h-5 text-red-400';
+                    return;
+                }
+
+                state.isUpdatingSchema = true;
+                render(); // Re-render to disable button
+                statusEl.textContent = 'Загрузка актуального скрипта...';
+                statusEl.className = 'text-center text-sm mt-3 h-5 text-gray-400';
+
+                try {
+                    const response = await fetch('./SUPABASE_SETUP.md');
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    const markdown = await response.text();
+                    const sqlMatch = markdown.match(/```sql\n([\s\S]*?)\n```/);
+                    const sqlScript = sqlMatch ? sqlMatch[1].trim() : null;
+
+                    if (!sqlScript) {
+                        throw new Error('Не удалось извлечь SQL-скрипт из SUPABASE_SETUP.md');
+                    }
+                    
+                    statusEl.textContent = 'Отправка запроса на обновление...';
+                    await supabaseService.executeSql(workerUrl, sqlScript);
+
+                    statusEl.textContent = 'Схема базы данных успешно обновлена!';
+                    statusEl.className = 'text-center text-sm mt-3 h-5 text-green-400';
+                } catch (error) {
+                    console.error("Schema update failed:", error);
+                    statusEl.textContent = `Ошибка: ${error.message}`;
+                    statusEl.className = 'text-center text-sm mt-3 h-5 text-red-400';
+                } finally {
+                    state.isUpdatingSchema = false;
+                    setTimeout(() => render(), 500); // Re-render to re-enable button
+                }
                 break;
             }
         }

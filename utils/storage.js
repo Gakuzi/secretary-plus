@@ -17,7 +17,8 @@ const defaultSettings = {
         files: 'google',
         notes: 'supabase',
     },
-    useProxy: false, // New setting for proxy usage
+    useProxy: false,
+    managementWorkerUrl: '', // URL for the worker that executes management API calls
 };
 
 export function getSettings() {
@@ -49,6 +50,7 @@ export function saveSettings(settings) {
             enableAutoSync: settings.enableAutoSync,
             serviceMap: settings.serviceMap,
             useProxy: settings.useProxy,
+            managementWorkerUrl: settings.managementWorkerUrl,
         };
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
     } catch (error)
