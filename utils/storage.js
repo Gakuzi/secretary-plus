@@ -1,3 +1,4 @@
+
 const SETTINGS_KEY = 'secretary-plus-settings-v4';
 const SYNC_STATUS_KEY = 'secretary-plus-sync-status-v1';
 
@@ -8,6 +9,7 @@ const defaultSettings = {
     supabaseUrl: '',
     supabaseAnonKey: '',
     managementWorkerUrl: '', // URL for the DB management worker
+    adminSecretToken: '', // Token for the DB management function
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     enableEmailPolling: true, // For proactive email notifications
     enableAutoSync: true, // For background data synchronization
@@ -46,6 +48,7 @@ export function saveSettings(settings) {
             supabaseUrl: settings.supabaseUrl,
             supabaseAnonKey: settings.supabaseAnonKey,
             managementWorkerUrl: settings.managementWorkerUrl,
+            adminSecretToken: settings.adminSecretToken,
             timezone: settings.timezone,
             enableEmailPolling: settings.enableEmailPolling,
             enableAutoSync: settings.enableAutoSync,

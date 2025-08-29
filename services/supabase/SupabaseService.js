@@ -1,3 +1,4 @@
+
 import { GOOGLE_SCOPES } from '../../constants.js';
 
 // Helper function to safely parse date strings from Gmail API
@@ -444,39 +445,30 @@ export class SupabaseService {
         }
     }
 
-    // --- DB Management via Worker ---
-    async executeSql(workerUrl, sql) {
-        if (!workerUrl) throw new Error("Management worker URL is not configured.");
+    // --- DB Management via Supabase Edge Function ---
+    async executeSqlViaFunction(functionUrl, adminToken, sql) {
+        if (!functionUrl) throw new Error("URL функции не настроен.");
+        if (!adminToken) throw new Error("Токен администратора не предоставлен.");
         
-        const response = await fetch(workerUrl, {
+        const response = await fetch(`${functionUrl}/sql`, { // Endpoint might be just /sql as in example
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${adminToken}`, // Standard bearer token auth
+                'x-admin-token': adminToken, // Custom header as per example
             },
-            body: JSON.stringify({ query: sql }),
+            body: JSON.stringify({ sql: sql }),
         });
 
-        const text = await response.text();
+        const result = await response.json();
+
         if (!response.ok) {
-            console.error("Management worker error response:", text);
-            // Try to parse the error from the worker's JSON response
-            try {
-                 const errorJson = JSON.parse(text);
-                 if (errorJson.error) {
-                     throw new Error(`DB worker failed: ${errorJson.error}`);
-                 }
-            } catch (e) {
-                // Fallback if parsing fails
-            }
-            throw new Error(`DB management worker failed with status ${response.status}: ${text}`);
+            console.error("Edge function error response:", result);
+            const errorMessage = result.error || `Edge function failed with status ${response.status}`;
+            throw new Error(errorMessage);
         }
 
-        try {
-            return JSON.parse(text);
-        } catch (e) {
-            console.error("Failed to parse JSON response from worker:", text);
-            throw new Error("Received invalid JSON from the DB management worker.");
-        }
+        return result;
     }
 
 
