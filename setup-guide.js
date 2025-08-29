@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let state = {
         supabaseClient: null,
         user: null,
-        settings: {}, // Holds settings loaded from DB
+        settings: {},
         selectedProxies: [],
     };
     
@@ -105,9 +105,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- UI RENDERING & STATE MANAGEMENT ---
     
-    const showStep = (stepElement) => {
+    const showStep = (stepKey) => {
+        const stepElement = steps[stepKey];
+        if (!stepElement) return;
         Object.values(steps).forEach(s => s.style.display = 'none');
         stepElement.style.display = 'block';
+        window.scrollTo(0, 0);
     };
 
     const renderAuthenticatedState = async () => {
@@ -138,12 +141,14 @@ document.addEventListener('DOMContentLoaded', () => {
         state.selectedProxies = proxiesData || [];
         renderSelectedProxies();
         
-        showStep(steps.keys);
+        showStep('keys');
     };
     
     // --- EVENT HANDLERS ---
     
     buttons.connectLogin.addEventListener('click', async () => {
+        buttons.connectLogin.disabled = true;
+        buttons.connectLogin.textContent = 'Подключение...';
         setStatus(containers.authStatus, 'loading', 'Перенаправляем на страницу входа Google...');
         const { error } = await state.supabaseClient.auth.signInWithOAuth({
             provider: 'google',
@@ -151,6 +156,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (error) {
              setStatus(containers.authStatus, 'error', `Ошибка: ${error.message}`);
+             buttons.connectLogin.disabled = false;
+             buttons.connectLogin.textContent = 'Войти через Google';
         }
     });
 
@@ -167,15 +174,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         setStatus(containers.keysStatus, 'loading', 'Сохранение...');
+        buttons.saveKeys.disabled = true;
+
         const { error } = await state.supabaseClient.rpc('upsert_user_settings', { new_settings: settingsUpdate });
 
         if (error) {
             setStatus(containers.keysStatus, 'error', `Ошибка сохранения: ${error.message}`);
+            buttons.saveKeys.disabled = false;
         } else {
             state.settings = settingsUpdate;
             setStatus(containers.keysStatus, 'success', 'Ключи успешно сохранены в вашем аккаунте.');
             steps.keys.dataset.status = 'completed';
-            showStep(steps.proxy);
+            buttons.saveKeys.disabled = false;
+            showStep('proxy');
         }
     });
 
@@ -186,6 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         setStatus(containers.proxyFinderStatus, 'loading', 'Ищем прокси с помощью ИИ... Это может занять до минуты.');
         buttons.findProxies.disabled = true;
+        buttons.findProxies.textContent = 'Поиск...';
 
         try {
             const proxies = await findProxiesWithGemini(state.settings.geminiApiKey);
@@ -199,22 +211,24 @@ document.addEventListener('DOMContentLoaded', () => {
             setStatus(containers.proxyFinderStatus, 'error', error.message);
         } finally {
             buttons.findProxies.disabled = false;
+            buttons.findProxies.textContent = 'Найти прокси с помощью ИИ';
         }
     });
     
     buttons.saveProxies.addEventListener('click', async () => {
         setStatus(containers.proxyStatus, 'loading', 'Сохраняем прокси...');
-        
-        // First delete all existing proxies for the user to ensure a clean slate
+        buttons.saveProxies.disabled = true;
+
         const { error: deleteError } = await state.supabaseClient.from('proxies').delete().match({ user_id: state.user.id });
         if (deleteError) {
              setStatus(containers.proxyStatus, 'error', `Ошибка очистки старых прокси: ${deleteError.message}`);
+             buttons.saveProxies.disabled = false;
              return;
         }
 
         if (state.selectedProxies.length === 0) {
              steps.proxy.dataset.status = 'completed';
-             showStep(steps.final);
+             showStep('final');
              return;
         }
         
@@ -233,11 +247,16 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (error) {
             setStatus(containers.proxyStatus, 'error', `Ошибка сохранения: ${error.message}`);
+            buttons.saveProxies.disabled = false;
         } else {
             setStatus(containers.proxyStatus, 'success', `${proxiesToSave.length} прокси успешно сохранены.`);
             steps.proxy.dataset.status = 'completed';
-            setTimeout(() => showStep(steps.final), 1000);
+            showStep('final');
         }
+    });
+
+    document.querySelectorAll('.prev-button').forEach(btn => {
+        btn.addEventListener('click', () => showStep(btn.dataset.target));
     });
 
     // --- PROXY LISTS LOGIC ---
@@ -270,13 +289,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!item) return;
         const dot = item.querySelector('.proxy-status-dot');
         dot.dataset.status = status;
-        // Update data attribute for adding to selected list
-        dot.dataset.lastStatus = status;
+        item.dataset.lastStatus = status; // Save status for adding later
         const speedEl = item.querySelector('.speed-info');
         if (speed) {
             speedEl.textContent = ` | ${speed} мс`;
             speedEl.style.display = 'inline';
-            speedEl.dataset.lastSpeed = speed;
+            item.dataset.lastSpeed = speed; // Save speed for adding later
         } else {
             speedEl.style.display = 'none';
         }
@@ -310,14 +328,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (target.matches('.add-btn')) {
             if (state.selectedProxies.some(p => p.url === proxyUrl)) return;
-            const statusDot = item.querySelector('.proxy-status-dot');
-            const speedEl = item.querySelector('.speed-info');
             state.selectedProxies.push({ 
                 url: proxyUrl, 
                 geolocation: item.dataset.geo, 
                 alias: item.dataset.geo,
-                last_status: statusDot.dataset.lastStatus,
-                last_speed_ms: speedEl.dataset.lastSpeed
+                last_status: item.dataset.lastStatus,
+                last_speed_ms: item.dataset.lastSpeed
             });
             renderSelectedProxies();
         }
@@ -334,21 +350,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- INITIALIZATION ---
     
     const initialize = async () => {
-        showStep(steps.auth);
-
+        showStep('auth');
         state.supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
         state.supabaseClient.auth.onAuthStateChange(async (event, session) => {
             if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session) {
-                state.user = session.user;
-                await renderAuthenticatedState();
-                // Clean URL from auth tokens
+                if (!state.user) { // Prevent re-rendering if user is already set
+                    state.user = session.user;
+                    await renderAuthenticatedState();
+                }
+                // Clean URL from auth tokens after processing
                 if (window.location.hash.includes('access_token')) {
-                    history.pushState("", document.title, window.location.pathname + window.location.search);
+                    history.replaceState(null, document.title, window.location.pathname + window.location.search);
                 }
             }
         });
 
+        // Check for existing session on page load
         const { data: { session } } = await state.supabaseClient.auth.getSession();
         if (session) {
             state.user = session.user;

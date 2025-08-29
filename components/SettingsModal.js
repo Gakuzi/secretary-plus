@@ -189,13 +189,13 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                                         <p class="text-sm text-gray-400">Перетаскивайте для изменения приоритета.</p>
                                     </div>
                                     <div class="flex gap-2">
-                                        <button id="find-proxies-ai-button" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm font-semibold whitespace-nowrap">Найти ИИ</button>
+                                        <button id="find-proxies-ai-button" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm font-semibold whitespace-nowrap disabled:bg-indigo-800 disabled:cursor-not-allowed">Найти ИИ</button>
                                         <button id="add-proxy-button" class="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-sm font-semibold whitespace-nowrap">Добавить</button>
                                     </div>
                                 </div>
                                 <div id="proxy-list-container" class="space-y-2"></div>
                                  <div class="mt-4 pt-4 border-t border-gray-700">
-                                    <button id="cleanup-proxies-button" class="w-full px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold">Проверить все и удалить нерабочие</button>
+                                    <button id="cleanup-proxies-button" class="w-full px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold disabled:bg-gray-700 disabled:cursor-not-allowed">Проверить все и удалить нерабочие</button>
                                 </div>
                             </div>
                              <div id="proxy-editor-container"></div>
@@ -268,7 +268,7 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                         
                         <!-- About Tab -->
                         <div id="tab-about" class="settings-tab-content hidden space-y-6">
-                            <!-- About content remains the same -->
+                            <!-- About content is now loaded dynamically -->
                         </div>
                     </div>
                 </div>
@@ -302,12 +302,10 @@ export function createSettingsModal(currentSettings, authState, handlers) {
         onSave(newSettings);
     });
 
-    // ... (rest of the modal logic like AI analysis, tab switching, etc.)
-    // --- AI Error Analysis Modal ---
     function showErrorAnalysisModal(title, contentPromise) {
         const analysisModal = document.createElement('div');
         analysisModal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50';
-        analysisModal.style.zIndex = '60'; // Ensure it's above the settings modal
+        analysisModal.style.zIndex = '60';
 
         analysisModal.innerHTML = `
             <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col m-4">
@@ -488,8 +486,37 @@ export function createSettingsModal(currentSettings, authState, handlers) {
 
     const aboutTab = modalOverlay.querySelector('#tab-about');
     fetch('./app-info.json')
-        .then(response => response.json())
-        .then(data => { /* ... implementation to render about tab ... */ });
+        .then(response => response.ok ? response.json() : Promise.reject('File not found'))
+        .then(data => {
+            const changelogHtml = data.changelog.map(log => `
+                <div class="py-3 border-b border-gray-700/50 last:border-b-0">
+                    <div class="flex justify-between items-center">
+                        <h4 class="font-bold text-lg">Версия ${log.version}</h4>
+                        <span class="text-sm text-gray-400">${log.date}</span>
+                    </div>
+                    <ul class="list-disc list-inside mt-2 text-gray-300 text-sm space-y-1">
+                        ${log.changes.map(change => `<li>${change}</li>`).join('')}
+                    </ul>
+                </div>
+            `).join('');
+
+            aboutTab.innerHTML = `
+                <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                    <h3 class="text-xl font-bold">Секретарь+</h3>
+                    <p class="text-gray-400">Версия ${data.version}</p>
+                    <p class="mt-2 text-sm">Автор: ${data.author}</p>
+                    <p class="text-sm">Связаться: <a href="${data.contact}" target="_blank" class="text-blue-400 hover:underline">${data.contact}</a></p>
+                </div>
+                <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 mt-6">
+                     <h3 class="text-xl font-bold mb-3">История изменений</h3>
+                     ${changelogHtml}
+                </div>
+            `;
+        })
+        .catch(error => {
+            console.error("Could not load app info:", error);
+            aboutTab.innerHTML = `<p class="text-center text-gray-400">Не удалось загрузить информацию о приложении.</p>`;
+        });
 
 
     return modalOverlay;

@@ -34,7 +34,7 @@
                 </div>
                 <div class="step-content">
                     <p class="mb-6">Начните с входа в ваш аккаунт Google. Это позволит безопасно сохранять ваши настройки в облаке.</p>
-                     <div id="auth-status-container" class="mt-4 text-sm mb-4"></div>
+                     <div id="auth-status-container" class="mt-4 text-sm mb-4" style="display: none;"></div>
                     <button id="connect-login-button" class="wizard-nav-button next-button w-full text-center justify-center mt-4">
                         Войти через Google
                     </button>
@@ -60,8 +60,11 @@
                         <input type="text" id="google-client-id" placeholder="Вставьте ваш Google Client ID (для резервного подключения)">
                          <p class="note-text"><a href="https://console.cloud.google.com/apis/credentials" target="_blank">Получить Client ID в Google Cloud</a></p>
                     </div>
-                    <div id="keys-status-container" class="mt-4 text-sm"></div>
-                    <button id="save-keys-button" class="wizard-nav-button next-button w-full text-center justify-center mt-4">Сохранить и продолжить</button>
+                    <div id="keys-status-container" class="mt-4 text-sm" style="display: none;"></div>
+                    <div class="step-navigation">
+                        <button class="wizard-nav-button prev-button" data-target="auth">Назад</button>
+                        <button id="save-keys-button" class="wizard-nav-button next-button">Сохранить и продолжить</button>
+                    </div>
                 </div>
             </section>
 
@@ -72,7 +75,7 @@
                 </div>
                  <div class="step-content">
                     <p class="mb-4">Если доступ к Gemini API ограничен в вашем регионе, найдите и протестируйте рабочие прокси-серверы.</p>
-                    <button id="find-proxies-ai" class="wizard-nav-button next-button mb-4">Найти прокси с помощью ИИ</button>
+                    <button id="find-proxies-ai" class="wizard-nav-button find-button mb-4">Найти прокси с помощью ИИ</button>
                     <div id="proxy-finder-status" class="mt-2 text-sm"></div>
                     
                     <div class="grid md:grid-cols-2 gap-6 mt-6">
@@ -89,8 +92,11 @@
                             </div>
                         </div>
                     </div>
-                    <div id="proxy-status-container" class="mt-4 text-sm"></div>
-                    <button id="save-proxies-button" class="wizard-nav-button next-button w-full text-center justify-center mt-4">Сохранить и продолжить</button>
+                    <div id="proxy-status-container" class="mt-4 text-sm" style="display: none;"></div>
+                    <div class="step-navigation">
+                         <button class="wizard-nav-button prev-button" data-target="keys">Назад</button>
+                         <button id="save-proxies-button" class="wizard-nav-button next-button">Завершить настройку</button>
+                    </div>
                  </div>
             </section>
             
@@ -99,9 +105,9 @@
                     <div class="step-indicator">✓</div>
                     <h2 class="step-title">Настройка завершена!</h2>
                 </div>
-                <div class="step-content">
+                <div class="step-content text-center">
                     <p>Поздравляем! Ваш ассистент полностью настроен и готов к работе. Все данные сохранены в вашем облачном аккаунте.</p>
-                    <a href="./index.html" class="wizard-nav-button next-button w-full text-center justify-center mt-6">
+                    <a href="./index.html" class="wizard-nav-button next-button inline-flex text-center justify-center mt-6">
                         Перейти в приложение
                     </a>
                 </div>

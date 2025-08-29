@@ -785,8 +785,7 @@ ${payload.body}`;
     async function handleFindAndUpdateProxies() {
         if (!supabaseService) return;
         
-        const modal = document.getElementById('settings-content');
-        const findButton = modal?.querySelector('#find-proxies-ai-button');
+        const findButton = document.querySelector('#find-proxies-ai-button');
         if (findButton) {
             findButton.disabled = true;
             findButton.textContent = 'Поиск...';
@@ -821,8 +820,7 @@ ${payload.body}`;
     async function handleCleanupProxies() {
         if (!supabaseService || state.proxies.length === 0) return;
         
-        const modal = document.getElementById('settings-content');
-        const cleanupButton = modal?.querySelector('#cleanup-proxies-button');
+        const cleanupButton = document.querySelector('#cleanup-proxies-button');
         if(cleanupButton) {
             cleanupButton.disabled = true;
             cleanupButton.textContent = 'Тестирование...';
