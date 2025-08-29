@@ -92,6 +92,9 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                                         <div id="saved-proxy-list" class="space-y-2 max-h-48 overflow-y-auto pr-2">
                                             ${renderSavedProxies()}
                                         </div>
+                                        <button data-action="add-proxy" class="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold">
+                                            Добавить вручную
+                                        </button>
                                     </div>
                                     <!-- Right Panel: AI Finder -->
                                     <div>
@@ -297,6 +300,20 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                     managementWorkerUrl: modalElement.querySelector('#settings-management-worker-url')?.value.trim() || '',
                 };
                 onSave(newSettings);
+                break;
+            }
+            case 'add-proxy': {
+                const url = prompt('Введите URL прокси-сервера (например, http://user:pass@host:port):');
+                if (url) {
+                    try {
+                        // A simple validation
+                        new URL(url);
+                        await supabaseService.addProxy({ url: url.trim(), is_active: false });
+                        await loadSavedProxies();
+                    } catch (err) {
+                        alert(`Ошибка: неверный URL или не удалось сохранить прокси.\n\n${err.message}`);
+                    }
+                }
                 break;
             }
             case 'find-proxies': {
