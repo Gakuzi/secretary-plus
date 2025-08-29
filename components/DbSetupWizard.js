@@ -23,12 +23,12 @@ async function handleRequest(request) {
 
     // IMPORTANT: Replace with YOUR project reference ID
     const PROJECT_REF = 'YOUR_PROJECT_REF';
-    const SUPABASE_API_URL = \`https://api.supabase.com/v1/projects/\${PROJECT_REF}/sql\`;
+    const SUPABASE_API_URL = \`https://api.supabase.com/v1/projects/\${PROJECT_REF}/query\`;
 
     try {
-        const { sql } = await request.json();
-        if (!sql) {
-            return new Response(JSON.stringify({ error: '"sql" parameter is missing.' }), { status: 400, headers: corsHeaders() });
+        const { query } = await request.json();
+        if (!query) {
+            return new Response(JSON.stringify({ error: '"query" parameter is missing.' }), { status: 400, headers: corsHeaders() });
         }
 
         const response = await fetch(SUPABASE_API_URL, {
@@ -37,7 +37,7 @@ async function handleRequest(request) {
                 'Authorization': \`Bearer \${SUPABASE_MANAGEMENT_TOKEN}\`, // Token from Environment Variables
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ query: sql }),
+            body: JSON.stringify({ query: query }),
         });
 
         const responseText = await response.text();
@@ -80,6 +80,12 @@ function corsHeaders() {
 }
 `.trim();
 
+// Simple markdown helper for this component
+function markdownToHTML(text) {
+    if (!text) return '';
+    return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+}
+
 
 export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave }) {
     const wizardElement = document.createElement('div');
@@ -101,7 +107,7 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
 
         switch (stepConfig.id) {
             case 'intro':
-                contentHtml = `
+                contentHtml = markdownToHTML(`
                     <p class="mb-4">Этот мастер поможет вам настроить **"Управляющий воркер"** — безопасный сервис для автоматического обновления схемы вашей базы данных Supabase.</p>
                     <p class="mb-4">Это необходимо для добавления новых функций в приложение без риска потери данных.</p>
                     <div class="p-3 bg-gray-900 border border-gray-700 rounded-md text-sm space-y-2">
@@ -111,7 +117,7 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                             <li>Токен доступа к вашему аккаунту Supabase.</li>
                         </ul>
                     </div>
-                `;
+                `);
                 break;
 
             case 'get-token':
@@ -154,12 +160,12 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                         <input type="text" id="project-ref-input" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 font-mono text-sm" value="${state.projectRef}" placeholder="abcdefghijklmnopqrst">
                         <p class="text-xs text-gray-500 mt-1">ID был автоматически определен из ваших настроек. При необходимости исправьте его.</p>
                     </div>
-                    <div class="guide-code-block">
-                        <div class="flex justify-between items-center bg-gray-900 px-4 py-2 border-b border-gray-700 text-xs text-gray-400">
+                    <div class="rounded-md border border-gray-700">
+                        <div class="flex justify-between items-center bg-gray-900 px-4 py-2 text-xs text-gray-400 rounded-t-md">
                             <span>JAVASCRIPT (CLOUDFLARE WORKER)</span>
-                            <button class="copy-code-button" data-action="copy-code">Копировать</button>
+                            <button class="text-xs font-semibold bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded-md transition-colors" data-action="copy-code">Копировать</button>
                         </div>
-                        <pre><code id="worker-code-block" class="text-xs">${codeWithRef}</code></pre>
+                        <pre class="p-4 bg-gray-900/50 rounded-b-md overflow-x-auto"><code id="worker-code-block" class="text-sm whitespace-pre font-mono">${codeWithRef}</code></pre>
                     </div>
                      <p class="mt-4">После вставки кода нажмите <strong>Save and Deploy</strong> в интерфейсе Cloudflare.</p>
                 `;
@@ -197,8 +203,8 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                 ${state.currentStep > 0 ? `<button data-action="back" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold">Назад</button>` : ''}
             </div>
             ${state.currentStep < WIZARD_STEPS.length - 1 ? 
-                `<button data-action="next" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold" ${isNextDisabled ? 'disabled' : ''}>Далее</button>` : 
-                `<button data-action="finish" class="px-6 py-2 bg-green-600 hover:bg-green-700 rounded-md font-semibold" ${state.testStatus !== 'ok' ? 'disabled' : ''}>Сохранить и закрыть</button>`
+                `<button data-action="next" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed" ${isNextDisabled ? 'disabled' : ''}>Далее</button>` : 
+                `<button data-action="finish" class="px-6 py-2 bg-green-600 hover:bg-green-700 rounded-md font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed" ${state.testStatus !== 'ok' ? 'disabled' : ''}>Сохранить и закрыть</button>`
             }
         `;
 
@@ -260,7 +266,7 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                     const response = await fetch(state.workerUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ sql: 'SELECT 1;' }),
+                        body: JSON.stringify({ query: 'SELECT 1;' }),
                     });
                     if (!response.ok) {
                         const errorText = await response.text();
@@ -268,6 +274,10 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                     }
                     const data = await response.json();
                     if (!Array.isArray(data) || data[0]['?column?'] !== 1) {
+                         // Check for a common error from Supabase API when token is missing/wrong in the worker
+                        if (JSON.stringify(data).includes("Authentication failed")) {
+                             throw new Error('Ошибка аутентификации. Проверьте токен, сохраненный в переменных окружения воркера.');
+                        }
                         throw new Error('Воркер вернул неожиданный ответ.');
                     }
                     state.testStatus = 'ok';
