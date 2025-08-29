@@ -172,14 +172,14 @@ export class GoogleServiceProvider {
         };
     }
 
-    async getCalendarEvents({ time_min, time_max, max_results = 10 }) {
+    async getCalendarEvents({ time_min, time_max, max_results = 1000, showDeleted = false }) {
         await this.ensureGapiIsReady();
         await this.gapi.client.load('calendar', 'v3');
         const response = await this.gapi.client.calendar.events.list({
             'calendarId': 'primary',
-            'timeMin': time_min || (new Date()).toISOString(),
+            'timeMin': time_min, // If undefined, fetches all future events
             'timeMax': time_max,
-            'showDeleted': false,
+            'showDeleted': showDeleted,
             'singleEvents': true,
             'maxResults': max_results,
             'orderBy': 'startTime'
@@ -236,8 +236,8 @@ export class GoogleServiceProvider {
 
         const response = await this.gapi.client.people.people.connections.list({
             resourceName: 'people/me',
-            personFields: 'names,emailAddresses,phoneNumbers,photos',
-            pageSize: 1000,
+            personFields: 'names,emailAddresses,phoneNumbers,photos,addresses,organizations,birthdays',
+            pageSize: 2000,
         });
 
         return response.result.connections || [];
@@ -278,7 +278,7 @@ export class GoogleServiceProvider {
         do {
             const response = await this.gapi.client.drive.files.list({
                 q: `trashed = false and 'me' in owners`,
-                fields: 'nextPageToken, files(id, name, webViewLink, iconLink, mimeType, createdTime, modifiedTime, viewedByMeTime, size, owners(displayName))',
+                fields: 'nextPageToken, files(id, name, webViewLink, iconLink, mimeType, createdTime, modifiedTime, viewedByMeTime, size, owners(displayName), lastModifyingUser(displayName))',
                 spaces: 'drive',
                 pageSize: 1000,
                 pageToken: pageToken,
@@ -379,15 +379,28 @@ export class GoogleServiceProvider {
         return response.result;
     }
 
-    async getTasks({ max_results = 20 }) {
+    async getTasks({ max_results = 1000, showCompleted = true, showHidden = true }) {
         await this.ensureGapiIsReady();
         await this.gapi.client.load('tasks', 'v1');
-        const response = await this.gapi.client.tasks.tasks.list({
-            tasklist: '@default',
-            maxResults: max_results,
-            showCompleted: false,
-        });
-        return response.result.items || [];
+        
+        const tasklistsResponse = await this.gapi.client.tasks.tasklists.list();
+        const tasklists = tasklistsResponse.result.items;
+        let allTasks = [];
+
+        if (tasklists && tasklists.length > 0) {
+            for (const tasklist of tasklists) {
+                const tasksResponse = await this.gapi.client.tasks.tasks.list({
+                    tasklist: tasklist.id,
+                    maxResults: max_results,
+                    showCompleted: showCompleted,
+                    showHidden: showHidden,
+                });
+                if (tasksResponse.result.items) {
+                    allTasks = allTasks.concat(tasksResponse.result.items);
+                }
+            }
+        }
+        return allTasks;
     }
 
     async createTask(details) {

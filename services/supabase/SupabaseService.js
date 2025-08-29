@@ -7,8 +7,6 @@ function parseGmailDate(dateString) {
         const date = new Date(dateString);
         // Check if the parsed date is valid
         if (isNaN(date.getTime())) {
-            // Attempt to parse more complex date formats if needed,
-            // but for now, returning null is the safest option.
             console.warn(`Could not parse invalid date string: ${dateString}`);
             return null;
         }
@@ -52,187 +50,154 @@ export class SupabaseService {
         return this.client.auth.onAuthStateChange(callback);
     }
     
-    // --- Data Sync ---
-    
-    /**
-     * Synchronizes Google Contacts with the Supabase database.
-     * @param {Array<Object>} googleContacts - Array of contact objects from Google People API.
-     * @returns {Promise<{synced: number, failed: number}>} - The result of the sync operation.
-     */
-    async syncContacts(googleContacts) {
+    // --- Data Sync (New logic with Soft Deletes) ---
+
+    async #genericSync(tableName, googleItems, formatterFn, idExtractorFn = item => item.id) {
         const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
 
-        const formattedContacts = googleContacts.map(c => ({
-            user_id: user.id,
-            source: 'google',
-            source_id: c.resourceName.split('/')[1],
-            display_name: c.names?.[0]?.displayName || null,
-            email: c.emailAddresses?.[0]?.value || null,
-            phone: c.phoneNumbers?.[0]?.value || null,
-            avatar_url: c.photos?.[0]?.url || null,
-        })).filter(c => c.display_name); // Only sync contacts with names
+        const googleSourceIds = new Set(googleItems.map(idExtractorFn));
 
-        // Upsert in chunks to avoid payload size limits
-        const chunkSize = 500;
-        let syncedCount = 0;
-        for (let i = 0; i < formattedContacts.length; i += chunkSize) {
-            const chunk = formattedContacts.slice(i, i + chunkSize);
-            const { error } = await this.client
-                .from('contacts')
-                .upsert(chunk, { onConflict: 'user_id,source,source_id', ignoreDuplicates: false });
+        const { data: existingItems, error: fetchError } = await this.client
+            .from(tableName)
+            .select('source_id')
+            .eq('user_id', user.id)
+            .eq('is_deleted', false);
 
-            if (error) {
-                console.error("Error syncing contacts chunk:", error);
-                throw error;
+        if (fetchError) {
+            console.error(`Error fetching existing items from ${tableName}:`, fetchError);
+            throw fetchError;
+        }
+        const supabaseSourceIds = new Set(existingItems.map(item => item.source_id));
+
+        const deletedSourceIds = [...supabaseSourceIds].filter(id => !googleSourceIds.has(id));
+
+        if (deletedSourceIds.length > 0) {
+            const { error: deleteError } = await this.client
+                .from(tableName)
+                .update({ is_deleted: true, updated_at: new Date().toISOString() })
+                .eq('user_id', user.id)
+                .in('source_id', deletedSourceIds);
+
+            if (deleteError) {
+                console.error(`Error marking items in ${tableName} as deleted:`, deleteError);
+                throw deleteError;
             }
-            syncedCount += chunk.length;
         }
 
-        return { synced: syncedCount };
+        if (googleItems.length > 0) {
+            const formattedItems = googleItems.map(item => formatterFn(item, user.id));
+            const { error: upsertError } = await this.client
+                .from(tableName)
+                .upsert(formattedItems, { onConflict: 'user_id,source_id' });
+
+            if (upsertError) {
+                console.error(`Error upserting items to ${tableName}:`, upsertError);
+                throw upsertError;
+            }
+        }
     }
     
-     /**
-     * Synchronizes Google Drive files with the Supabase database.
-     * @param {Array<Object>} googleFiles - Array of file objects from Google Drive API.
-     * @returns {Promise<{synced: number, failed: number}>} - The result of the sync operation.
-     */
+    async syncContacts(googleContacts) {
+        return this.#genericSync(
+            'contacts',
+            googleContacts.filter(c => c.names?.[0]?.displayName), // Only sync contacts with names
+            (c, userId) => ({
+                user_id: userId,
+                source_id: c.resourceName.split('/')[1],
+                display_name: c.names?.[0]?.displayName || null,
+                email: c.emailAddresses?.[0]?.value || null,
+                phone: c.phoneNumbers?.[0]?.value || null,
+                avatar_url: c.photos?.[0]?.url || null,
+                addresses: c.addresses,
+                organizations: c.organizations,
+                birthdays: c.birthdays,
+                is_deleted: false,
+            }),
+            c => c.resourceName.split('/')[1]
+        );
+    }
+    
     async syncFiles(googleFiles) {
-        const { data: { user } } = await this.client.auth.getUser();
-        if (!user) throw new Error("User not authenticated.");
-
-        const formattedFiles = googleFiles.map(f => ({
-            user_id: user.id,
-            source: 'google_drive',
-            source_id: f.id,
-            name: f.name,
-            mime_type: f.mimeType,
-            url: f.webViewLink,
-            icon_link: f.iconLink,
-            created_time: f.createdTime,
-            modified_time: f.modifiedTime,
-            viewed_by_me_time: f.viewedByMeTime,
-            size: f.size ? parseInt(f.size, 10) : null,
-            owner: f.owners?.[0]?.displayName || null,
-        }));
-        
-        // Supabase has a limit on how many rows can be inserted at once, so we do it in chunks.
-        const chunkSize = 500;
-        let syncedCount = 0;
-        for (let i = 0; i < formattedFiles.length; i += chunkSize) {
-            const chunk = formattedFiles.slice(i, i + chunkSize);
-            const { error } = await this.client
-                .from('files')
-                .upsert(chunk, { onConflict: 'user_id,source,source_id', ignoreDuplicates: false });
-
-            if (error) {
-                console.error("Error syncing files chunk:", error);
-                throw error; // Stop on first error
-            }
-            syncedCount += chunk.length;
-        }
-
-        return { synced: syncedCount };
+        return this.#genericSync(
+            'files',
+            googleFiles,
+            (f, userId) => ({
+                user_id: userId,
+                source_id: f.id,
+                name: f.name,
+                mime_type: f.mimeType,
+                url: f.webViewLink,
+                icon_link: f.iconLink,
+                created_time: f.createdTime,
+                modified_time: f.modifiedTime,
+                viewed_by_me_time: f.viewedByMeTime,
+                size: f.size ? parseInt(f.size, 10) : null,
+                owner: f.owners?.[0]?.displayName || null,
+                permissions: f.permissions,
+                last_modifying_user: f.lastModifyingUser?.displayName,
+                is_deleted: false,
+            })
+        );
     }
 
     async syncCalendarEvents(googleEvents) {
-        const { data: { user } } = await this.client.auth.getUser();
-        if (!user) throw new Error("User not authenticated.");
-
-        const formattedEvents = googleEvents.map(e => ({
-            user_id: user.id,
-            source_id: e.id,
-            title: e.summary,
-            description: e.description,
-            start_time: e.start?.dateTime || e.start?.date,
-            end_time: e.end?.dateTime || e.end?.date,
-            event_link: e.htmlLink,
-            meet_link: e.hangoutLink,
-        }));
-
-        // Upsert in chunks to avoid payload size limits
-        const chunkSize = 500;
-        let syncedCount = 0;
-        for (let i = 0; i < formattedEvents.length; i += chunkSize) {
-            const chunk = formattedEvents.slice(i, i + chunkSize);
-            const { error } = await this.client
-                .from('calendar_events')
-                .upsert(chunk, { onConflict: 'user_id,source_id', ignoreDuplicates: false });
-
-            if (error) {
-                 console.error("Error syncing calendar events chunk:", error);
-                throw error;
-            }
-            syncedCount += chunk.length;
-        }
-
-        return { synced: syncedCount };
+         return this.#genericSync(
+            'calendar_events',
+            googleEvents,
+            (e, userId) => ({
+                user_id: userId,
+                source_id: e.id,
+                title: e.summary,
+                description: e.description,
+                start_time: e.start?.dateTime || e.start?.date,
+                end_time: e.end?.dateTime || e.end?.date,
+                event_link: e.htmlLink,
+                meet_link: e.hangoutLink,
+                attendees: e.attendees,
+                status: e.status,
+                creator_email: e.creator?.email,
+                is_all_day: !!e.start?.date && !e.start?.dateTime,
+                is_deleted: e.status === 'cancelled',
+            })
+        );
     }
 
     async syncTasks(googleTasks) {
-        const { data: { user } } = await this.client.auth.getUser();
-        if (!user) throw new Error("User not authenticated.");
-
-        const formattedTasks = googleTasks.map(t => ({
-            user_id: user.id,
-            source_id: t.id,
-            title: t.title,
-            notes: t.notes,
-            due_date: t.due,
-            status: t.status,
-        }));
-
-        // Upsert in chunks for consistency, although tasks are usually fewer.
-        const chunkSize = 500;
-        let syncedCount = 0;
-        for (let i = 0; i < formattedTasks.length; i += chunkSize) {
-            const chunk = formattedTasks.slice(i, i + chunkSize);
-            const { error } = await this.client
-                .from('tasks')
-                .upsert(chunk, { onConflict: 'user_id,source_id', ignoreDuplicates: false });
-
-            if (error) {
-                 console.error("Error syncing tasks chunk:", error);
-                throw error;
-            }
-            syncedCount += chunk.length;
-        }
-        
-        return { synced: syncedCount };
+         return this.#genericSync(
+            'tasks',
+            googleTasks,
+            (t, userId) => ({
+                user_id: userId,
+                source_id: t.id,
+                title: t.title,
+                notes: t.notes,
+                due_date: t.due,
+                status: t.status,
+                completed_at: t.completed,
+                parent_task_id: t.parent,
+                is_deleted: false,
+            })
+        );
     }
 
     async syncEmails(googleEmails) {
-        const { data: { user } } = await this.client.auth.getUser();
-        if (!user) throw new Error("User not authenticated.");
-
-        const formattedEmails = googleEmails.map(e => ({
-            user_id: user.id,
-            source_id: e.id,
-            subject: e.subject,
-            sender: e.from,
-            snippet: e.snippet,
-            received_at: parseGmailDate(e.date),
-        }));
-
-        // Upsert in chunks to avoid payload size limits
-        const chunkSize = 500;
-        let syncedCount = 0;
-        for (let i = 0; i < formattedEmails.length; i += chunkSize) {
-            const chunk = formattedEmails.slice(i, i + chunkSize);
-            const { error } = await this.client
-                .from('emails')
-                .upsert(chunk, { onConflict: 'user_id,source_id', ignoreDuplicates: false });
-
-            if (error) {
-                console.error("Error syncing emails chunk:", error);
-                throw error;
-            }
-            syncedCount += chunk.length;
-        }
-        
-        return { synced: syncedCount };
+        return this.#genericSync(
+            'emails',
+            googleEmails,
+            (e, userId) => ({
+                user_id: userId,
+                source_id: e.id,
+                subject: e.subject,
+                sender: e.from,
+                snippet: e.snippet,
+                received_at: parseGmailDate(e.date),
+                full_body: e.body,
+                attachments_metadata: e.attachments,
+                is_deleted: false,
+            })
+        );
     }
-
 
     // --- Data Retrieval (from local cache) ---
     
@@ -240,6 +205,7 @@ export class SupabaseService {
         let query = this.client
             .from('calendar_events')
             .select('*')
+            .eq('is_deleted', false)
             .order('start_time', { ascending: true })
             .gte('start_time', time_min || new Date().toISOString())
             .limit(max_results);
@@ -267,6 +233,7 @@ export class SupabaseService {
         const { data, error } = await this.client
             .from('tasks')
             .select('*')
+            .eq('is_deleted', false)
             .neq('status', 'completed')
             .order('due_date', { ascending: true, nullsFirst: true })
             .limit(max_results);
@@ -286,6 +253,7 @@ export class SupabaseService {
         const { data, error } = await this.client
             .from('contacts')
             .select('*')
+            .eq('is_deleted', false)
             .or(`display_name.ilike.%${query}%,email.ilike.%${query}%`) // Case-insensitive search
             .limit(10);
             
@@ -297,6 +265,7 @@ export class SupabaseService {
          const { data, error } = await this.client
             .from('files')
             .select('*')
+            .eq('is_deleted', false)
             .ilike('name', `%${query}%`) // Case-insensitive search
             .order('modified_time', { ascending: false, nullsFirst: false })
             .limit(10);
@@ -396,7 +365,6 @@ export class SupabaseService {
             .select('settings')
             .single();
         
-        // PGRST116: Supabase error for "No rows found"
         if (error && error.code !== 'PGRST116') {
             console.error('Error fetching user settings:', error);
             throw error;
@@ -433,14 +401,12 @@ export class SupabaseService {
     async getSampleData(tableName, limit = 10) {
         if (!tableName) throw new Error("Table name is required.");
         
-        // This is a special case for the 'notes' table which does not have a 'created_at' column by default in the old schema
-        // We order by 'updated_at' to be safe. If 'updated_at' does not exist, it will fallback to natural order.
         const orderColumn = ['notes', 'files', 'contacts'].includes(tableName) ? 'updated_at' : 'created_at';
 
         const { data, error } = await this.client
             .from(tableName)
             .select('*')
-            .order(orderColumn, { ascending: false })
+            .order(orderColumn, { ascending: false, nullsFirst: true })
             .limit(limit);
             
         if (error) {
@@ -478,7 +444,6 @@ export class SupabaseService {
             .single();
 
         if (error) {
-             // Handle unique constraint violation gracefully
             if (error.code === '23505') {
                  const { data: updateData, error: updateError } = await this.client
                     .from('proxies')
@@ -515,5 +480,34 @@ export class SupabaseService {
 
         if (error) throw error;
         return { success: true };
+    }
+
+    // --- Schema Management ---
+    async executeSql(managementWorkerUrl, sqlScript) {
+        if (!managementWorkerUrl) {
+            throw new Error("Management Worker URL is not configured.");
+        }
+        
+        const { data: { session } } = await this.client.auth.getSession();
+        if (!session || !session.provider_token) {
+            throw new Error("User is not authenticated or provider token is missing.");
+        }
+
+        const response = await fetch(managementWorkerUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                // Pass the Google token to the worker for potential validation if needed
+                'Authorization': `Bearer ${session.provider_token}`
+            },
+            body: JSON.stringify({ sql: sqlScript }),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Schema update failed with status ${response.status}: ${errorText}`);
+        }
+
+        return await response.json();
     }
 }
