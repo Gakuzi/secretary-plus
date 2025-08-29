@@ -3,6 +3,7 @@
 
 
 
+
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
@@ -91,15 +92,8 @@ const serviceProviders = {
 };
 
 // --- DOM ELEMENTS ---
-const appContainer = document.getElementById('app');
-const authContainer = document.getElementById('auth-container');
-const mainContent = document.getElementById('main-content');
-const settingsButton = document.getElementById('settings-button');
-const helpButton = document.getElementById('help-button');
-const statsButton = document.getElementById('stats-button');
-const modalContainer = document.getElementById('modal-container');
-const cameraViewContainer = document.getElementById('camera-view-container');
-const wizardContainer = document.getElementById('setup-wizard-container');
+// These will be populated after the app's structure is rendered.
+let appContainer, authContainer, mainContent, settingsButton, helpButton, statsButton, modalContainer, cameraViewContainer, wizardContainer;
 
 // --- ERROR HANDLING ---
 function showSystemError(text) {
@@ -110,7 +104,7 @@ function showSystemError(text) {
 function updateProxyStatusIndicator(status) {
     if (state.proxyStatus === status && status !== 'connecting') return; 
     state.proxyStatus = status;
-    const profileButton = authContainer.querySelector('button');
+    const profileButton = authContainer?.querySelector('button');
     if (profileButton) {
         profileButton.classList.remove('proxy-status-ok', 'proxy-status-error', 'proxy-status-off', 'proxy-status-connecting');
         profileButton.classList.add(`proxy-status-${status}`);
@@ -544,30 +538,41 @@ function setupEmailPolling() {
 // by the user through the new DbSetupWizard component which calls a secure Supabase Edge Function.
 
 
-// --- MAIN APP INITIALIZATION ---
-async function main() {
+// --- APP STARTUP LOGIC ---
+/**
+ * Renders the main application UI, hooks up event listeners, and decides
+ * whether to show the setup wizard or the main chat interface.
+ */
+async function startFullApp() {
+    // Populate global DOM element variables
+    appContainer = document.getElementById('app');
+    authContainer = document.getElementById('auth-container');
+    mainContent = document.getElementById('main-content');
+    settingsButton = document.getElementById('settings-button');
+    helpButton = document.getElementById('help-button');
+    statsButton = document.getElementById('stats-button');
+    modalContainer = document.getElementById('modal-container');
+    cameraViewContainer = document.getElementById('camera-view-container');
+    wizardContainer = document.getElementById('setup-wizard-container');
+
+    // Hook up header button listeners
     settingsButton.innerHTML = SettingsIcon;
     statsButton.innerHTML = ChartBarIcon;
     helpButton.innerHTML = QuestionMarkCircleIcon;
     settingsButton.addEventListener('click', showSettingsModal);
     helpButton.addEventListener('click', showHelpModal);
     statsButton.addEventListener('click', showStatsModal);
-
-    // Check if we are returning from an OAuth flow.
-    // This is the most critical part of the fix to prevent wiping state.
-    const isAuthCallback = window.location.hash.includes('access_token') && window.location.hash.includes('provider_token');
-
+    
     const settings = getSettings();
     const savedWizardState = sessionStorage.getItem('wizardState');
 
-    // Condition to show the initial setup wizard:
-    // - No Gemini API key is saved.
-    // - AND we are NOT in the middle of an auth callback.
-    if (!settings.geminiApiKey && !isAuthCallback) {
-        // This is a true first run. Clear any potentially conflicting old data.
-        localStorage.removeItem('secretary-plus-settings-v4');
-        localStorage.removeItem('secretary-plus-sync-status-v1');
-        sessionStorage.removeItem('wizardState');
+    // Condition to show the initial setup wizard
+    if (!settings.geminiApiKey) {
+        // If this is a true first run, clear any potentially conflicting old data.
+        if (!savedWizardState) {
+            localStorage.removeItem('secretary-plus-settings-v4');
+            localStorage.removeItem('secretary-plus-sync-status-v1');
+        }
         
         wizardContainer.innerHTML = '';
         const wizard = createSetupWizard({
@@ -585,47 +590,78 @@ async function main() {
             googleProvider,
             supabaseConfig: SUPABASE_CONFIG,
             googleClientId: GOOGLE_CLIENT_ID,
-            resumeState: null // Cleared state, so no resume
+            resumeState: savedWizardState ? JSON.parse(savedWizardState) : null
         });
         wizardContainer.appendChild(wizard);
     } else {
-        // This path is for returning users OR for the auth callback.
-        // Initialize all services first. This allows the Supabase client
-        // to process the token from the URL hash if it's an auth callback.
+        // All settings are present. Initialize services and render the main app.
         await initializeAppServices();
-
-        // After services are initialized and auth is potentially handled,
-        // check if settings are still incomplete (e.g., missing API key).
-        if (!state.settings.geminiApiKey) {
-            // We might be authenticated now but still need to complete the setup.
-            wizardContainer.innerHTML = '';
-            const wizard = createSetupWizard({
-                onComplete: async (newSettings) => {
-                    state.settings = newSettings;
-                    saveSettings(newSettings);
-                    wizardContainer.innerHTML = '';
-                    // Re-initialize services with the newly saved settings.
-                    await initializeAppServices();
-                    renderMainContent();
-                },
-                onExit: () => {
-                    wizardContainer.innerHTML = '';
-                    // Even if wizard is exited, render the main content.
-                    // The app will be in a limited state.
-                    renderMainContent();
-                },
-                googleProvider,
-                supabaseConfig: SUPABASE_CONFIG,
-                googleClientId: GOOGLE_CLIENT_ID,
-                // Pass the saved state to resume the wizard at the correct step.
-                resumeState: savedWizardState ? JSON.parse(savedWizardState) : null
-            });
-            wizardContainer.appendChild(wizard);
-        } else {
-            // All settings are present. Render the main application interface.
-            renderMainContent();
-        }
+        renderMainContent();
     }
 }
 
-main();
+/**
+ * Main entry point. Decides whether to handle an auth callback or start the app normally.
+ */
+async function main() {
+    const isAuthCallback = window.location.hash.includes('access_token');
+    const settings = getSettings();
+
+    // If we are returning from a Supabase OAuth flow, we must handle it first.
+    if (isAuthCallback && settings.isSupabaseEnabled) {
+        // Display a simple loading message to the user.
+        document.body.innerHTML = `
+            <div class="flex items-center justify-center h-screen bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300">
+                Завершение входа...
+            </div>`;
+
+        // Initialize Supabase early to handle the auth event.
+        const tempSupabaseService = new SupabaseService(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+        
+        // Wait for the SIGNED_IN event from Supabase, which confirms the session is created from the URL hash.
+        await new Promise(resolve => {
+            const { data: { subscription } } = tempSupabaseService.onAuthStateChange((event, session) => {
+                if (event === 'SIGNED_IN' && session) {
+                    subscription.unsubscribe(); // Stop listening after we're signed in.
+                    resolve(session);
+                }
+            });
+        });
+
+        // Clean the URL hash to prevent reprocessing.
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        
+        // Now that authentication is complete, reload the original body and start the full app.
+        document.body.className = "font-sans bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-100 h-screen overflow-hidden flex flex-col";
+        document.body.innerHTML = `
+            <div id="app" class="flex flex-col h-full">
+                <header class="flex justify-between items-center p-2 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0 bg-white dark:bg-slate-800 shadow-sm">
+                    <a href="https://gakuzi.github.io/secretary-plus/" target="_blank" rel="noopener noreferrer" class="flex items-center gap-3" aria-label="Домашняя страница Секретарь+">
+                        <div id="header-logo-container" class="w-10 h-10"></div>
+                        <h1 class="text-xl font-bold text-slate-800 dark:text-slate-100">Секретарь+</h1>
+                    </a>
+                    <div class="flex items-center gap-2">
+                        <div id="auth-container" class="relative"></div>
+                        <button id="stats-button" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Статистика"></button>
+                        <button id="help-button" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Помощь"></button>
+                        <button id="settings-button" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Настройки"></button>
+                    </div>
+                </header>
+                <main id="main-content" class="flex-1 overflow-hidden relative"></main>
+            </div>
+            <div id="setup-wizard-container"></div>
+            <div id="modal-container"></div>
+            <div id="camera-view-container" class="hidden"></div>
+        `;
+        await startFullApp();
+
+    } else {
+        // This is a normal app start (not an auth callback).
+        await startFullApp();
+    }
+}
+
+main().catch(error => {
+    console.error("An unhandled error occurred during app startup:", error);
+    document.body.innerHTML = `<div class="p-4 text-red-500">A critical error occurred. Please check the console.</div>`;
+});
