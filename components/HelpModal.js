@@ -1,4 +1,4 @@
-import { QuestionMarkCircleIcon, CodeIcon, AlertTriangleIcon, SettingsIcon } from './icons/Icons.js';
+import { QuestionMarkCircleIcon, CodeIcon, AlertTriangleIcon, SettingsIcon, TelegramIcon } from './icons/Icons.js';
 import { getSettings } from '../utils/storage.js';
 import { SUPABASE_CONFIG } from '../config.js';
 
@@ -231,7 +231,7 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                                 Запустите интерактивный мастер для пошаговой настройки "Управляющего воркера", который необходим для безопасного обновления схемы вашей базы данных.
                             </p>
                              <button data-action="launch-db-wizard" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md font-semibold transition-colors">
-                                ${Icons.SettingsIcon}
+                                ${SettingsIcon}
                                 <span>Запустить мастер настройки БД</span>
                             </button>
                         </div>
@@ -259,7 +259,7 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                             <h3 class="text-lg font-semibold text-gray-200">Обратная связь</h3>
                             <p class="text-sm text-gray-400 mt-1 mb-4">Если у вас есть вопросы, предложения или вы столкнулись с ошибкой, которую не удалось решить, вы можете связаться с автором напрямую.</p>
                             <a href="https://t.me/eklimov" target="_blank" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 rounded-md font-semibold transition-colors">
-                                ${Icons.TelegramIcon.replace('fill="currentColor"', 'fill="white"')}
+                                ${TelegramIcon.replace('fill="currentColor"', 'fill="white"')}
                                 <span>Написать в Telegram</span>
                             </a>
                              <p class="text-xs text-gray-500 mt-4 text-center">
