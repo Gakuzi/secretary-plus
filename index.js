@@ -8,6 +8,7 @@ import { createSettingsModal } from './components/SettingsModal.js';
 import { createProfileModal } from './components/ProfileModal.js';
 import { createStatsModal } from './components/StatsModal.js';
 import { createHelpModal } from './components/HelpModal.js';
+import { createDbSetupWizard } from './components/DbSetupWizard.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
@@ -434,6 +435,26 @@ function showSetupWizard(resumeState = null) {
     wizardContainer.appendChild(wizard);
 }
 
+function showDbSetupWizard() {
+    modalContainer.innerHTML = '';
+    const onSave = async (newSettings) => {
+        state.settings = newSettings;
+        saveSettings(newSettings);
+        if (state.isSupabaseReady && supabaseService) {
+            await supabaseService.saveUserSettings(newSettings);
+        }
+        modalContainer.innerHTML = '';
+        await initializeAppServices();
+    };
+    const modal = createDbSetupWizard({
+        settings: state.settings,
+        supabaseConfig: SUPABASE_CONFIG,
+        onClose: () => modalContainer.innerHTML = '',
+        onSave,
+    });
+    modalContainer.appendChild(modal);
+}
+
 function showSettingsModal() {
     modalContainer.innerHTML = '';
     const onSave = async (newSettings) => {
@@ -450,6 +471,10 @@ function showSettingsModal() {
         supabaseService: supabaseService,
         onClose: () => modalContainer.innerHTML = '',
         onSave,
+        onLaunchDbWizard: () => {
+            modalContainer.innerHTML = ''; // Close settings modal first
+            showDbSetupWizard();
+        },
     });
     modalContainer.appendChild(modal);
 }
@@ -537,6 +562,10 @@ function showHelpModal(options = {}) {
         settings: state.settings,
         analyzeErrorFn,
         onRelaunchWizard,
+        onLaunchDbWizard: () => {
+            modalContainer.innerHTML = ''; // Close help modal first
+            showDbSetupWizard();
+        },
         initialTab: options.initialTab || 'error-analysis'
     });
     modalContainer.appendChild(modal);

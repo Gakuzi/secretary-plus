@@ -2,13 +2,12 @@ import { getSettings, saveSettings } from '../utils/storage.js';
 import { testProxyConnection, findProxiesWithGemini } from '../services/geminiService.js';
 import * as Icons from './icons/Icons.js';
 
-export function createSettingsModal({ settings, supabaseService, onClose, onSave }) {
+export function createSettingsModal({ settings, supabaseService, onClose, onSave, onLaunchDbWizard }) {
     const modalElement = document.createElement('div');
     modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
 
     let state = {
         isLoading: false,
-        isUpdatingSchema: false,
     };
     
     const showProxyManagerModal = () => {
@@ -148,12 +147,11 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                     break;
                 case 'retest-proxy':
                 case 'test-found-proxy':
-                     // Simplified test feedback
                     target.textContent = '...';
                     target.disabled = true;
-                    const result = await testProxyConnection({ proxyUrl: url });
+                    const result = await testProxyConnection({ proxyUrl: url, apiKey: settings.geminiApiKey });
                      if (id) { // Retesting a saved proxy
-                        await supabaseService.updateProxy(id, { last_status: result.status, last_speed_ms: result.speed, geolocation: result.geolocation });
+                        await supabaseService.updateProxy(id, { last_status: result.status, last_speed_ms: result.speed });
                         await loadSavedProxies();
                      } else { // Testing a found proxy
                         alert(`Тест ${result.status === 'ok' ? 'пройден' : 'не пройден'}\nСкорость: ${result.speed || 'N/A'}\n${result.message}`);
@@ -261,7 +259,7 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                                     ${settings.isSupabaseEnabled && supabaseService ? `
                                     <div>
                                         <label class="text-sm font-medium">URL Управляющего Воркера</label>
-                                        <p class="text-xs text-gray-500 mt-1">URL для безопасного управления схемой БД. <a href="#" id="open-help-from-settings" class="text-blue-400 hover:underline">Инструкцию по его созданию можно найти здесь.</a></p>
+                                        <p class="text-xs text-gray-500 mt-1">URL для безопасного управления схемой БД. Можно настроить с помощью мастера на вкладке "База данных".</p>
                                         <input type="url" id="settings-management-worker-url" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 font-mono text-sm" placeholder="https://my-worker.example.workers.dev" value="${settings.managementWorkerUrl || ''}">
                                     </div>
                                     ` : ''}
@@ -296,18 +294,17 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                         <div id="tab-database" class="settings-tab-content hidden space-y-6">
                            ${settings.isSupabaseEnabled && supabaseService ? `
                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                                <h3 class="text-lg font-semibold">Управление схемой базы данных</h3>
+                                <h3 class="text-lg font-semibold">Управление базой данных</h3>
                                 <p class="text-sm text-gray-400 mt-1 mb-4">
-                                    Эта функция безопасно обновит структуру таблиц в вашей базе Supabase до последней версии, не удаляя данные.
+                                   Для безопасного автоматического обновления схемы базы данных требуется настроить "Управляющий воркер".
                                 </p>
-                                <div class="text-sm p-3 rounded-md bg-yellow-900/30 border border-yellow-700 text-yellow-300">
-                                    <p class="font-bold">Требование:</p>
-                                    <p>Для работы этой функции необходимо указать "URL Управляющего Воркера" на вкладке "Ключи API".</p>
-                                </div>
-                                <button data-action="update-schema" class="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md font-semibold transition-colors disabled:bg-gray-700/50 disabled:cursor-not-allowed" ${state.isUpdatingSchema ? 'disabled' : ''}>
-                                    ${state.isUpdatingSchema ? '<div class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div> Обновление...' : 'Проверить и обновить схему'}
+                                 <button data-action="launch-db-wizard" class="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm font-semibold">
+                                    ${Icons.SettingsIcon}
+                                    <span>Запустить мастер настройки</span>
                                 </button>
-                                <div id="schema-update-status" class="text-center text-sm mt-3 h-5"></div>
+                                <p class="text-xs text-gray-500 mt-4 text-center">
+                                    Также вы всегда можете обновить схему вручную, выполнив <a href="https://github.com/user/repo/blob/main/SUPABASE_SETUP.md" target="_blank" class="text-blue-400 hover:underline">актуальный SQL-скрипт</a> в вашем редакторе Supabase.
+                                </p>
                             </div>` : ''}
                         </div>
                     </div>
@@ -353,47 +350,9 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
             case 'manage-proxies':
                 showProxyManagerModal();
                 break;
-            case 'update-schema': {
-                const statusEl = modalElement.querySelector('#schema-update-status');
-                const workerUrl = modalElement.querySelector('#settings-management-worker-url')?.value.trim();
-
-                if (!workerUrl) {
-                    statusEl.textContent = 'Ошибка: URL Управляющего Воркера не указан.';
-                    statusEl.className = 'text-center text-sm mt-3 h-5 text-red-400';
-                    return;
-                }
-
-                state.isUpdatingSchema = true;
-                render(); 
-                statusEl.textContent = 'Загрузка актуального скрипта...';
-                statusEl.className = 'text-center text-sm mt-3 h-5 text-gray-400';
-
-                try {
-                    const response = await fetch('./SUPABASE_SETUP.md');
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    const markdown = await response.text();
-                    const sqlMatch = markdown.match(/```sql\n([\s\S]*?)\n```/);
-                    const sqlScript = sqlMatch ? sqlMatch[1].trim() : null;
-
-                    if (!sqlScript) {
-                        throw new Error('Не удалось извлечь SQL-скрипт из SUPABASE_SETUP.md');
-                    }
-                    
-                    statusEl.textContent = 'Отправка запроса на обновление...';
-                    await supabaseService.executeSql(workerUrl, sqlScript);
-
-                    statusEl.textContent = 'Схема базы данных успешно обновлена!';
-                    statusEl.className = 'text-center text-sm mt-3 h-5 text-green-400';
-                } catch (error) {
-                    console.error("Schema update failed:", error);
-                    statusEl.textContent = `Ошибка: ${error.message}`;
-                    statusEl.className = 'text-center text-sm mt-3 h-5 text-red-400';
-                } finally {
-                    state.isUpdatingSchema = false;
-                    setTimeout(() => render(), 500);
-                }
+            case 'launch-db-wizard':
+                onLaunchDbWizard();
                 break;
-            }
         }
     };
     

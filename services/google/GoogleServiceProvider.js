@@ -455,6 +455,7 @@ export class GoogleServiceProvider {
         const listResponse = await this.gapi.client.gmail.users.messages.list({
             userId: 'me',
             maxResults: max_results,
+            q: 'in:inbox -in:draft -in:spam -in:trash',
         });
 
         const messages = listResponse.result.messages || [];

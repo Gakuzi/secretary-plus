@@ -183,9 +183,10 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 case 'test-found-proxy':
                     target.textContent = '...';
                     target.disabled = true;
-                    const result = await testProxyConnection({ proxyUrl: url });
+                    collectInputs();
+                    const result = await testProxyConnection({ proxyUrl: url, apiKey: state.config.geminiApiKey });
                      if (id) {
-                        await supabaseService.updateProxy(id, { last_status: result.status, last_speed_ms: result.speed, geolocation: result.geolocation });
+                        await supabaseService.updateProxy(id, { last_status: result.status, last_speed_ms: result.speed });
                         await loadSavedProxies();
                      } else {
                         alert(`Тест ${result.status === 'ok' ? 'пройден' : 'не пройден'}\nСкорость: ${result.speed || 'N/A'}\n${result.message}`);

@@ -1,4 +1,4 @@
-import { QuestionMarkCircleIcon, CodeIcon, AlertTriangleIcon } from './icons/Icons.js';
+import { QuestionMarkCircleIcon, CodeIcon, AlertTriangleIcon, SettingsIcon } from './icons/Icons.js';
 import { getSettings } from '../utils/storage.js';
 import { SUPABASE_CONFIG } from '../config.js';
 
@@ -85,7 +85,7 @@ function createGuideFromMarkdown(markdown) {
     return `<div class="prose prose-invert max-w-none">${finalHtml}</div>`;
 }
 
-export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchWizard, initialTab = 'error-analysis' }) {
+export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchWizard, onLaunchDbWizard, initialTab = 'error-analysis' }) {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
     
@@ -138,6 +138,16 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                     <!-- Tools Tab -->
                     <div id="tab-tools" class="settings-tab-content hidden space-y-6">
                          <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                            <h3 class="text-lg font-semibold text-gray-200">Мастер настройки базы данных</h3>
+                             <p class="text-sm text-gray-400 mt-1 mb-4">
+                                Запустите интерактивный мастер для пошаговой настройки "Управляющего воркера", который необходим для безопасного обновления схемы вашей базы данных.
+                            </p>
+                             <button data-action="launch-db-wizard" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md font-semibold transition-colors">
+                                ${Icons.SettingsIcon}
+                                <span>Запустить мастер настройки БД</span>
+                            </button>
+                        </div>
+                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
                             <h3 class="text-lg font-semibold text-gray-200">Сброс и повторная настройка</h3>
                             <p class="text-sm text-gray-400 mt-1 mb-4">
                                 Если вы хотите начать настройку с самого начала или считаете, что допустили ошибку, вы можете перезапустить мастер.
@@ -174,7 +184,7 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
         if (guideContainer.innerHTML !== '') return; // Already loaded or loading
 
         guideContainer.innerHTML = `<div class="flex items-center justify-center h-48"><div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;
-        fetch('./PROXY_INSTRUCTIONS.md')
+        fetch('./PROXY_WORKER_SETUP.md')
             .then(res => res.ok ? res.text() : Promise.reject(`HTTP error! status: ${res.status}`))
             .then(markdown => {
                 guideContainer.innerHTML = createGuideFromMarkdown(markdown);
@@ -252,6 +262,12 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
         const analyzeButton = e.target.closest('#analyze-error-button');
         const relaunchButton = e.target.closest('#relaunch-wizard-button');
         const editServiceButton = e.target.closest('#edit-service-button');
+        const launchDbWizardButton = e.target.closest('[data-action="launch-db-wizard"]');
+
+        if (launchDbWizardButton) {
+            onLaunchDbWizard();
+            return;
+        }
 
         if (analyzeButton) {
             const errorInput = modalOverlay.querySelector('#error-input-area');

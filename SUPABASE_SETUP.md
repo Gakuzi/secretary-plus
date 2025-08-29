@@ -20,7 +20,7 @@
 ```sql
 -- =================================================================
 --  Скрипт настройки базы данных "Секретарь+"
---  Версия: 2.4.0
+--  Версия: 2.5.0
 --  Этот скрипт является идемпотентным. Его можно безопасно 
 --  запускать несколько раз для создания или обновления схемы.
 -- =================================================================
@@ -34,19 +34,16 @@ CREATE TABLE IF NOT EXISTS public.contacts (
   email TEXT,
   phone TEXT,
   avatar_url TEXT,
-  addresses JSONB,
-  organizations JSONB,
-  birthdays JSONB,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 DO $$ BEGIN
-  IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint 
-      WHERE conname = 'contacts_user_id_source_id_key' AND conrelid = 'public.contacts'::regclass
-  ) THEN
-      ALTER TABLE public.contacts ADD UNIQUE(user_id, source_id);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'contacts_user_id_source_id_key' AND conrelid = 'public.contacts'::regclass) THEN
+    ALTER TABLE public.contacts ADD UNIQUE(user_id, source_id);
   END IF;
+  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='contacts' and column_name='addresses') THEN ALTER TABLE public.contacts ADD COLUMN "addresses" jsonb; END IF;
+  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='contacts' and column_name='organizations') THEN ALTER TABLE public.contacts ADD COLUMN "organizations" jsonb; END IF;
+  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='contacts' and column_name='birthdays') THEN ALTER TABLE public.contacts ADD COLUMN "birthdays" jsonb; END IF;
 END $$;
 
 
@@ -65,17 +62,14 @@ CREATE TABLE IF NOT EXISTS public.files (
   size BIGINT,
   owner TEXT,
   permissions JSONB,
-  last_modifying_user TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 DO $$ BEGIN
-  IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint 
-      WHERE conname = 'files_user_id_source_id_key' AND conrelid = 'public.files'::regclass
-  ) THEN
-      ALTER TABLE public.files ADD UNIQUE(user_id, source_id);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'files_user_id_source_id_key' AND conrelid = 'public.files'::regclass) THEN
+    ALTER TABLE public.files ADD UNIQUE(user_id, source_id);
   END IF;
+  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='files' and column_name='last_modifying_user') THEN ALTER TABLE public.files ADD COLUMN "last_modifying_user" text; END IF;
 END $$;
 
 
@@ -101,20 +95,17 @@ CREATE TABLE IF NOT EXISTS public.calendar_events (
     end_time TIMESTAMPTZ,
     event_link TEXT,
     meet_link TEXT,
-    attendees JSONB,
-    status TEXT,
-    creator_email TEXT,
-    is_all_day BOOLEAN DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 DO $$ BEGIN
-  IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint 
-      WHERE conname = 'calendar_events_user_id_source_id_key' AND conrelid = 'public.calendar_events'::regclass
-  ) THEN
-      ALTER TABLE public.calendar_events ADD UNIQUE(user_id, source_id);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'calendar_events_user_id_source_id_key' AND conrelid = 'public.calendar_events'::regclass) THEN
+    ALTER TABLE public.calendar_events ADD UNIQUE(user_id, source_id);
   END IF;
+  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='calendar_events' and column_name='attendees') THEN ALTER TABLE public.calendar_events ADD COLUMN "attendees" jsonb; END IF;
+  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='calendar_events' and column_name='status') THEN ALTER TABLE public.calendar_events ADD COLUMN "status" text; END IF;
+  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='calendar_events' and column_name='creator_email') THEN ALTER TABLE public.calendar_events ADD COLUMN "creator_email" text; END IF;
+  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='calendar_events' and column_name='is_all_day') THEN ALTER TABLE public.calendar_events ADD COLUMN "is_all_day" boolean DEFAULT false; END IF;
 END $$;
 
 
@@ -127,18 +118,15 @@ CREATE TABLE IF NOT EXISTS public.tasks (
     notes TEXT,
     due_date TIMESTAMPTZ,
     status TEXT,
-    completed_at TIMESTAMPTZ,
-    parent_task_id TEXT,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 DO $$ BEGIN
-  IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint 
-      WHERE conname = 'tasks_user_id_source_id_key' AND conrelid = 'public.tasks'::regclass
-  ) THEN
-      ALTER TABLE public.tasks ADD UNIQUE(user_id, source_id);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tasks_user_id_source_id_key' AND conrelid = 'public.tasks'::regclass) THEN
+    ALTER TABLE public.tasks ADD UNIQUE(user_id, source_id);
   END IF;
+  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='tasks' and column_name='completed_at') THEN ALTER TABLE public.tasks ADD COLUMN "completed_at" timestamptz; END IF;
+  IF NOT EXISTS(SELECT * FROM information_schema.columns WHERE table_name='tasks' and column_name='parent_task_id') THEN ALTER TABLE public.tasks ADD COLUMN "parent_task_id" text; END IF;
 END $$;
 
 
@@ -167,11 +155,8 @@ CREATE TABLE IF NOT EXISTS public.emails (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 DO $$ BEGIN
-  IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint 
-      WHERE conname = 'emails_user_id_source_id_key' AND conrelid = 'public.emails'::regclass
-  ) THEN
-      ALTER TABLE public.emails ADD UNIQUE(user_id, source_id);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'emails_user_id_source_id_key' AND conrelid = 'public.emails'::regclass) THEN
+    ALTER TABLE public.emails ADD UNIQUE(user_id, source_id);
   END IF;
 END $$;
 
@@ -184,11 +169,8 @@ CREATE TABLE IF NOT EXISTS public.action_stats (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 DO $$ BEGIN
-  IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint 
-      WHERE conname = 'action_stats_user_id_function_name_key' AND conrelid = 'public.action_stats'::regclass
-  ) THEN
-      ALTER TABLE public.action_stats ADD UNIQUE(user_id, function_name);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'action_stats_user_id_function_name_key' AND conrelid = 'public.action_stats'::regclass) THEN
+    ALTER TABLE public.action_stats ADD UNIQUE(user_id, function_name);
   END IF;
 END $$;
 
@@ -214,11 +196,8 @@ CREATE TABLE IF NOT EXISTS public.proxies (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 DO $$ BEGIN
-  IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint 
-      WHERE conname = 'proxies_user_id_url_key' AND conrelid = 'public.proxies'::regclass
-  ) THEN
-      ALTER TABLE public.proxies ADD UNIQUE(user_id, url);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'proxies_user_id_url_key' AND conrelid = 'public.proxies'::regclass) THEN
+    ALTER TABLE public.proxies ADD UNIQUE(user_id, url);
   END IF;
 END $$;
 

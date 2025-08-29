@@ -779,64 +779,70 @@ export const callGemini = async ({
     }
 };
 
-export const testProxyConnection = async ({ proxyUrl, signal }) => {
+export const testProxyConnection = async ({ proxyUrl, apiKey, signal }) => {
     if (!proxyUrl) {
         return { status: 'error', message: 'URL прокси не указан.' };
     }
-
-    const testUrl = new URL(proxyUrl);
-    testUrl.pathname = '/test-proxy';
+    if (!apiKey) {
+        return { status: 'error', message: 'Ключ Gemini API не указан для теста.' };
+    }
 
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error('Timeout')), 10000); // 10-second timeout
+        timeoutId = setTimeout(() => reject(new Error('Timeout')), 15000); // 15-second timeout
     });
 
     try {
+        const clientOptions = { apiKey, apiEndpoint: proxyUrl.replace(/^https?:\/\//, '') };
+        const ai = new GoogleGenAI(clientOptions);
+
         const startTime = performance.now();
         
-        const response = await Promise.race([
-            fetch(testUrl.toString(), {
-                method: 'GET',
-                headers: { 'Content-Type': 'application/json' },
-                signal,
-            }),
-            timeoutPromise
-        ]);
+        // The SDK doesn't seem to support AbortSignal directly in generateContent.
+        // We will rely on the timeoutPromise race.
+        const generatePromise = ai.models.generateContent({ model: GEMINI_MODEL, contents: 'test' });
         
+        // We are not using the AbortSignal for now as the SDK does not support it.
+        // The timeout is our primary cancellation mechanism.
+        if (signal) {
+             signal.addEventListener('abort', () => {
+                clearTimeout(timeoutId);
+             });
+        }
+        
+        const response = await Promise.race([generatePromise, timeoutPromise]);
         clearTimeout(timeoutId);
 
         const endTime = performance.now();
         const speed = Math.round(endTime - startTime);
 
-        if (!response.ok) {
-            throw new Error(`Proxy returned status ${response.status}`);
+        if (response && response.text.length >= 0) { // Any valid response from Gemini is a success
+            return { status: 'ok', message: 'Соединение успешно.', speed };
+        } else {
+            throw new Error("Получен некорректный ответ от Gemini API через прокси.");
         }
-
-        const data = await response.json();
-        
-        if (!data.ip) {
-             throw new Error("Invalid response from test service through proxy.");
-        }
-
-        return { status: 'ok', message: 'Соединение успешно.', speed, geolocation: data.ip };
 
     } catch (error) {
         clearTimeout(timeoutId);
+
         if (error.name === 'AbortError') {
-            return { status: 'cancelled', message: 'Тест отменен пользователем.', speed: null, geolocation: null };
+            return { status: 'cancelled', message: 'Тест отменен.', speed: null };
         }
 
         console.error('Ошибка при тесте прокси:', error);
         
-        let message = `Ошибка сети. Убедитесь, что URL прокси правильный и на нем настроены CORS-заголовки.`;
-        if (error.message.includes('status')) {
-            message = `Прокси вернул ошибку: ${error.message}. Проверьте код воркера.`;
+        let message = 'Не удалось подключиться через прокси.';
+        if (error.message.includes('API key not valid')) {
+            message = 'Неверный Gemini API ключ.';
+        } else if (error.message.includes('fetch')) {
+             message = `Ошибка сети. Проверьте URL прокси и CORS-заголовки.`;
         } else if (error.message === 'Timeout') {
-            message = 'Тайм-аут: прокси не ответил в течение 10 секунд.';
+            message = 'Тайм-аут: прокси не ответил в течение 15 секунд.';
+        } else {
+            message = error.message;
         }
         
-        return { status: 'error', message: message, speed: null, geolocation: null };
+        return { status: 'error', message: message, speed: null };
     }
 };
 
