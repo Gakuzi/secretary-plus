@@ -6,6 +6,8 @@
 
 
 
+
+
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
@@ -357,6 +359,160 @@ async function handleSendMessage(prompt, image = null) {
     await processBotResponse(userMessage, false);
 }
 
+/**
+ * A centralized handler for all dynamic actions in the app.
+ * Uses event delegation to handle clicks on buttons with data-* attributes.
+ */
+async function handleGlobalClick(event) {
+    const target = event.target;
+
+    // --- 1. Handle actions within result cards, welcome screen, etc. ---
+    const actionButton = target.closest('[data-action]');
+    if (actionButton) {
+        event.preventDefault();
+        
+        const action = actionButton.dataset.action;
+        let payload = {};
+        try {
+            payload = JSON.parse(actionButton.dataset.payload || '{}');
+        } catch (e) {
+            console.error("Failed to parse payload for action:", action, e);
+        }
+
+        switch (action) {
+            case 'welcome_prompt': {
+                handleSendMessage(payload.prompt);
+                const welcomeScreen = document.querySelector('.welcome-screen-container');
+                if (welcomeScreen) welcomeScreen.remove();
+                break;
+            }
+
+            case 'analyze_event':
+                handleSendMessage(`Подробности о событии: "${payload.summary}". Что можно с ним сделать?`);
+                break;
+            case 'analyze_task':
+                handleSendMessage(`Подробности о задаче: "${payload.title}". Какие есть опции?`);
+                break;
+            case 'analyze_email':
+                handleSendMessage(`Проанализируй это письмо от ${payload.from} с темой "${payload.subject}" и подготовь варианты действий. Содержимое:\n\n${payload.body}`);
+                break;
+            case 'analyze_document':
+                handleSendMessage(`Проанализируй документ "${payload.name}" и сделай краткую выжимку.`);
+                break;
+            case 'analyze_contact': {
+                addMessageToChat({
+                    id: Date.now().toString(),
+                    sender: MessageSender.ASSISTANT,
+                    text: `Выбран контакт: ${payload.display_name}.`,
+                    card: { type: 'contact', icon: 'UsersIcon', title: 'Карточка контакта', person: payload }
+                });
+                break;
+            }
+
+            case 'download_ics': {
+                try {
+                    const base64Decoded = atob(payload.data);
+                    const uint8Array = new Uint8Array(base64Decoded.length);
+                    for (let i = 0; i < base64Decoded.length; i++) {
+                        uint8Array[i] = base64Decoded.charCodeAt(i);
+                    }
+                    const blob = new Blob([uint8Array], { type: 'text/calendar;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = payload.filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                } catch (e) {
+                    showSystemError(`Не удалось создать файл .ics: ${e.message}`);
+                }
+                break;
+            }
+
+            case 'request_delete': {
+                const typeMap = { event: 'событие', task: 'задачу', email: 'письмо' };
+                const typeText = typeMap[payload.type] || 'элемент';
+                if (confirm(`Вы уверены, что хотите удалить это ${typeText}?`)) {
+                    handleSendMessage(`Удали ${typeText} с ID ${payload.id}`);
+                }
+                break;
+            }
+            case 'create_meet_with':
+                handleSendMessage(`Создай видеовстречу с ${payload.name} (${payload.email}) на ближайшее удобное время.`);
+                break;
+            
+            case 'send_meeting_link': {
+                try {
+                    await googleProvider.sendEmail(payload);
+                    addMessageToChat({ sender: MessageSender.ASSISTANT, text: 'Приглашение со ссылкой на встречу отправлено.', id: Date.now().toString() });
+                } catch (e) { showSystemError(`Не удалось отправить письмо: ${e.message}`); }
+                break;
+            }
+            case 'create_prep_task': {
+                try {
+                    const task = await googleProvider.createTask(payload);
+                    addMessageToChat({ sender: MessageSender.ASSISTANT, text: `Задача "${task.title}" успешно создана.`, id: Date.now().toString() });
+                } catch (e) { showSystemError(`Не удалось создать задачу: ${e.message}`); }
+                break;
+            }
+            case 'create_google_doc_with_content': {
+                 try {
+                    const doc = await googleProvider.createGoogleDocWithContent(payload.title, payload.content);
+                    addMessageToChat({ sender: MessageSender.ASSISTANT, text: `Документ "${doc.name}" создан.`, id: Date.now().toString(), card: { type: 'document', icon: 'FileIcon', title: doc.name, actions: [{label: 'Открыть', url: doc.webViewLink}] } });
+                } catch (e) { showSystemError(`Не удалось создать документ: ${e.message}`); }
+                break;
+            }
+        }
+        return;
+    }
+
+    // --- 2. Handle client-side actions (like opening modals) ---
+    const clientActionButton = target.closest('[data-client-action]');
+    if (clientActionButton) {
+        event.preventDefault();
+        const action = clientActionButton.dataset.clientAction;
+        if (action === 'open_settings') {
+            showSettingsModal();
+        }
+        return;
+    }
+
+    // --- 3. Handle contextual action prompts ---
+    const promptButton = target.closest('[data-action-prompt]');
+    if (promptButton) {
+        event.preventDefault();
+        handleSendMessage(promptButton.dataset.actionPrompt);
+        renderContextualActions([]);
+        return;
+    }
+
+    // --- 4. Handle quick replies ---
+    const replyButton = target.closest('[data-reply-text]');
+    if (replyButton) {
+        event.preventDefault();
+        handleSendMessage(replyButton.dataset.replyText);
+        const container = replyButton.closest('.quick-replies-container');
+        if (container) {
+            container.querySelectorAll('button').forEach(b => b.disabled = true);
+            replyButton.classList.add('clicked');
+        }
+        return;
+    }
+    
+     // --- 5. Handle welcome screen "open wizard" button ---
+    const openWizardButton = target.closest('#open-wizard-from-welcome');
+    if (openWizardButton) {
+        if (confirm('Это действие перезапустит мастер настройки и может сбросить несохраненные ключи. Продолжить?')) {
+             localStorage.removeItem('secretary-plus-settings-v4');
+             window.location.reload();
+        }
+        return;
+    }
+}
+
+
 // --- MODAL & WIZARD MANAGEMENT ---
 function showSettingsModal() {
     modalContainer.innerHTML = '';
@@ -564,6 +720,9 @@ async function startFullApp() {
     settingsButton.addEventListener('click', showSettingsModal);
     helpButton.addEventListener('click', showHelpModal);
     statsButton.addEventListener('click', showStatsModal);
+    
+    // Add the global click handler to the body to catch all dynamic actions
+    document.body.addEventListener('click', handleGlobalClick);
     
     const settings = getSettings();
     const savedWizardState = sessionStorage.getItem('wizardState');
