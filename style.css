@@ -18,7 +18,7 @@
 /* Custom Scrollbar for Dark Theme */
 @media (prefers-color-scheme: dark) {
   ::-webkit-scrollbar-track {
-    background: #1e293b; /* dark:slate-800 */
+    background: #0f172a; /* dark:slate-900 */
   }
   ::-webkit-scrollbar-thumb {
     background-color: #475569; /* dark:slate-600 */

@@ -23,7 +23,7 @@ export function createMessageElement(message) {
     let avatarClass = 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200';
     let avatarText = 'S+';
     let authorNameText = 'Секретарь+';
-    let bubbleClass = 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100';
+    let bubbleClass = 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-100';
 
     if (isUser) {
         avatarClass = 'bg-blue-500 text-white';
@@ -50,17 +50,10 @@ export function createMessageElement(message) {
     
     contentContainer.appendChild(authorName);
 
-    // KEY CHANGE: If there is a card, we don't use a bubble. The card is the message.
+    // If there is a card, we don't use a bubble. The card is the message.
     if (message.card) {
         const cardElement = createResultCardElement(message.card);
         cardElement.classList.add('mt-1'); // Add margin that the bubble would have had
-        
-        if (isSystem) {
-            // For system cards, we might want a different background or styling
-            cardElement.classList.remove('dark:bg-slate-800');
-            cardElement.classList.add('bg-transparent', 'dark:bg-transparent', 'p-0', 'shadow-none');
-        }
-
         contentContainer.appendChild(cardElement);
 
     } else { // Handle regular text/image messages with a bubble

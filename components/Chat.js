@@ -460,7 +460,7 @@ export function renderContextualActions(actions) {
     container.innerHTML = actions.map(action => {
         const iconSVG = Icons[action.icon] || '';
         return `
-            <button class="action-bar-button flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-md text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-600 transition-all">
+            <button class="action-bar-button flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-md text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-600 transition-all" data-action-prompt="${action.prompt}">
                 ${iconSVG ? `<span class="w-4 h-4">${iconSVG}</span>` : ''}
                 ${action.label}
             </button>
