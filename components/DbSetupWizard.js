@@ -37,7 +37,8 @@ async function handleRequest(request) {
 
     // IMPORTANT: This should be automatically set to your project reference ID
     const PROJECT_REF = 'YOUR_PROJECT_REF';
-    const SUPABASE_API_URL = \`https://api.supabase.com/v1/projects/\${PROJECT_REF}/sql\`;
+    // **FIXED**: The correct endpoint for the SQL execution is /database/sql
+    const SUPABASE_API_URL = \`https://api.supabase.com/v1/projects/\${PROJECT_REF}/database/sql\`;
 
     try {
         const { query } = await request.json();
