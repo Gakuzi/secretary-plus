@@ -29,6 +29,27 @@ const APP_STRUCTURE_CONTEXT = `
 - SUPABASE_SETUP.md: Содержит SQL-скрипт для создания/обновления схемы БД.
 `;
 
+async function showBrowserNotification(title, options) {
+    if (!('Notification' in window)) {
+        console.warn("Браузер не поддерживает уведомления.");
+        return;
+    }
+
+    if (Notification.permission === "granted") {
+        new Notification(title, options);
+    } else if (Notification.permission !== "denied") {
+        try {
+            const permission = await Notification.requestPermission();
+            if (permission === "granted") {
+                new Notification(title, options);
+            }
+        } catch (error) {
+            console.error("Ошибка при запросе разрешений на уведомления:", error);
+        }
+    }
+}
+
+
 // --- STATE MANAGEMENT ---
 let state = {
     settings: getSettings(),
@@ -282,6 +303,13 @@ async function processBotResponse(userMessage, isSilent) {
             apiKey: state.settings.geminiApiKey,
             proxyUrl: proxyUrl, // Pass the found proxyUrl (or null)
         });
+
+        if (isSilent && response.sender === MessageSender.ASSISTANT && response.text) {
+            showBrowserNotification('Секретарь+', {
+                body: response.text,
+                icon: './favicon.svg'
+            });
+        }
 
         // After the call, update status based on the result
         if (proxyUrl) {

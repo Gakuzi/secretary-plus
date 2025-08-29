@@ -20,7 +20,7 @@
 ```sql
 -- =================================================================
 --  Скрипт настройки базы данных "Секретарь+"
---  Версия: 2.2.0
+--  Версия: 2.3.0
 --  Этот скрипт является идемпотентным. Его можно безопасно 
 --  запускать несколько раз для создания или обновления схемы.
 -- =================================================================
@@ -40,9 +40,6 @@ CREATE TABLE IF NOT EXISTS public.contacts (
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
-ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS addresses JSONB;
-ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS organizations JSONB;
-ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS birthdays JSONB;
 DO $$ BEGIN
   IF NOT EXISTS (
       SELECT 1 FROM pg_constraint 
@@ -72,8 +69,6 @@ CREATE TABLE IF NOT EXISTS public.files (
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
-ALTER TABLE public.files ADD COLUMN IF NOT EXISTS permissions JSONB;
-ALTER TABLE public.files ADD COLUMN IF NOT EXISTS last_modifying_user TEXT;
 DO $$ BEGIN
   IF NOT EXISTS (
       SELECT 1 FROM pg_constraint 
@@ -113,10 +108,6 @@ CREATE TABLE IF NOT EXISTS public.calendar_events (
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
-ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS attendees JSONB;
-ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS status TEXT;
-ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS creator_email TEXT;
-ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS is_all_day BOOLEAN DEFAULT false;
 DO $$ BEGIN
   IF NOT EXISTS (
       SELECT 1 FROM pg_constraint 
@@ -141,8 +132,6 @@ CREATE TABLE IF NOT EXISTS public.tasks (
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
-ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
-ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS parent_task_id TEXT;
 DO $$ BEGIN
   IF NOT EXISTS (
       SELECT 1 FROM pg_constraint 
@@ -177,8 +166,6 @@ CREATE TABLE IF NOT EXISTS public.emails (
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
-ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS full_body TEXT;
-ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS attachments_metadata JSONB;
 DO $$ BEGIN
   IF NOT EXISTS (
       SELECT 1 FROM pg_constraint 
@@ -212,7 +199,6 @@ CREATE TABLE IF NOT EXISTS public.user_settings (
   management_worker_url TEXT,
   updated_at TIMESTAMPTZ DEFAULT now()
 );
-ALTER TABLE public.user_settings ADD COLUMN IF NOT EXISTS management_worker_url TEXT;
 
 
 -- 10. Таблица прокси-серверов (proxies)
@@ -308,11 +294,3 @@ BEGIN
 END;
 $$;
 ```
-
-## Шаг 3: Получение ключей Supabase
-
-1.  В меню вашего проекта выберите **Project Settings** (значок шестеренки) > **API**.
-2.  На этой странице найдите и скопируйте:
-    *   **Project URL**
-    *   **anon public key**
-3.  Эти два значения нужно будет вставить в соответствующие поля на вкладке "Подключения" в настройках приложения "Секретарь+".

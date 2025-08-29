@@ -9,141 +9,209 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
     let state = {
         isLoading: false,
         isUpdatingSchema: false,
-        savedProxies: [],
-        foundProxies: [],
     };
     
-    // This function creates and manages the new interactive proxy test modal.
-    const showProxyTestModal = ({ url, id, isFoundProxy }) => {
-        const testModalContainer = modalElement.querySelector('#proxy-test-modal-container');
-        if (!testModalContainer) return;
-
-        let testState = {
-            status: 'idle', // 'idle', 'testing', 'result'
-            result: null,
-        };
+    const showProxyManagerModal = () => {
+        const managerContainer = document.createElement('div');
+        managerContainer.className = 'fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50';
         
-        const renderTestModalContent = () => {
-            let content = '';
-            switch (testState.status) {
-                case 'testing':
-                    content = `
-                        <div class="text-center p-8">
-                            <div class="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
-                            <p class="mt-4 text-gray-300">Выполняется тест...</p>
-                        </div>
-                    `;
-                    break;
-                case 'result':
-                    const isSuccess = testState.result.status === 'ok';
-                    content = `
-                        <div class="p-6 text-center">
-                             <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${isSuccess ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">
-                                ${isSuccess ? Icons.CheckSquareIcon.replace(/width="24" height="24"/, 'width="40" height="40"') : Icons.AlertTriangleIcon.replace(/width="24" height="24"/, 'width="40" height="40"')}
-                            </div>
-                            <h4 class="text-xl font-bold">${isSuccess ? 'Тест пройден успешно' : 'Тест не пройден'}</h4>
-                            <div class="mt-4 space-y-2 text-sm text-left bg-gray-900 p-4 rounded-lg">
-                                <div class="test-result-item"><span class="test-result-label">Статус:</span> <span class="test-result-value ${isSuccess ? 'text-green-400' : 'text-red-400'}">${testState.result.status}</span></div>
-                                <div class="test-result-item"><span class="test-result-label">Скорость:</span> <span class="test-result-value">${testState.result.speed !== null ? `${testState.result.speed}ms` : 'N/A'}</span></div>
-                                <div class="test-result-item"><span class="test-result-label">Геолокация:</span> <span class="test-result-value">${testState.result.geolocation || 'N/A'}</span></div>
-                                ${!isSuccess ? `<div class="pt-2 border-t border-gray-700 mt-2"><p class="test-result-label">Сообщение:</p><p class="text-red-300 text-xs mt-1">${testState.result.message}</p></div>` : ''}
-                            </div>
-                        </div>
-                        <footer class="p-4 bg-gray-700/50 flex justify-end gap-3">
-                            ${isSuccess && isFoundProxy ? `<button data-action="add-tested-proxy" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold text-sm">Добавить в мой список</button>` : ''}
-                            <button data-action="close-test-modal" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md font-semibold text-sm">Закрыть</button>
-                        </footer>
-                    `;
-                    break;
-                case 'idle':
-                default:
-                    content = `
-                        <div class="p-6 text-center">
-                            <h4 class="text-xl font-bold">Готовы к тесту?</h4>
-                            <p class="font-mono text-sm bg-gray-900 p-2 rounded-md my-4 break-all">${url}</p>
-                        </div>
-                        <footer class="p-4 bg-gray-700/50 flex justify-end gap-3">
-                            <button data-action="cancel-test-modal" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md font-semibold text-sm">Отмена</button>
-                            <button data-action="start-test" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold text-sm">Начать тест</button>
-                        </footer>
-                    `;
-                    break;
-            }
-            return content;
+        let proxyState = {
+            saved: [],
+            found: [],
+            isLoading: false,
+            draggedItemId: null
         };
 
-        const runTest = async () => {
-            testState.status = 'testing';
-            renderTestModal();
-            const result = await testProxyConnection({ proxyUrl: url });
-            testState.result = result;
-            testState.status = 'result';
-            
-            // If the test was successful for an existing proxy, update it in the DB immediately.
-            if (result.status === 'ok' && id) {
-                await supabaseService.updateProxy(id, {
-                    last_status: result.status,
-                    last_speed_ms: result.speed,
-                    geolocation: result.geolocation
-                });
-                await loadSavedProxies(); // Refresh list in the background
-            }
-            
-            renderTestModal();
-        };
+        const renderManager = () => {
+            const savedProxiesHtml = proxyState.saved.map((p, index) => {
+                 let statusIndicatorClass = 'status-untested';
+                 if (p.last_status === 'ok') statusIndicatorClass = 'status-ok';
+                 if (p.last_status === 'error') statusIndicatorClass = 'status-error';
 
-        const renderTestModal = () => {
-            testModalContainer.innerHTML = `
-                <div class="absolute inset-0 bg-black/70 flex items-center justify-center p-4 z-20">
-                    <div class="bg-gray-800 border border-gray-700 rounded-lg shadow-xl w-full max-w-md flex flex-col overflow-hidden animate-fadeIn">
-                         <header class="p-4 border-b border-gray-700">
-                            <h3 class="text-lg font-bold">Тестирование прокси</h3>
-                         </header>
-                         <main id="test-modal-main-content">
-                            ${renderTestModalContent()}
-                         </main>
+                return `
+                <div class="proxy-list-item bg-gray-700/50" draggable="true" data-id="${p.id}" data-index="${index}">
+                    <div class="flex-shrink-0 cursor-grab text-gray-500" title="Перетащить для изменения приоритета">${Icons.MenuIcon}</div>
+                     <label class="toggle-switch" style="transform: scale(0.7); margin: 0 -4px;">
+                        <input type="checkbox" data-action="toggle-proxy" data-id="${p.id}" ${p.is_active ? 'checked' : ''}>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <div class="status-indicator ${statusIndicatorClass}" title="Статус: ${p.last_status || 'untested'}"></div>
+                    <div class="flex-1 font-mono text-xs truncate" title="${p.url}">${p.url}</div>
+                    ${p.last_status === 'ok' && p.last_speed_ms ? `<span class="text-xs text-gray-400">${p.last_speed_ms}ms</span>` : ''}
+                    <div class="flex items-center gap-1">
+                        <button data-action="retest-proxy" data-id="${p.id}" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 rounded">Тест</button>
+                        <button data-action="delete-proxy" data-id="${p.id}" class="p-1 text-xs bg-red-800 hover:bg-red-700 rounded-full leading-none">${Icons.TrashIcon.replace('width="24" height="24"', 'width="12" height="12"')}</button>
                     </div>
                 </div>`;
-        };
-        
-        const closeTestModal = () => {
-            testModalContainer.innerHTML = '';
+            }).join('');
+
+            const foundProxiesHtml = proxyState.found.map(p => `
+                 <div class="proxy-list-item">
+                    <div class="status-indicator status-untested"></div>
+                    <div class="flex-1 font-mono text-xs truncate" title="${p.url}">${p.location ? `${p.location}: ` : ''}${p.url}</div>
+                    <div class="flex items-center gap-1">
+                        <button data-action="test-found-proxy" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 rounded">Тест</button>
+                        <button data-action="add-proxy-from-found" data-url="${p.url}" data-location="${p.location || ''}" class="px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-500 rounded">Добавить</button>
+                    </div>
+                </div>`).join('');
+            
+            managerContainer.innerHTML = `
+                <div class="bg-gray-800 border border-gray-700 rounded-lg shadow-xl w-full max-w-2xl flex flex-col h-full sm:h-auto sm:max-h-[80vh] animate-fadeIn">
+                    <header class="p-4 border-b border-gray-700 flex justify-between items-center">
+                        <h3 class="text-lg font-bold">Менеджер прокси-серверов</h3>
+                        <button data-action="close-manager" class="p-2 rounded-full hover:bg-gray-700">&times;</button>
+                    </header>
+                    <main class="p-4 space-y-4 overflow-y-auto">
+                        <div>
+                            <h4 class="font-semibold mb-2">Мои прокси (приоритет сверху вниз)</h4>
+                            <div id="saved-proxy-list-dnd" class="space-y-2 p-2 bg-gray-900/50 rounded-md min-h-[80px]">
+                                ${proxyState.isLoading && proxyState.saved.length === 0 ? '<p class="text-center text-sm text-gray-500">Загрузка...</p>' : proxyState.saved.length === 0 ? '<p class="text-center text-sm text-gray-500">Список пуст.</p>' : savedProxiesHtml}
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold mb-2">Поиск прокси</h4>
+                            <div id="found-proxy-list" class="space-y-2">
+                                ${proxyState.isLoading && proxyState.found.length > 0 ? '<p class="text-center text-sm text-gray-500">Поиск...</p>' : proxyState.found.length > 0 ? foundProxiesHtml : ''}
+                            </div>
+                        </div>
+                    </main>
+                    <footer class="p-4 bg-gray-700/50 flex justify-between items-center">
+                        <button data-action="add-proxy-manual" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md font-semibold text-sm">Добавить вручную</button>
+                        <button data-action="find-proxies-ai" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md font-semibold text-sm" ${proxyState.isLoading ? 'disabled' : ''}>${proxyState.isLoading ? 'Поиск...' : 'Найти с помощью ИИ'}</button>
+                    </footer>
+                </div>
+            `;
         };
 
-        testModalContainer.onclick = async (e) => {
+        const loadSavedProxies = async () => {
+            proxyState.isLoading = true;
+            renderManager();
+            try {
+                proxyState.saved = await supabaseService.getProxies();
+            } catch(e) { alert(`Ошибка загрузки прокси: ${e.message}`); }
+            finally { 
+                proxyState.isLoading = false;
+                renderManager();
+            }
+        };
+
+        const handleManagerAction = async (e) => {
             const target = e.target.closest('[data-action]');
             if (!target) return;
             const action = target.dataset.action;
+            const id = target.dataset.id;
+            const url = target.dataset.url;
 
             switch(action) {
-                case 'start-test': await runTest(); break;
-                case 'close-test-modal':
-                case 'cancel-test-modal': closeTestModal(); break;
-                case 'add-tested-proxy':
-                     try {
-                        await supabaseService.addProxy({ 
-                            url: url, 
-                            last_status: 'ok',
-                            last_speed_ms: testState.result.speed,
-                            geolocation: testState.result.geolocation,
-                            is_active: true,
-                        });
-                        state.foundProxies = state.foundProxies.filter(p => p.url !== url);
+                case 'close-manager': managerContainer.remove(); break;
+                case 'toggle-proxy':
+                    const is_active = e.target.checked;
+                    await supabaseService.updateProxy(id, { is_active });
+                    break;
+                case 'delete-proxy':
+                    if (confirm('Удалить этот прокси?')) {
+                        await supabaseService.deleteProxy(id);
                         await loadSavedProxies();
-                        closeTestModal();
-                    } catch (err) {
-                        alert(`Не удалось сохранить прокси: ${err.message}`);
                     }
+                    break;
+                case 'find-proxies-ai':
+                    proxyState.isLoading = true;
+                    proxyState.found = [];
+                    renderManager();
+                    try {
+                        const proxies = await findProxiesWithGemini({ apiKey: settings.geminiApiKey });
+                        proxyState.found = proxies;
+                    } catch(err) { alert(`Ошибка: ${err.message}`); }
+                    finally {
+                        proxyState.isLoading = false;
+                        renderManager();
+                    }
+                    break;
+                case 'add-proxy-manual': {
+                    const newUrl = prompt('Введите URL прокси:');
+                    if (newUrl) {
+                        try {
+                            new URL(newUrl);
+                            await supabaseService.addProxy({ url: newUrl.trim(), is_active: true, priority: proxyState.saved.length });
+                            await loadSavedProxies();
+                        } catch(err) { alert(`Ошибка: ${err.message}`); }
+                    }
+                    break;
+                }
+                 case 'add-proxy-from-found':
+                    try {
+                        await supabaseService.addProxy({ url: url, is_active: true, geolocation: target.dataset.location, priority: proxyState.saved.length });
+                        proxyState.found = proxyState.found.filter(p => p.url !== url);
+                        await loadSavedProxies();
+                    } catch(err) { alert(`Ошибка: ${err.message}`); }
+                    break;
+                case 'retest-proxy':
+                case 'test-found-proxy':
+                     // Simplified test feedback
+                    target.textContent = '...';
+                    target.disabled = true;
+                    const result = await testProxyConnection({ proxyUrl: url });
+                     if (id) { // Retesting a saved proxy
+                        await supabaseService.updateProxy(id, { last_status: result.status, last_speed_ms: result.speed, geolocation: result.geolocation });
+                        await loadSavedProxies();
+                     } else { // Testing a found proxy
+                        alert(`Тест ${result.status === 'ok' ? 'пройден' : 'не пройден'}\nСкорость: ${result.speed || 'N/A'}\n${result.message}`);
+                        target.textContent = 'Тест';
+                        target.disabled = false;
+                     }
                     break;
             }
         };
+        
+        // Drag and Drop Logic
+        const handleDragAndDrop = (container) => {
+            container.addEventListener('dragstart', e => {
+                proxyState.draggedItemId = e.target.dataset.id;
+                e.target.style.opacity = '0.5';
+            });
+            container.addEventListener('dragend', e => {
+                 e.target.style.opacity = '1';
+                 proxyState.draggedItemId = null;
+            });
+            container.addEventListener('dragover', e => {
+                e.preventDefault();
+            });
+            container.addEventListener('drop', async e => {
+                e.preventDefault();
+                const droppedOn = e.target.closest('[data-id]');
+                if (!droppedOn || !proxyState.draggedItemId) return;
+                
+                const fromIndex = proxyState.saved.findIndex(p => p.id === proxyState.draggedItemId);
+                const toIndex = proxyState.saved.findIndex(p => p.id === droppedOn.dataset.id);
+                
+                const [movedItem] = proxyState.saved.splice(fromIndex, 1);
+                proxyState.saved.splice(toIndex, 0, movedItem);
 
-        renderTestModal();
+                const updates = proxyState.saved.map((p, index) => ({ id: p.id, priority: index }));
+                
+                renderManager(); // Re-render immediately for responsiveness
+                
+                try {
+                     await supabaseService.client.from('proxies').upsert(updates);
+                } catch(err) {
+                    alert('Не удалось сохранить новый порядок.');
+                    await loadSavedProxies(); // Revert on failure
+                }
+            });
+        };
+
+        managerContainer.addEventListener('click', handleManagerAction);
+        managerContainer.addEventListener('change', (e) => {
+            if(e.target.closest('[data-action="toggle-proxy"]')) handleManagerAction(e);
+        });
+        
+        renderManager();
+        modalElement.appendChild(managerContainer);
+        handleDragAndDrop(managerContainer.querySelector('#saved-proxy-list-dnd'));
+        loadSavedProxies();
     };
 
     const render = () => {
-        const savedProxiesHtml = renderSavedProxies();
-        const foundProxiesHtml = renderFoundProxies();
         modalElement.innerHTML = `
             <div class="bg-gray-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-4xl sm:rounded-lg shadow-xl relative">
                 <header class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
@@ -193,11 +261,11 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                         <!-- Proxy Manager Tab -->
                         <div id="tab-proxy" class="settings-tab-content hidden space-y-6">
                            ${settings.isSupabaseEnabled && supabaseService ? `
-                            <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
                                 <div class="flex justify-between items-center mb-4">
                                     <div>
-                                        <h3 class="font-semibold text-lg">Менеджер Прокси</h3>
-                                        <p class="text-xs text-gray-400">Используйте ИИ для поиска и тестирования прокси-серверов.</p>
+                                        <h3 class="font-semibold text-lg">Настройки Прокси</h3>
+                                        <p class="text-xs text-gray-400">Используйте прокси-серверы для обхода региональных ограничений Gemini.</p>
                                     </div>
                                     <div class="flex items-center gap-3">
                                         <label for="use-proxy-toggle" class="font-medium text-sm">Использовать прокси</label>
@@ -207,26 +275,9 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                                         </label>
                                     </div>
                                 </div>
-                                <div class="grid md:grid-cols-2 gap-6">
-                                    <div>
-                                        <h4 class="font-semibold mb-2">Ваши прокси-серверы</h4>
-                                        <div id="saved-proxy-list" class="space-y-2 max-h-48 overflow-y-auto pr-2">
-                                            ${savedProxiesHtml}
-                                        </div>
-                                        <button data-action="add-proxy" class="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold">
-                                            Добавить вручную
-                                        </button>
-                                    </div>
-                                    <div>
-                                         <button data-action="find-proxies" class="w-full mb-3 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm font-semibold" ${state.isLoading ? 'disabled' : ''}>
-                                            ${state.isLoading ? 'Поиск...' : 'Найти прокси с помощью ИИ'}
-                                         </button>
-                                         <h4 class="font-semibold mb-2">Найденные прокси</h4>
-                                         <div id="found-proxy-list" class="space-y-2 max-h-40 overflow-y-auto pr-2">
-                                            ${foundProxiesHtml}
-                                         </div>
-                                    </div>
-                                </div>
+                                <button data-action="manage-proxies" class="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold">
+                                    Управление списком прокси-серверов
+                                </button>
                             </div>` : ''}
                         </div>
                         
@@ -253,59 +304,7 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 <footer class="p-4 border-t border-gray-700 flex justify-end flex-shrink-0">
                     <button data-action="save" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold">Сохранить и закрыть</button>
                 </footer>
-                <div id="proxy-test-modal-container"></div>
             </div>`;
-    };
-    
-    const renderSavedProxies = () => {
-        if (state.savedProxies.length === 0) return `<p class="text-sm text-gray-500 text-center py-4">Нет сохраненных прокси.</p>`;
-        return state.savedProxies.map(p => {
-            let statusIndicatorClass = 'status-untested';
-            if (p.last_status === 'ok') statusIndicatorClass = 'status-ok';
-            if (p.last_status === 'error') statusIndicatorClass = 'status-error';
-
-            return `
-            <div class="proxy-list-item">
-                <label class="toggle-switch" style="transform: scale(0.7); margin-left: -8px; margin-right: -4px;">
-                    <input type="checkbox" data-action="toggle-proxy" data-id="${p.id}" ${p.is_active ? 'checked' : ''}>
-                    <span class="toggle-slider"></span>
-                </label>
-                <div class="status-indicator ${statusIndicatorClass}" title="Статус: ${p.last_status || 'untested'}"></div>
-                <div class="flex-1 font-mono text-xs truncate" title="${p.url}">${p.url}</div>
-                 ${p.last_status === 'ok' && p.last_speed_ms ? `<span class="text-xs text-gray-400">${p.last_speed_ms}ms</span>` : ''}
-                <div class="flex items-center gap-1">
-                    <button data-action="retest-proxy" data-id="${p.id}" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 rounded">Тест</button>
-                    <button data-action="delete-proxy" data-id="${p.id}" class="p-1 text-xs bg-red-800 hover:bg-red-700 rounded-full leading-none">${Icons.TrashIcon.replace('width="24" height="24"', 'width="12" height="12"')}</button>
-                </div>
-            </div>`;
-        }).join('');
-    };
-    
-    const renderFoundProxies = () => {
-        if (state.isLoading) return `<p class="text-sm text-gray-500 text-center py-4">Поиск...</p>`;
-        if (state.foundProxies.length === 0) return `<p class="text-sm text-gray-500 text-center py-4">Нажмите "Найти", чтобы начать.</p>`;
-        return state.foundProxies.map(p => {
-            return `
-             <div class="proxy-list-item">
-                <div class="status-indicator status-untested"></div>
-                <div class="flex-1 font-mono text-xs truncate" title="${p.url}">${p.location ? `${p.location}: ` : ''}${p.url}</div>
-                <button data-action="test-proxy" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 rounded">Тест</button>
-            </div>`;
-        }).join('');
-    };
-    
-    const loadSavedProxies = async () => {
-        if (!supabaseService) return;
-        state.isLoading = true;
-        render();
-        try {
-            state.savedProxies = await supabaseService.getProxies();
-        } catch (e) {
-            alert(`Ошибка загрузки прокси: ${e.message}`);
-        } finally {
-            state.isLoading = false;
-            render();
-        }
     };
     
     const handleAction = async (e) => {
@@ -321,23 +320,6 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 content.classList.toggle('hidden', content.id !== `tab-${tabId}`);
             });
             return;
-        }
-
-        if (e.target.dataset.action === 'toggle-proxy') {
-            const id = e.target.dataset.id;
-            const is_active = e.target.checked;
-            const proxy = state.savedProxies.find(p => p.id == id);
-            if(proxy) {
-                 proxy.is_active = is_active;
-                 try {
-                    await supabaseService.updateProxy(id, { is_active });
-                 } catch(err) {
-                    alert('Не удалось обновить статус прокси');
-                    proxy.is_active = !is_active; 
-                    render();
-                 }
-            }
-            return; 
         }
 
         const target = e.target.closest('[data-action]');
@@ -357,49 +339,9 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 onSave(newSettings);
                 break;
             }
-            case 'add-proxy': {
-                const url = prompt('Введите URL прокси-сервера (например, https://proxy.example.com:8443):');
-                if (url) {
-                    try {
-                        new URL(url);
-                        await supabaseService.addProxy({ url: url.trim(), is_active: false });
-                        await loadSavedProxies();
-                    } catch (err) {
-                        alert(`Ошибка: неверный URL или не удалось сохранить прокси.\n\n${err.message}`);
-                    }
-                }
+            case 'manage-proxies':
+                showProxyManagerModal();
                 break;
-            }
-            case 'find-proxies': {
-                state.isLoading = true;
-                state.foundProxies = [];
-                render();
-                try {
-                    const proxies = await findProxiesWithGemini({ apiKey: settings.geminiApiKey, proxyUrl: null });
-                    state.foundProxies = proxies;
-                } catch (err) {
-                    alert(`Ошибка поиска прокси: ${err.message}`);
-                } finally {
-                    state.isLoading = false;
-                    render();
-                }
-                break;
-            }
-            case 'test-proxy':
-            case 'retest-proxy': {
-                const url = target.dataset.url;
-                const id = target.dataset.id || null;
-                const isFoundProxy = !id;
-                showProxyTestModal({ url, id, isFoundProxy });
-                break;
-            }
-            case 'delete-proxy': {
-                if (confirm('Удалить этот прокси?')) {
-                    await supabaseService.deleteProxy(target.dataset.id);
-                    await loadSavedProxies();
-                }
-                break;
-            }
             case 'update-schema': {
                 const statusEl = modalElement.querySelector('#schema-update-status');
                 const workerUrl = modalElement.querySelector('#settings-management-worker-url')?.value.trim();
@@ -445,11 +387,12 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
     };
     
     modalElement.addEventListener('click', handleAction);
-    modalElement.addEventListener('change', handleAction);
+    modalElement.addEventListener('change', (e) => {
+        if(e.target.closest('[data-action="toggle-proxy"]')) {
+             handleAction(e);
+        }
+    });
     
     render();
-    if (settings.isSupabaseEnabled && supabaseService) {
-        loadSavedProxies();
-    }
     return modalElement;
 }
