@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
         saveKeys: document.getElementById('save-keys-button'),
         findProxies: document.getElementById('find-proxies-ai'),
         saveProxies: document.getElementById('save-proxies-button'),
+        goToApp: document.getElementById('go-to-app-button'),
     };
     
     const containers = {
@@ -174,19 +175,20 @@ document.addEventListener('DOMContentLoaded', () => {
         
         setStatus(containers.keysStatus, 'loading', 'Сохранение...');
         buttons.saveKeys.disabled = true;
+        buttons.saveKeys.textContent = 'Сохранение...'
 
         const { error } = await state.supabaseClient.rpc('upsert_user_settings', { new_settings: settingsUpdate });
 
         if (error) {
             setStatus(containers.keysStatus, 'error', `Ошибка сохранения: ${error.message}`);
-            buttons.saveKeys.disabled = false;
         } else {
             state.settings = settingsUpdate;
             setStatus(containers.keysStatus, 'success', 'Ключи успешно сохранены в вашем аккаунте.');
             steps.keys.dataset.status = 'completed';
-            buttons.saveKeys.disabled = false;
             showStep('proxy');
         }
+        buttons.saveKeys.disabled = false;
+        buttons.saveKeys.textContent = 'Сохранить и продолжить';
     });
 
     buttons.findProxies.addEventListener('click', async () => {
@@ -222,7 +224,36 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     buttons.saveProxies.addEventListener('click', async () => {
-        showStep('final');
+        setStatus(containers.proxyStatus, 'loading', 'Сохраняем список прокси...');
+        buttons.saveProxies.disabled = true;
+        try {
+            const proxiesToUpsert = state.selectedProxies.map((p, index) => ({
+                url: p.url,
+                alias: p.alias || p.geolocation,
+                geolocation: p.geolocation,
+                is_active: true,
+                priority: index
+            }));
+
+            if(proxiesToUpsert.length > 0) {
+                const { error } = await state.supabaseClient.from('proxies').upsert(proxiesToUpsert, { onConflict: 'user_id, url' });
+                if (error) throw error;
+            }
+            
+            setStatus(containers.proxyStatus, 'success', 'Список прокси сохранен.');
+            steps.proxy.dataset.status = 'completed';
+            showStep('final');
+        } catch (error) {
+            setStatus(containers.proxyStatus, 'error', `Ошибка сохранения: ${error.message}`);
+        } finally {
+            buttons.saveProxies.disabled = false;
+        }
+    });
+
+    buttons.goToApp.addEventListener('click', () => {
+        // Use localStorage to signal completion to the main app window
+        localStorage.setItem('setup_completed', 'true');
+        window.close();
     });
 
     document.body.addEventListener('click', e => {
@@ -246,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <p class="proxy-item-url" title="${proxy.url}">${proxy.alias || proxy.url}</p>
                 <p class="proxy-item-details">
                     <span>${proxy.geolocation || 'N/A'}</span>
-                    <span class="speed-info" style="display: ${proxy.last_speed_ms ? 'inline' : 'none'};"> | ${proxy.last_speed_ms} мс</span>
+                    <span class="speed-info" style="display: ${proxy.last_speed_ms ? 'inline' : 'none'};"> &middot; ${proxy.last_speed_ms} мс</span>
                 </p>
             </div>
             <div class="proxy-item-actions">
@@ -265,7 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
         item.dataset.lastStatus = status; // Save status for adding later
         const speedEl = item.querySelector('.speed-info');
         if (speed) {
-            speedEl.textContent = ` | ${speed} мс`;
+            speedEl.textContent = ` · ${speed} мс`;
             speedEl.style.display = 'inline';
             item.dataset.lastSpeed = speed; // Save speed for adding later
         } else {
@@ -332,10 +363,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.user = session.user;
                     await renderAuthenticatedState();
                 }
-                // Clean URL from auth tokens after processing
-                if (window.location.hash.includes('access_token')) {
-                    history.replaceState(null, document.title, window.location.pathname + window.location.search);
-                }
+            } else if (event === 'SIGNED_OUT') {
+                state.user = null;
+                // Reset to initial state
+                showStep('auth');
+                buttons.connectLogin.style.display = 'block';
+                containers.userProfile.style.display = 'none';
+                containers.authStatus.style.display = 'none';
+            }
+
+            // Clean URL from auth tokens after processing
+            if (window.location.hash.includes('access_token')) {
+                history.replaceState(null, document.title, window.location.pathname + window.location.search);
             }
         });
 

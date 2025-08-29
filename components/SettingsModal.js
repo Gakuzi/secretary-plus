@@ -244,7 +244,7 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                                     <label for="gemini-api-key" class="block text-sm font-medium text-gray-300">Gemini API Key</label>
                                     <input type="password" id="gemini-api-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.geminiApiKey || ''}">
                                 </div>
-                                <p class="text-xs text-gray-400 mt-1">Ключ хранится локально и синхронизируется с облаком. <a href="./setup-guide.html" class="text-blue-400 hover:underline">Как получить ключ?</a></p>
+                                <p class="text-xs text-gray-400 mt-1">Ключ хранится локально и синхронизируется с облаком. <a href="./setup-guide.html" target="_blank" class="text-blue-400 hover:underline">Как получить ключ?</a></p>
                             </div>
                              <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
                                 <h3 class="text-lg font-semibold text-gray-200">Резервное подключение Google</h3>
@@ -252,7 +252,7 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                                 <div class="space-y-2 mt-2">
                                     <label for="google-client-id" class="block text-sm font-medium text-gray-300">Google Client ID</label>
                                     <input type="text" id="google-client-id" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2" value="${currentSettings.googleClientId || ''}">
-                                    <p class="text-xs text-gray-400 mt-1"><a href="./setup-guide.html" class="text-blue-400 hover:underline">Как получить Client ID?</a></p>
+                                    <p class="text-xs text-gray-400 mt-1"><a href="./setup-guide.html" target="_blank" class="text-blue-400 hover:underline">Как получить Client ID?</a></p>
                                 </div>
                             </div>
                         </div>
@@ -578,8 +578,9 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                 const indicator = proxyListContainer.querySelector('.drag-over-indicator');
                 if (indicator) indicator.remove();
                 
-                const reorderedProxies = Array.from(proxyListContainer.querySelectorAll('.proxy-item')).map(item => {
-                    return authState.proxies.find(p => p.id === item.dataset.proxyId);
+                const reorderedProxies = Array.from(proxyListContainer.querySelectorAll('.proxy-item')).map((item, index) => {
+                    const proxy = authState.proxies.find(p => p.id.toString() === item.dataset.proxyId);
+                    return { ...proxy, priority: index };
                 });
                 onProxyReorder(reorderedProxies);
             }
@@ -614,7 +615,7 @@ export function createSettingsModal(currentSettings, authState, handlers) {
         proxyListContainer.addEventListener('click', e => {
             const item = e.target.closest('.proxy-item');
             if (!item) return;
-            const proxy = authState.proxies.find(p => p.id === item.dataset.proxyId);
+            const proxy = authState.proxies.find(p => p.id.toString() === item.dataset.proxyId);
             if (!proxy) return;
 
             if (e.target.closest('.proxy-test-btn')) showProxyTestModal(proxy);

@@ -945,6 +945,14 @@ ${payload.body}`;
                 }
             }
         });
+        
+        // Listen for completion of setup wizard from another tab/window
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'setup_completed' && e.newValue === 'true') {
+                localStorage.removeItem('setup_completed'); // Clean up the flag
+                window.location.reload(); // Reload to pick up the new session and settings
+            }
+        });
 
         await initializeAppServices();
         render(); 

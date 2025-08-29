@@ -26,55 +26,62 @@ export function createHelpModal(onClose, settings, analyzeErrorFn) {
                 <button id="close-help" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Закрыть помощь">&times;</button>
             </header>
             
-            <main class="flex-1 flex overflow-hidden">
-                <aside class="w-52 border-r border-gray-700 p-4">
-                    <nav class="flex flex-col space-y-2">
+            <main class="flex-1 flex flex-col md:flex-row overflow-hidden">
+                <aside class="w-52 border-r border-gray-700 p-4 hidden md:block">
+                    <nav class="flex flex-col space-y-2" id="desktop-help-nav">
                         <a href="#error-analysis" class="settings-tab-button active text-left" data-tab="error-analysis">Анализ ошибок</a>
-                        <a href="#setup-guide" class="settings-tab-button" data-tab="setup-guide">Инструкция</a>
+                        <a href="#setup-guide" class="settings-tab-button" data-tab="setup-guide">Мастер Настройки</a>
                         <a href="#dev-tools" class="settings-tab-button" data-tab="dev-tools">Инструменты</a>
                     </nav>
                 </aside>
-                <div class="flex-1 p-6 overflow-y-auto" id="help-tabs-content">
-                    
-                    <!-- Error Analysis Tab -->
-                    <div id="tab-error-analysis" class="settings-tab-content space-y-6">
-                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                            <h3 class="text-lg font-semibold text-gray-200">Диагностика с помощью ИИ</h3>
-                            <p class="text-sm text-gray-400 mt-1 mb-4">Столкнулись с проблемой? Вставьте полное сообщение об ошибке в поле ниже, и ассистент проанализирует её, предложив решение.</p>
-                            <div class="space-y-2">
-                                <label for="error-input-area" class="block text-sm font-medium text-gray-300">Сообщение об ошибке:</label>
-                                <textarea id="error-input-area" class="w-full h-32 bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition font-mono text-sm" placeholder="Например: Could not find the 'created_time' column of 'files' in the schema cache"></textarea>
+                <div class="flex-1 p-4 sm:p-6 overflow-y-auto">
+                    <div class="md:hidden mb-4">
+                        <label for="mobile-help-nav" class="sr-only">Раздел помощи</label>
+                        <select id="mobile-help-nav" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                        </select>
+                    </div>
+
+                    <div id="help-tabs-content">
+                        <!-- Error Analysis Tab -->
+                        <div id="tab-error-analysis" class="settings-tab-content space-y-6">
+                            <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                                <h3 class="text-lg font-semibold text-gray-200">Диагностика с помощью ИИ</h3>
+                                <p class="text-sm text-gray-400 mt-1 mb-4">Столкнулись с проблемой? Вставьте полное сообщение об ошибке в поле ниже, и ассистент проанализирует её, предложив решение.</p>
+                                <div class="space-y-2">
+                                    <label for="error-input-area" class="block text-sm font-medium text-gray-300">Сообщение об ошибке:</label>
+                                    <textarea id="error-input-area" class="w-full h-32 bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition font-mono text-sm" placeholder="Например: Could not find the 'created_time' column of 'files' in the schema cache"></textarea>
+                                </div>
+                                <div id="error-validation-message" class="text-red-400 text-sm mt-2 h-5"></div>
+                                <button id="analyze-error-button" class="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded-md font-semibold transition-colors">
+                                    Проанализировать
+                                </button>
                             </div>
-                            <div id="error-validation-message" class="text-red-400 text-sm mt-2 h-5"></div>
-                            <button id="analyze-error-button" class="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded-md font-semibold transition-colors">
-                                Проанализировать
-                            </button>
+                            <div id="error-analysis-result" class="p-4 bg-gray-900/50 rounded-lg border border-gray-700" style="display: none;">
+                                <!-- AI analysis result will be displayed here -->
+                            </div>
                         </div>
-                        <div id="error-analysis-result" class="p-4 bg-gray-900/50 rounded-lg border border-gray-700" style="display: none;">
-                            <!-- AI analysis result will be displayed here -->
-                        </div>
-                    </div>
 
-                    <!-- Setup Guide Tab -->
-                    <div id="tab-setup-guide" class="settings-tab-content hidden space-y-6">
-                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                            <h3 class="text-lg font-semibold text-gray-200">Инструкция по настройке</h3>
-                            <p class="text-sm text-gray-400 mt-1 mb-4">Для первоначальной настройки приложения и получения всех необходимых ключей (Google, Supabase, Gemini) воспользуйтесь нашим интерактивным руководством.</p>
-                             <a href="./setup-guide.html" target="_blank" rel="noopener noreferrer" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md font-semibold transition-colors">
-                                Открыть инструкцию
-                             </a>
+                        <!-- Setup Guide Tab -->
+                        <div id="tab-setup-guide" class="settings-tab-content hidden space-y-6">
+                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                                <h3 class="text-lg font-semibold text-gray-200">Мастер Настройки</h3>
+                                <p class="text-sm text-gray-400 mt-1 mb-4">Для первоначальной настройки или изменения ключевых параметров (API ключи, прокси) воспользуйтесь нашим интерактивным мастером.</p>
+                                 <a href="./setup-guide.html" target="_blank" rel="noopener noreferrer" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md font-semibold transition-colors">
+                                    Открыть Мастер Настройки
+                                 </a>
+                            </div>
                         </div>
-                    </div>
 
-                    <!-- Dev Tools Tab -->
-                    <div id="tab-dev-tools" class="settings-tab-content hidden space-y-6">
-                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                            <h3 class="text-lg font-semibold text-gray-200">Инструменты разработчика</h3>
-                            <p class="text-sm text-gray-400 mt-1 mb-4">Быстрый доступ для редактирования и отладки ассистента в Google AI Studio.</p>
-                            <button id="edit-service-button" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md font-semibold transition-colors">
-                                ${CodeIcon}
-                                <span>Редактировать в AI Studio</span>
-                            </button>
+                        <!-- Dev Tools Tab -->
+                        <div id="tab-dev-tools" class="settings-tab-content hidden space-y-6">
+                            <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                                <h3 class="text-lg font-semibold text-gray-200">Инструменты разработчика</h3>
+                                <p class="text-sm text-gray-400 mt-1 mb-4">Быстрый доступ для редактирования и отладки ассистента в Google AI Studio.</p>
+                                <button id="edit-service-button" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md font-semibold transition-colors">
+                                    ${CodeIcon}
+                                    <span>Редактировать в AI Studio</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -88,22 +95,33 @@ export function createHelpModal(onClose, settings, analyzeErrorFn) {
         if (e.target === modalOverlay) onClose();
     });
 
-    // Tab switching logic
+    // Tab switching logic for both desktop and mobile
     const tabButtons = modalOverlay.querySelectorAll('.settings-tab-button');
     const tabContents = modalOverlay.querySelectorAll('.settings-tab-content');
+    const mobileNav = modalOverlay.querySelector('#mobile-help-nav');
+
     tabButtons.forEach(button => {
-        button.addEventListener('click', (e) => {
-            e.preventDefault();
-            const tabId = e.target.dataset.tab;
-
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            e.target.classList.add('active');
-
-            tabContents.forEach(content => {
-                content.classList.toggle('hidden', content.id !== `tab-${tabId}`);
-            });
-        });
+        const option = document.createElement('option');
+        option.value = button.dataset.tab;
+        option.textContent = button.textContent;
+        mobileNav.appendChild(option);
     });
+
+    const switchTab = (tabId) => {
+        tabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
+        mobileNav.value = tabId;
+        tabContents.forEach(content => {
+            content.classList.toggle('hidden', content.id !== `tab-${tabId}`);
+        });
+    };
+    
+    modalOverlay.querySelector('#desktop-help-nav').addEventListener('click', (e) => {
+        e.preventDefault();
+        const button = e.target.closest('.settings-tab-button');
+        if (button) switchTab(button.dataset.tab);
+    });
+    
+    mobileNav.addEventListener('change', (e) => switchTab(e.target.value));
 
     // Error analysis logic
     const analyzeButton = modalOverlay.querySelector('#analyze-error-button');
