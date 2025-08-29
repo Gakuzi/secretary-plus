@@ -292,14 +292,15 @@ if (!window.isSecretaryPlusAppInitialized) {
             supabaseService = new SupabaseService(supabaseUrl, supabaseAnonKey);
             serviceProviders.supabase = supabaseService;
 
+            // The onAuthStateChange listener also fires on initial load, making
+            // a separate call to getSession() redundant and a potential source of race conditions.
+            // We rely on this single listener to handle all auth state.
             supabaseService.onAuthStateChange(async (event, session) => {
                 console.log(`Supabase auth event: ${event}`);
                 await handleAuthStateChange(session);
             });
             
-            const { data: { session } } = await supabaseService.client.auth.getSession();
-            await handleAuthStateChange(session); // Handle initial session
-            
+            // Supabase client is ready now, even if the user is not authenticated yet.
             state.isSupabaseReady = true;
 
         } catch (error) {
