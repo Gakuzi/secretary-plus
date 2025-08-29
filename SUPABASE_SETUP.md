@@ -35,7 +35,10 @@ CREATE TABLE IF NOT EXISTS public.contacts (
   phone TEXT,
   avatar_url TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  addresses JSONB,
+  organizations JSONB,
+  birthdays JSONB
 );
 ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS addresses JSONB;
 ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS organizations JSONB;
@@ -65,7 +68,9 @@ CREATE TABLE IF NOT EXISTS public.files (
   size BIGINT,
   owner TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  permissions JSONB,
+  last_modifying_user TEXT
 );
 ALTER TABLE public.files ADD COLUMN IF NOT EXISTS permissions JSONB;
 ALTER TABLE public.files ADD COLUMN IF NOT EXISTS last_modifying_user TEXT;
@@ -100,7 +105,13 @@ CREATE TABLE IF NOT EXISTS public.calendar_events (
     start_time TIMESTAMPTZ,
     end_time TIMESTAMPTZ,
     event_link TEXT,
-    meet_link TEXT
+    meet_link TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    attendees JSONB,
+    status TEXT,
+    creator_email TEXT,
+    is_all_day BOOLEAN DEFAULT false
 );
 ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
 ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
@@ -126,7 +137,11 @@ CREATE TABLE IF NOT EXISTS public.tasks (
     title TEXT,
     notes TEXT,
     due_date TIMESTAMPTZ,
-    status TEXT
+    status TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    completed_at TIMESTAMPTZ,
+    parent_task_id TEXT
 );
 ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
 ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
@@ -160,7 +175,11 @@ CREATE TABLE IF NOT EXISTS public.emails (
     subject TEXT,
     sender TEXT,
     snippet TEXT,
-    received_at TIMESTAMPTZ
+    received_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    full_body TEXT,
+    attachments_metadata JSONB
 );
 ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
 ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
@@ -196,10 +215,9 @@ END $$;
 CREATE TABLE IF NOT EXISTS public.user_settings (
   user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   settings JSONB NOT NULL,
-  updated_at TIMESTAMPTZ DEFAULT now()
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  management_worker_url TEXT
 );
--- Add the new management worker URL to the settings table if it doesn't exist
--- This is a placeholder, user will add it via UI
 ALTER TABLE public.user_settings ADD COLUMN IF NOT EXISTS management_worker_url TEXT;
 
 
