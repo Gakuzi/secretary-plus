@@ -14,9 +14,10 @@ const WIZARD_STEPS = [
 
 const EDGE_FUNCTION_CODE = `
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/postgres-js@1.22.7';
+// Используем современную, рекомендованную библиотеку postgres с надежным URL
+import postgres from 'https://deno.land/x/postgresjs@v3.4.2/mod.js';
 
-// Cors headers for preflight and actual requests
+// Заголовки CORS для preflight и обычных запросов
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -24,44 +25,45 @@ const CORS_HEADERS = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
+  // Обработка CORS preflight запросов
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS });
   }
 
   try {
-    // 1. Get secrets from environment variables
+    // 1. Получаем секреты из переменных окружения
     const DATABASE_URL = Deno.env.get('DATABASE_URL');
     const ADMIN_SECRET_TOKEN = Deno.env.get('ADMIN_SECRET_TOKEN');
 
     if (!DATABASE_URL || !ADMIN_SECRET_TOKEN) {
-      throw new Error('Database URL or Admin Token is not set in the function secrets.');
+      throw new Error('Database URL или Admin Token не установлены в секретах функции.');
     }
 
-    // 2. Check for the admin token in the request headers
+    // 2. Проверяем токен администратора в заголовках запроса
     const requestToken = req.headers.get('Authorization')?.replace('Bearer ', '');
     if (requestToken !== ADMIN_SECRET_TOKEN) {
-      return new Response(JSON.stringify({ error: 'Unauthorized: Invalid token.' }), {
+      return new Response(JSON.stringify({ error: 'Unauthorized: Неверный токен.' }), {
         status: 401,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       });
     }
 
-    // 3. Extract SQL query from the request body
-    const { sql } = await req.json();
-    if (!sql || typeof sql !== 'string') {
-      return new Response(JSON.stringify({ error: 'Bad Request: "sql" parameter is missing or invalid.' }), {
+    // 3. Извлекаем SQL-запрос из тела запроса
+    const { sql: sqlQuery } = await req.json();
+    if (!sqlQuery || typeof sqlQuery !== 'string') {
+      return new Response(JSON.stringify({ error: 'Bad Request: "sql" параметр отсутствует или неверен.' }), {
         status: 400,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       });
     }
 
-    // 4. Execute the SQL query
-    const pg = createClient({ connectionString: DATABASE_URL });
-    const result = await pg.sql(sql); // WARNING: This directly executes SQL. Ensure calls are trusted.
-    await pg.end();
+    // 4. Выполняем SQL-запрос
+    const sql = postgres(DATABASE_URL);
+    // .unsafe() необходим для выполнения "сырой" SQL строки
+    const result = await sql.unsafe(sqlQuery);
+    await sql.end();
 
-    // 5. Return the result
+    // 5. Возвращаем результат
     return new Response(JSON.stringify({ ok: true, result }), {
       status: 200,
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
