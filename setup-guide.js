@@ -167,6 +167,56 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     });
+
+    // --- SUPABASE SETUP PAGE LOGIC ---
+    const supabaseAccessTokenInput = document.getElementById('supabase-access-token');
+    const supabaseProjectIdInput = document.getElementById('supabase-project-id');
+    const curlCommandOutput = document.getElementById('curl-command-output');
+    const sqlScriptSource = document.getElementById('sql-script-source')?.textContent.trim() || '';
+
+    // Tab switching
+    const setupOptionsContainer = document.querySelector('.setup-options');
+    if (setupOptionsContainer) {
+        setupOptionsContainer.addEventListener('click', (e) => {
+            const tab = e.target.closest('.option-tab');
+            if (!tab) return;
+            
+            document.querySelectorAll('.option-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+            document.querySelector(tab.dataset.tabTarget).style.display = 'block';
+        });
+    }
+
+    // cURL command generation
+    const generateCurlCommand = () => {
+        if (!supabaseAccessTokenInput || !supabaseProjectIdInput || !curlCommandOutput) return;
+
+        const token = supabaseAccessTokenInput.value.trim() || '[YOUR_ACCESS_TOKEN]';
+        const projectId = supabaseProjectIdInput.value.trim() || '[YOUR_PROJECT_ID]';
+        
+        const escapedSql = JSON.stringify(sqlScriptSource);
+
+        const command = `curl -X POST 'https://api.supabase.com/v1/projects/${projectId}/sql' \\
+-H "Authorization: Bearer ${token}" \\
+-H "Content-Type: application/json" \\
+-d '{"sql": ${escapedSql}}'`;
+
+        curlCommandOutput.textContent = command;
+    };
+
+    if (supabaseAccessTokenInput && supabaseProjectIdInput) {
+        supabaseAccessTokenInput.addEventListener('input', generateCurlCommand);
+        supabaseProjectIdInput.addEventListener('input', generateCurlCommand);
+        generateCurlCommand(); // Initial generation
+    }
+
+    // Copy the SQL script from the hidden source to the visible block
+    const visibleSqlBlock = document.getElementById('sql-script-content');
+    if (visibleSqlBlock && sqlScriptSource) {
+        visibleSqlBlock.textContent = sqlScriptSource;
+    }
     
     // --- PROXY SETUP ---
     const findProxiesBtn = document.getElementById('find-proxies-ai');

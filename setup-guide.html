@@ -93,28 +93,79 @@
                 <!-- Supabase Setup -->
                 <section id="supabase-setup" class="wizard-step" style="display: none;">
                     <h2 class="section-title">2. Настройка Supabase</h2>
-                    <p class="mb-6">Supabase используется как безопасная база данных и сервис аутентификации. Если вы включите его, пользователи смогут входить через Google, а их контакты и файлы будут синхронизироваться для быстрого доступа.</p>
-
-                    <div class="step">
-                        <h3 class="step-title">Шаг 2.1: Создание проекта</h3>
-                        <ol>
-                            <li><a href="https://supabase.com/dashboard/projects" target="_blank" rel="noopener noreferrer">Откройте панель управления Supabase</a> и нажмите <strong>"New project"</strong>.</li>
-                            <li>Придумайте имя проекта, сгенерируйте и сохраните надежный пароль от базы данных.</li>
-                            <li>Выберите регион и нажмите <strong>"Create new project"</strong>.</li>
-                        </ol>
+                    <p class="mb-6">Supabase используется как безопасная база данных и сервис аутентификации. На этом шаге вам нужно создать таблицы и настроить политики безопасности.</p>
+                    
+                    <div class="setup-options mb-6">
+                        <button class="option-tab active" data-tab-target="#auto-setup">Вариант А: Автоматическая настройка (Рекомендуется)</button>
+                        <button class="option-tab" data-tab-target="#manual-setup">Вариант Б: Ручная настройка</button>
                     </div>
 
-                    <div class="step">
-                        <h3 class="step-title">Шаг 2.2: Настройка базы данных</h3>
-                        <p>Вам необходимо выполнить SQL-скрипт для создания таблиц и настройки политик безопасности. Это надежный способ гарантировать правильную работу базы данных.</p>
-                         <ol>
-                            <li>В меню вашего нового проекта выберите <strong>SQL Editor</strong> (редактор SQL).</li>
-                            <li>Нажмите <strong>"+ New query"</strong>.</li>
-                            <li>Скопируйте и вставьте весь SQL-скрипт ниже в редактор.</li>
-                            <li>Нажмите <strong>"RUN"</strong>.</li>
-                        </ol>
-                        <div class="code-block mt-4">
-                            <pre><code id="sql-script-content">-- =================================================================
+                    <!-- Auto Setup Content -->
+                    <div id="auto-setup" class="tab-content">
+                        <p class="mb-4">Этот метод использует официальный API Supabase для выполнения скрипта. Это <strong>на 100% надежный и безопасный способ</strong>, так как он обходит ограничения браузера, а ваш токен доступа не сохраняется.</p>
+                        
+                        <div class="step">
+                            <h3 class="step-title">Шаг 2.1: Сгенерируйте токен доступа</h3>
+                            <ol>
+                                <li><a href="https://supabase.com/dashboard/account/tokens" target="_blank" rel="noopener noreferrer">Откройте страницу токенов доступа</a> в вашем аккаунте Supabase.</li>
+                                <li>Нажмите "Generate New Token".</li>
+                                <li>Дайте ему имя (например, "Secretary Setup") и нажмите "Generate Token".</li>
+                                <li>Скопируйте сгенерированный токен и вставьте его в поле ниже.</li>
+                            </ol>
+                             <div class="input-group">
+                                <label for="supabase-access-token">Токен доступа (Access Token)</label>
+                                <input type="password" id="supabase-access-token" placeholder="sbp_...">
+                            </div>
+                        </div>
+
+                        <div class="step">
+                            <h3 class="step-title">Шаг 2.2: Найдите ID вашего проекта</h3>
+                            <ol>
+                                <li>Перейдите в настройки вашего проекта: `Project Settings` > `General`.</li>
+                                <li>Найдите поле `Reference ID` и скопируйте его.</li>
+                            </ol>
+                            <div class="input-group">
+                                <label for="supabase-project-id">ID вашего проекта (Project Reference ID)</label>
+                                <input type="text" id="supabase-project-id" placeholder="abdcdefghijklmnopqrst">
+                            </div>
+                        </div>
+
+                        <div class="step">
+                             <h3 class="step-title">Шаг 2.3: Выполните команду</h3>
+                             <p>Скопируйте сгенерированную ниже команду и выполните её в вашем терминале (на macOS, Linux или в Windows WSL). Она безопасно отправит SQL-скрипт в ваш проект.</p>
+                             <div class="code-block mt-4">
+                                <pre><code id="curl-command-output">Введите токен и ID проекта выше...</code></pre>
+                                <button class="copy-button" data-copy-target="curl-command-output">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                                    <span class="copy-text">Копировать</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Manual Setup Content -->
+                    <div id="manual-setup" class="tab-content" style="display: none;">
+                        <p class="mb-4">Этот метод требует ручного копирования SQL-скрипта в редактор Supabase. Используйте его, если у вас нет доступа к терминалу.</p>
+                        <div class="step">
+                            <h3 class="step-title">Инструкция по ручной настройке</h3>
+                            <ol>
+                                <li>В меню вашего нового проекта выберите <strong>SQL Editor</strong>.</li>
+                                <li>Нажмите <strong>"+ New query"</strong>.</li>
+                                <li>Скопируйте и вставьте весь SQL-скрипт ниже в редактор.</li>
+                                <li>Нажмите <strong>"RUN"</strong>.</li>
+                            </ol>
+                            <div class="code-block mt-4">
+                                <pre><code id="sql-script-content"></code></pre>
+                                <button class="copy-button" data-copy-target="sql-script-content">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                                    <span class="copy-text">Копировать</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- This code is needed by both methods but hidden from user view -->
+                    <pre style="display:none;"><code id="sql-script-source">-- =================================================================
 --  Скрипт настройки базы данных "Секретарь+"
 --  Версия: 1.8.0
 --  Этот скрипт является идемпотентным. Его можно безопасно 
@@ -373,23 +424,9 @@ BEGIN
   ON CONFLICT (user_id)
   DO UPDATE SET settings = EXCLUDED.settings, updated_at = now();
 END;
-$$;
-</code></pre>
-                            <button class="copy-button" data-copy-target="sql-script-content">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
-                                <span class="copy-text">Копировать</span>
-                            </button>
-                        </div>
-                    </div>
+$$;</code></pre>
 
-                    <div class="step">
-                        <h3 class="step-title">Шаг 2.3: Получение ключей Supabase</h3>
-                        <ol>
-                             <li>В меню проекта выберите <strong>Project Settings</strong> (значок шестеренки) &gt; <strong>API</strong>.</li>
-                            <li>Скопируйте <strong>Project URL</strong> и <strong>anon public key</strong>. Их нужно будет вставить в настройки приложения.</li>
-                        </ol>
-                    </div>
-                     <footer class="wizard-footer">
+                    <footer class="wizard-footer">
                         <button class="wizard-nav-button back-button" data-back="1">Назад</button>
                         <button class="wizard-nav-button next-button" data-next="3">Далее</button>
                     </footer>
