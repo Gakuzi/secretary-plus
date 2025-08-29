@@ -10,6 +10,7 @@ import { createStatsModal } from './components/StatsModal.js';
 import { createHelpModal } from './components/HelpModal.js';
 import { createDbSetupWizard } from './components/DbSetupWizard.js';
 import { createProxySetupWizard } from './components/ProxySetupWizard.js';
+import { createProxyManagerModal } from './components/ProxyManagerModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
@@ -525,6 +526,10 @@ function showSettingsModal() {
              modalContainer.innerHTML = ''; // Close settings before opening wizard
              showDbSetupWizard();
         },
+        onLaunchProxyManager: () => {
+            modalContainer.innerHTML = ''; // Close settings before opening manager
+            showProxyManagerModal();
+        }
     });
     modalContainer.appendChild(modal);
 }
@@ -545,6 +550,7 @@ function showProfileModal() {
                 googleProvider.setTimezone(newSettings.timezone);
                 if(newSettings.enableAutoSync) startAutoSync(); else stopAutoSync();
                 if(newSettings.enableEmailPolling) setupEmailPolling(); else stopEmailPolling();
+                onClose(); // Close the modal after saving.
             },
             onLogout: handleLogout,
             onDelete: async () => {
@@ -648,6 +654,15 @@ function showProxySetupWizard() {
         onClose: () => { wizardContainer.innerHTML = ''; },
      });
      wizardContainer.appendChild(wizard);
+}
+
+function showProxyManagerModal() {
+    wizardContainer.innerHTML = '';
+    const manager = createProxyManagerModal({
+        supabaseService: supabaseService,
+        onClose: () => { wizardContainer.innerHTML = ''; },
+    });
+    wizardContainer.appendChild(manager);
 }
 
 

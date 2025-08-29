@@ -837,12 +837,11 @@ export const testProxyConnection = async ({ proxyUrl, apiKey, signal }) => {
         // We will rely on the timeoutPromise race.
         const generatePromise = ai.models.generateContent({ model: GEMINI_MODEL, contents: 'test' });
         
-        // We are not using the AbortSignal for now as the SDK does not support it.
-        // The timeout is our primary cancellation mechanism.
         if (signal) {
              signal.addEventListener('abort', () => {
                 clearTimeout(timeoutId);
-             });
+                // No standard way to abort the underlying fetch in the current SDK version.
+             }, { once: true });
         }
         
         const response = await Promise.race([generatePromise, timeoutPromise]);
@@ -860,7 +859,7 @@ export const testProxyConnection = async ({ proxyUrl, apiKey, signal }) => {
     } catch (error) {
         clearTimeout(timeoutId);
 
-        if (error.name === 'AbortError') {
+        if (signal?.aborted) {
             return { status: 'cancelled', message: 'Тест отменен.', speed: null };
         }
 
@@ -868,11 +867,13 @@ export const testProxyConnection = async ({ proxyUrl, apiKey, signal }) => {
         
         let message = 'Не удалось подключиться через прокси.';
         if (error.message.includes('API key not valid')) {
-            message = 'Неверный Gemini API ключ.';
-        } else if (error.message.includes('fetch')) {
+            message = 'Прокси работает, но API ключ недействителен.';
+        } else if (error.message.includes('fetch') || error.message.includes('CORS')) {
              message = `Ошибка сети. Проверьте URL прокси и CORS-заголовки.`;
         } else if (error.message === 'Timeout') {
             message = 'Тайм-аут: прокси не ответил в течение 15 секунд.';
+        } else if (error.message.includes('429')) {
+             message = 'Прокси работает, но Gemini блокирует (слишком много запросов).';
         } else {
             message = error.message;
         }
@@ -925,7 +926,7 @@ ${errorMessage}
     }
 };
 
-export const findProxiesWithGemini = async ({ apiKey, proxyUrl }) => {
+export const findProxiesWithGemini = async ({ apiKey, proxyUrl, existingProxies = [] }) => {
     if (!apiKey) throw new Error("Ключ Gemini API не предоставлен.");
 
     const clientOptions = { apiKey };
@@ -934,8 +935,14 @@ export const findProxiesWithGemini = async ({ apiKey, proxyUrl }) => {
     }
     const ai = new GoogleGenAI(clientOptions);
 
-    const systemInstruction = `Ты — эксперт по сетевым протоколам. Твоя задача — сгенерировать список из 10 публичных, бесплатных прокси-серверов (ТОЛЬКО HTTPS). Для каждого прокси укажи его предполагаемую геолокацию (страна). Верни результат в виде JSON-массива объектов. Пример: [{"url": "https://proxy.example.com:8080", "location": "Germany"}, ...]. Если не можешь сгенерировать, верни пустой массив.`;
-    const prompt = `Предоставь, пожалуйста, 10 URL-адресов публичных HTTPS прокси-серверов с их предполагаемой геолокацией.`;
+    const existingProxiesString = existingProxies.length > 0 ? existingProxies.join(', ') : 'Нет';
+
+    const systemInstruction = `Ты — эксперт по сетевой безопасности. Моя цель — найти рабочие прокси для доступа к Gemini API.
+    Твоя задача: Найди 10 **НОВЫХ**, публичных, бесплатных HTTPS прокси. Отдай приоритет серверам, расположенным в регионах, где Gemini API гарантированно доступен (например, США, страны ЕС).
+    Верни результат в виде JSON-массива объектов. Пример: [{"url": "https://proxy.example.com:8080", "location": "Germany"}, ...]. Если не можешь сгенерировать, верни пустой массив.`;
+    
+    const prompt = `Вот список прокси, которые у меня **уже есть**, не предлагай их снова: \`${existingProxiesString}\`.
+    Предоставь, пожалуйста, 10 **НОВЫХ** URL-адресов публичных HTTPS прокси-серверов с их предполагаемой геолокацией.`;
 
     try {
         const response = await ai.models.generateContent({

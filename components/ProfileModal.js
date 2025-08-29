@@ -93,7 +93,6 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
                      <button data-action="logout" class="w-full sm:w-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md text-sm font-semibold">Выйти</button>
                 </div>
                 <div class="flex flex-col-reverse sm:flex-row w-full sm:w-auto gap-3">
-                     <button data-action="delete" class="w-full sm:w-auto px-4 py-2 bg-red-700 hover:bg-red-800 dark:bg-red-800 dark:hover:bg-red-700 text-white rounded-md text-sm font-semibold">Удалить из облака</button>
                      <button data-action="save" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-semibold">Сохранить</button>
                 </div>
             </footer>
@@ -220,7 +219,7 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
                         return acc;
                     }, {}),
                 };
-                onSave(newSettings);
+                await onSave(newSettings);
                 break;
             }
             case 'force-sync': {

@@ -237,3 +237,33 @@ body.recording-active {
 }
 #auth-container button.proxy-status-ok::after { background-color: #22c55e; } /* green-500 */
 #auth-container button.proxy-status-error::after { background-color: #ef4444; } /* red-500 */
+
+
+/* --- NEW PROXY MANAGER STYLES --- */
+
+/* Active Proxy Item in Left Column */
+.proxy-list-item-active {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem; /* 12px */
+    padding: 0.75rem;
+    border-radius: 0.5rem; /* rounded-lg */
+    transition: background-color 0.2s, box-shadow 0.2s;
+    user-select: none;
+}
+.proxy-list-item-active.dragging {
+    opacity: 0.5;
+    background-color: #e0e7ff; /* indigo-100 */
+}
+.dark .proxy-list-item-active.dragging {
+     background-color: #3730a3; /* indigo-800 */
+}
+
+/* Storage Proxy Item in Middle Column */
+.proxy-list-item-storage {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem; /* 12px */
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem; /* rounded-lg */
+}
