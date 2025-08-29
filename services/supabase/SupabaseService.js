@@ -458,7 +458,7 @@ export class SupabaseService {
             headers: {
                 'Content-Type': 'application/json',
                 'x-admin-token': adminToken,
-                'apikey': this.anonKey,
+                'Authorization': `Bearer ${this.anonKey}`,
             },
             body: JSON.stringify({ sql: sql }),
         });
