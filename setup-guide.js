@@ -115,25 +115,64 @@ document.addEventListener('DOMContentLoaded', () => {
     const runSqlButton = document.getElementById('run-sql-auto');
     const tokenInput = document.getElementById('supabase-token-input');
     const projectIdInput = document.getElementById('supabase-project-id');
-    const statusContainer = document.getElementById('auto-setup-status');
+    const progressContainer = document.getElementById('auto-setup-progress');
+    const resultContainer = document.getElementById('auto-setup-result');
+
+    const progressSteps = [
+        { id: 'connect', text: 'Подключение к Supabase Management API...' },
+        { id: 'execute', text: 'Выполнение SQL-скрипта...' },
+        { id: 'verify', text: 'Проверка ответа...' },
+    ];
+
+    function updateProgress(stepId, status, message = null) {
+        const stepElement = document.getElementById(`progress-step-${stepId}`);
+        if (stepElement) {
+            stepElement.dataset.status = status;
+            if (message) {
+                const textElement = stepElement.querySelector('span');
+                textElement.textContent = message;
+            }
+        }
+    }
 
     runSqlButton.addEventListener('click', async () => {
         const accessToken = tokenInput.value.trim();
         const projectId = projectIdInput.value.trim();
         const sqlContent = document.getElementById('sql-script-content').textContent.trim();
 
+        // --- 1. Validation ---
+        resultContainer.innerHTML = '';
+        resultContainer.className = '';
+        resultContainer.classList.add('hidden');
+        tokenInput.style.borderColor = '';
+        projectIdInput.style.borderColor = '';
+
         if (!accessToken || !projectId) {
-            statusContainer.className = 'status-message status-error';
-            statusContainer.textContent = 'Ошибка: Пожалуйста, введите токен доступа и ID проекта.';
+            resultContainer.className = 'status-message status-error';
+            resultContainer.textContent = 'Ошибка: Пожалуйста, введите токен доступа и ID проекта.';
+            resultContainer.classList.remove('hidden');
+            if (!accessToken) tokenInput.style.borderColor = '#ef4444';
+            if (!projectId) projectIdInput.style.borderColor = '#ef4444';
             return;
         }
 
-        statusContainer.className = 'status-message status-loading';
-        statusContainer.textContent = 'Выполнение скрипта... Это может занять до 30 секунд.';
+        // --- 2. Initialize UI ---
         runSqlButton.disabled = true;
         runSqlButton.textContent = 'Выполняется...';
+        progressContainer.classList.remove('hidden');
+        progressContainer.innerHTML = progressSteps.map(step => `
+            <div class="progress-step" id="progress-step-${step.id}" data-status="pending">
+                <span class="progress-step-text">${step.text}</span>
+            </div>
+        `).join('');
 
         try {
+            // --- 3. Execute Steps ---
+            updateProgress('connect', 'loading');
+            await new Promise(res => setTimeout(res, 500)); // Simulate connection
+            updateProgress('connect', 'success');
+
+            updateProgress('execute', 'loading');
             const response = await fetch(`https://api.supabase.com/v1/projects/${projectId}/sql`, {
                 method: 'POST',
                 headers: {
@@ -142,20 +181,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 body: JSON.stringify({ "query": sqlContent })
             });
+            updateProgress('execute', 'success');
 
+            updateProgress('verify', 'loading');
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
             }
+            updateProgress('verify', 'success');
 
-            // The API returns an empty response on success (200 OK)
-            statusContainer.className = 'status-message status-success';
-            statusContainer.textContent = 'Успешно! Схема базы данных настроена. Можете переходить к следующему шагу.';
+            // --- 4. Show Success ---
+            resultContainer.className = 'status-message status-success';
+            resultContainer.textContent = 'Успешно! Схема базы данных настроена. Можете переходить к следующему шагу.';
+            resultContainer.classList.remove('hidden');
 
         } catch (error) {
+            // --- 5. Show Error ---
             console.error('Auto-setup failed:', error);
-            statusContainer.className = 'status-message status-error';
-            statusContainer.textContent = `Ошибка выполнения: ${error.message}. Проверьте правильность токена и ID проекта. Вы можете попробовать ручной метод ниже.`;
+            progressSteps.forEach(step => {
+                const stepElement = document.getElementById(`progress-step-${step.id}`);
+                if (stepElement.dataset.status === 'loading') {
+                    updateProgress(step.id, 'error', `Ошибка на шаге: ${step.text}`);
+                }
+            });
+            resultContainer.className = 'status-message status-error';
+            resultContainer.textContent = `Ошибка выполнения: ${error.message}. Проверьте правильность токена и ID проекта. Вы можете попробовать ручной метод.`;
+            resultContainer.classList.remove('hidden');
         } finally {
             runSqlButton.disabled = false;
             runSqlButton.textContent = 'Запустить автоматическую настройку';

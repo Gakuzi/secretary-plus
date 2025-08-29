@@ -94,33 +94,42 @@
                         
                         <div id="auto-setup-block" class="bg-gray-800 border border-gray-700 rounded-lg p-6 mt-4">
                             <h4 class="text-xl font-semibold text-white mb-4">Вариант А: Автоматическая настройка (Рекомендуется)</h4>
-                            <ol class="space-y-3">
-                                <li>
-                                    <strong>Сгенерируйте токен доступа:</strong>
-                                    <ul class="list-disc list-inside text-gray-400 mt-1 pl-4">
+                            <div class="space-y-6">
+                                <div>
+                                    <h5 class="font-semibold mb-2">Шаг 1: Сгенерируйте токен доступа</h5>
+                                    <ul class="list-disc list-inside text-gray-400 mt-1 pl-4 text-sm">
                                         <li><a href="https://supabase.com/dashboard/account/tokens" target="_blank">Откройте страницу токенов доступа</a> в вашем аккаунте Supabase.</li>
                                         <li>Нажмите "Generate New Token".</li>
                                         <li>Дайте ему имя (например, "Secretary Setup") и нажмите "Generate Token".</li>
                                         <li>Скопируйте сгенерированный токен и вставьте его в поле ниже.</li>
                                     </ul>
-                                </li>
-                                 <li>
-                                    <strong>Найдите ID вашего проекта:</strong>
-                                     <ul class="list-disc list-inside text-gray-400 mt-1 pl-4">
+                                    <div class="mt-3">
+                                        <label for="supabase-token-input" class="block text-sm font-medium text-gray-300 mb-1">Токен доступа (Access Token)</label>
+                                        <input type="password" id="supabase-token-input" placeholder="Вставьте ваш токен (начинается с sup_...)" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 font-mono">
+                                    </div>
+                                </div>
+                                 <div>
+                                    <h5 class="font-semibold mb-2">Шаг 2: Найдите ID вашего проекта</h5>
+                                     <ul class="list-disc list-inside text-gray-400 mt-1 pl-4 text-sm">
                                          <li>Перейдите в настройки вашего проекта: `Project Settings` > `General`.</li>
                                          <li>Найдите поле `Reference ID` и скопируйте его.</li>
                                      </ul>
-                                </li>
-                                <li>
-                                    <strong>Запустите настройку:</strong>
-                                    <div class="space-y-4 my-4">
-                                        <input type="password" id="supabase-token-input" placeholder="Вставьте ваш токен доступа (вида sup-..." class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 font-mono">
+                                     <div class="mt-3">
+                                        <label for="supabase-project-id" class="block text-sm font-medium text-gray-300 mb-1">ID вашего проекта (Project Reference ID)</label>
                                         <input type="text" id="supabase-project-id" placeholder="Вставьте ваш Project Reference ID" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 font-mono">
-                                    </div>
+                                     </div>
+                                </div>
+                                <div>
+                                    <h5 class="font-semibold mb-2">Шаг 3: Запустите настройку</h5>
                                     <button id="run-sql-auto" class="wizard-nav-button next-button w-full text-center justify-center">Запустить автоматическую настройку</button>
-                                </li>
-                            </ol>
-                            <div id="auto-setup-status" class="mt-4 text-sm"></div>
+                                </div>
+                            </div>
+                            <div id="auto-setup-status-container" class="mt-4 text-sm">
+                                 <div id="auto-setup-progress" class="hidden mt-4 space-y-2 progress-steps">
+                                    <!-- Progress steps will be injected here by JS -->
+                                 </div>
+                                 <div id="auto-setup-result" class="hidden mt-4"></div>
+                            </div>
                         </div>
 
                         <details class="mt-6">
