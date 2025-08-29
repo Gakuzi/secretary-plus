@@ -456,9 +456,18 @@ input:checked + .toggle-slider:before {
 
 
 /* --- PROXY STATUS INDICATOR --- */
+@keyframes proxy-pulse {
+  0% {
+    box-shadow: 0 0 0 0px rgba(234, 179, 8, 0.7);
+  }
+  100% {
+    box-shadow: 0 0 0 5px rgba(234, 179, 8, 0);
+  }
+}
+
 #auth-container button {
     border: 3px solid transparent;
-    transition: border-color 0.3s ease-in-out;
+    transition: border-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
 }
 #auth-container button.proxy-status-off {
     border-color: #6b7280; /* gray-500 */
@@ -468,4 +477,8 @@ input:checked + .toggle-slider:before {
 }
 #auth-container button.proxy-status-error {
     border-color: #ef4444; /* red-500 */
+}
+#auth-container button.proxy-status-connecting {
+    border-color: #eab308; /* yellow-500 */
+    animation: proxy-pulse 1.5s infinite;
 }

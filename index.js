@@ -40,7 +40,7 @@ let state = {
     lastSeenEmailId: null,
     syncStatus: getSyncStatus(),
     isSyncing: false,
-    proxyStatus: 'off', // 'off', 'ok', 'error'
+    proxyStatus: 'off', // 'off', 'connecting', 'ok', 'error'
 };
 
 // --- SERVICE INSTANCES ---
@@ -74,10 +74,11 @@ function showSystemError(text) {
 
 // --- RENDER FUNCTIONS ---
 function updateProxyStatusIndicator(status) {
+    if (state.proxyStatus === status) return; // Avoid unnecessary DOM manipulation
     state.proxyStatus = status;
     const profileButton = authContainer.querySelector('button');
     if (profileButton) {
-        profileButton.classList.remove('proxy-status-ok', 'proxy-status-error', 'proxy-status-off');
+        profileButton.classList.remove('proxy-status-ok', 'proxy-status-error', 'proxy-status-off', 'proxy-status-connecting');
         profileButton.classList.add(`proxy-status-${status}`);
     }
 }
@@ -91,6 +92,7 @@ function renderAuth() {
         profileButton.innerHTML = `<img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full">`;
         profileButton.addEventListener('click', showProfileModal);
         authContainer.appendChild(profileButton);
+        // Ensure indicator is updated after rendering
         updateProxyStatusIndicator(state.proxyStatus);
     }
 }
@@ -233,14 +235,18 @@ async function getActiveProxy() {
         return null;
     }
     const proxies = await supabaseService.getProxies();
+    // Find the first active proxy that has a good status, ordered by priority
     const sorted = [...proxies]
-        .filter(p => p.is_active && p.last_status === 'ok')
+        .filter(p => p.is_active) // Don't filter by status here, try any active one
         .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
     
     if (sorted.length > 0) {
+        updateProxyStatusIndicator('connecting');
         return sorted[0].url;
     }
-    updateProxyStatusIndicator('error'); // No valid proxies found
+    
+    // If useProxy is on, but no active proxies exist.
+    updateProxyStatusIndicator('error');
     return null;
 };
 
@@ -251,8 +257,7 @@ async function processBotResponse(prompt, image = null) {
 
     try {
         proxyUrl = await getActiveProxy();
-        if (proxyUrl) updateProxyStatusIndicator('ok');
-
+        
         const response = await callGemini({
             prompt,
             history: state.messages.slice(0, -1),
@@ -265,7 +270,10 @@ async function processBotResponse(prompt, image = null) {
             proxyUrl: proxyUrl,
         });
 
-        if (response.sender === MessageSender.SYSTEM && proxyUrl) {
+        // If a proxy was used and the call was successful (not a system error), it's OK.
+        if (proxyUrl && response.sender !== MessageSender.SYSTEM) {
+             updateProxyStatusIndicator('ok');
+        } else if (proxyUrl) { // It was a system error with a proxy
              updateProxyStatusIndicator('error');
         }
 
