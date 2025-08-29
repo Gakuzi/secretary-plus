@@ -9,9 +9,9 @@ export function createWelcomeScreen({ isGoogleConnected, isSupabaseReady }) {
             <div class="max-w-md">
                 <h2 class="text-3xl font-bold mb-2">Добро пожаловать в Секретарь+</h2>
                 <p class="text-gray-400 mb-6">Ваш личный ассистент для управления цифровой продуктивностью. Начните с быстрой настройки вашего аккаунта.</p>
-                <a href="./setup-guide.html" target="_blank" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors text-white no-underline">
+                <button data-action="launch_setup" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors text-white">
                     Запустить мастер настройки
-                </a>
+                </button>
             </div>
         `;
     } else {

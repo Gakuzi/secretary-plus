@@ -34,9 +34,8 @@ if (!window.isSecretaryPlusAppInitialized) {
     - services/google/GoogleServiceProvider.js: Управляет всеми взаимодействиями с Google API (Календарь, Диск, Gmail и т.д.).
     - services/supabase/SupabaseService.js: Управляет всеми взаимодействиями с базой данных Supabase (аутентификация, синхронизация данных, запросы).
     - components/Chat.js: Рендерит интерфейс чата и панель ввода.
-    - components/SettingsModal.js: Рендерит UI настроек, где пользователь вводит свои личные ключи.
+    - components/SettingsModal.js: Рендерит UI настроек. Используется как для модального окна, так и для полноэкранного мастера настройки.
     - components/HelpModal.js: Рендерит UI 'Центра помощи' с ИИ-анализом ошибок.
-    - setup-guide.html: Интерактивный мастер для первоначальной настройки профиля пользователя (вход, ввод ключей).
     `;
 
 
@@ -54,6 +53,8 @@ if (!window.isSecretaryPlusAppInitialized) {
         syncStatus: getSyncStatus(),
         isSyncing: false,
         proxies: [], // User-defined proxy servers
+        currentView: 'loading', // 'loading', 'setup', 'chat'
+        initialSetupTab: 'profile',
     };
 
     // --- SERVICE INSTANCES ---
@@ -72,6 +73,7 @@ if (!window.isSecretaryPlusAppInitialized) {
 
 
     // --- DOM ELEMENTS ---
+    const appHeader = document.querySelector('header');
     const authContainer = document.getElementById('auth-container');
     const mainContent = document.getElementById('main-content');
     const settingsButton = document.getElementById('settings-button');
@@ -90,7 +92,78 @@ if (!window.isSecretaryPlusAppInitialized) {
     function showSystemError(text) {
         const errorMessage = { sender: MessageSender.SYSTEM, text: `Ошибка: ${text}`, id: Date.now() };
         // We don't push system errors to history to avoid confusing the AI model.
-        addMessageToChat(errorMessage);
+        if (state.currentView === 'chat') {
+            addMessageToChat(errorMessage);
+        } else {
+            alert(`Ошибка: ${text}`);
+        }
+    }
+
+
+    // --- VIEW MANAGEMENT ---
+
+    function renderScreen() {
+        mainContent.innerHTML = '';
+        if (state.currentView === 'setup') {
+            appHeader.classList.add('hidden');
+            const setupView = createSettingsModal(
+                state.settings,
+                {
+                    isGoogleConnected: state.isGoogleConnected,
+                    isSupabaseReady: state.isSupabaseReady,
+                    userProfile: state.userProfile,
+                    proxies: state.proxies,
+                },
+                {
+                    onSave: handleSaveSettingsAndTransition,
+                    onClose: () => {}, // No-op in setup mode
+                    onNavigateBack: showChatView,
+                    onLogin: handleLogin,
+                    onLogout: handleLogout,
+                    isSyncing: state.isSyncing,
+                    onForceSync: () => runAllSyncs(true),
+                    syncStatus: state.syncStatus,
+                    onProxyAdd: handleProxyAdd,
+                    onProxyUpdate: handleProxyUpdate,
+                    onProxyDelete: handleProxyDelete,
+                    onProxyTest: handleProxyTest,
+                    onFindAndUpdateProxies: handleFindAndUpdateProxies,
+                    onCleanupProxies: handleCleanupProxies,
+                    onProxyReorder: handleProxyReorder,
+                    onProxyRefresh: handleProxyRefresh,
+                },
+                true, // isSetupMode = true
+                state.initialSetupTab
+            );
+            mainContent.appendChild(setupView);
+        } else if (state.currentView === 'chat') {
+            appHeader.classList.remove('hidden');
+            renderChatInterface();
+        } else { // loading
+            appHeader.classList.add('hidden');
+            mainContent.innerHTML = `<div class="flex items-center justify-center h-full text-gray-400">Загрузка...</div>`;
+        }
+    }
+
+    function showSetupView(initialTab = 'profile') {
+        state.currentView = 'setup';
+        state.initialSetupTab = initialTab;
+        renderScreen();
+    }
+    
+    function showChatView() {
+        if (!state.isGoogleConnected) {
+             showSystemError('Для доступа к приложению необходимо войти в аккаунт.');
+             showSetupView('profile');
+             return;
+        }
+        if (!state.settings.geminiApiKey) {
+            showSystemError('Необходимо указать Gemini API ключ в настройках для продолжения.');
+            showSetupView('api-keys');
+            return;
+        }
+        state.currentView = 'chat';
+        renderScreen();
     }
 
 
@@ -105,24 +178,17 @@ if (!window.isSecretaryPlusAppInitialized) {
                     <img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full ring-2 ring-gray-600 ring-offset-2 ring-offset-gray-800">
                 </div>
             `;
-            profileElement.addEventListener('click', () => {
-                // If setup is incomplete (e.g., Gemini key is missing), force the user back to the wizard.
-                if (!state.settings.geminiApiKey) {
-                    window.location.href = './setup-guide.html';
-                } else {
-                    showSettings('profile');
-                }
-            });
+            profileElement.addEventListener('click', () => showSettings('profile'));
             authContainer.appendChild(profileElement);
         } else {
              // Header is empty when logged out. Login is initiated from Welcome or Settings.
         }
     }
 
-    function renderMainContent() {
-        mainContent.innerHTML = '';
+    function renderChatInterface() {
         const chatContainer = createChatInterface(handleSendMessage, showCameraView, showSystemError, handleNewChat);
         mainContent.appendChild(chatContainer);
+        renderAuth();
 
         const chatLog = document.getElementById('chat-log');
         if (state.messages.length === 0) {
@@ -134,11 +200,6 @@ if (!window.isSecretaryPlusAppInitialized) {
         } else {
             state.messages.forEach(msg => addMessageToChat(msg));
         }
-    }
-
-    function render() {
-        renderAuth();
-        renderMainContent();
     }
     
     // --- AUTO-SYNC LOGIC ---
@@ -164,10 +225,13 @@ if (!window.isSecretaryPlusAppInitialized) {
 
         console.log("Starting background sync...");
         state.isSyncing = true;
-        // Re-render the settings modal if it's open to show loading state
-        if (document.getElementById('settings-content')) {
-            showSettings('sync');
-        }
+        
+        const reRenderSettings = () => {
+            if (state.currentView === 'setup') renderScreen();
+            else if (!settingsModalContainer.classList.contains('hidden')) showSettings('sync');
+        };
+
+        reRenderSettings();
 
         for (const task of syncTasks) {
             try {
@@ -180,19 +244,13 @@ if (!window.isSecretaryPlusAppInitialized) {
                 console.error(`Failed to sync ${task.name}:`, error);
                 state.syncStatus[task.name] = { error: error.message };
             }
-            // Save status after each task to ensure progress is saved even if one fails
             saveSyncStatus(state.syncStatus);
-            // Re-render modal to update status line by line
-            if (document.getElementById('settings-content')) {
-                showSettings('sync');
-            }
+            reRenderSettings();
         }
 
         state.isSyncing = false;
         console.log("Background sync finished.");
-        if (document.getElementById('settings-content')) {
-            showSettings('sync');
-        }
+        reRenderSettings();
     }
 
     function startAutoSync() {
@@ -238,72 +296,65 @@ if (!window.isSecretaryPlusAppInitialized) {
     }
 
     async function handleAuthStateChange(session) {
+        // Clear local settings on auth change to ensure DB is the source of truth
+        localStorage.removeItem('secretary-plus-settings-v4');
+        state.settings = getSettings(); // Reset to defaults
+
         if (session) {
             state.supabaseUser = session.user;
             const providerToken = session.provider_token;
             googleProvider.setAuthToken(providerToken);
             
             try {
-                // Load settings from DB and merge with local
                 const dbSettings = await supabaseService.getUserSettings();
-                const localSettings = getSettings();
-                
                 if (dbSettings) {
                     console.log("Loaded settings from Supabase.");
-                    const mergedSettings = { ...localSettings, ...dbSettings };
-                    state.settings = mergedSettings;
-                } else {
-                    console.log("No settings found in Supabase for this user. Using local settings.");
-                    state.settings = localSettings;
-                     // This indicates a user who has logged in but never saved settings via the wizard.
-                     // We don't save local to cloud here anymore, wizard is the source of truth.
+                    state.settings = { ...getSettings(), ...dbSettings };
+                    saveSettings(state.settings); // Update local cache with DB settings
                 }
-                saveSettings(state.settings); // Update local cache with merged/latest settings
 
-                // Re-apply critical settings from the potentially new settings object
                 googleProvider.setTimezone(state.settings.timezone);
                 await googleProvider.initClient(state.settings.googleClientId, () => {});
                 
                 state.userProfile = await googleProvider.getUserProfile();
                 state.isGoogleConnected = true;
-                state.actionStats = await supabaseService.getActionStats(); // Load stats on login
-                state.proxies = await supabaseService.getProxies(); // Load proxies on login
+                state.actionStats = await supabaseService.getActionStats();
+                state.proxies = await supabaseService.getProxies();
                 startAutoSync();
+
+                if (!state.settings.geminiApiKey) {
+                    showSetupView('api-keys');
+                } else {
+                    showChatView();
+                }
 
             } catch (error) {
                 console.error("Failed to fetch Google user profile or settings via Supabase:", error);
                 showSystemError(`Не удалось получить профиль Google после аутентификации. Ошибка: ${error.message}`);
-                await handleLogout(); // Log out on critical failure to avoid inconsistent state
+                await handleLogout();
             }
         } else {
             // User is logged out
             state.supabaseUser = null;
             state.isGoogleConnected = false;
             state.userProfile = null;
-            state.actionStats = {}; // Clear stats on logout
-            state.proxies = []; // Clear proxies on logout
+            state.actionStats = {};
+            state.proxies = [];
             googleProvider.setAuthToken(null);
             stopAutoSync();
-            state.settings = getSettings();
+            showSetupView('profile');
         }
-        
-        renderAuth();
-        setupEmailPolling();
-        renderMainContent(); // Always re-render main content on auth change
     }
     
     async function initializeAppServices() {
         await initializeSupabase();
-        // Google client is now initialized after auth state change, not here.
         googleProvider.setTimezone(state.settings.timezone);
-        renderAuth();
     }
 
     // --- EVENT HANDLERS & LOGIC ---
 
     async function handleLogin() {
-        // This function is now deprecated in favor of the setup guide link
-        window.location.href = './setup-guide.html';
+        await supabaseService.signInWithGoogle();
     }
 
     async function handleLogout() {
@@ -311,44 +362,36 @@ if (!window.isSecretaryPlusAppInitialized) {
             await supabaseService.signOut();
         } else { 
             await googleProvider.disconnect();
-            // Manually reset state since there's no authStateChange event
-            state.isGoogleConnected = false;
-            state.userProfile = null;
-            state.actionStats = {};
-            state.supabaseUser = null;
-            renderAuth();
-            renderMainContent();
         }
+        // onAuthStateChange will handle the UI reset
     }
-
+    
     async function handleSaveSettings(newSettings) {
-        const oldSettings = { ...state.settings };
         state.settings = newSettings;
         saveSettings(newSettings);
 
-        hideSettings();
-
         try {
-            // If logged into Supabase, save to the database as well
             if (state.supabaseUser && supabaseService) {
                 await supabaseService.saveUserSettings(newSettings);
                 console.log("Settings saved to Supabase.");
             }
-
-            // Re-apply settings immediately
             googleProvider.setTimezone(newSettings.timezone);
-            
-            // Handle changes that require restarting services
-            if (newSettings.enableAutoSync !== oldSettings.enableAutoSync) {
-                newSettings.enableAutoSync ? startAutoSync() : stopAutoSync();
-            }
-            if (newSettings.enableEmailPolling !== oldSettings.enableEmailPolling) {
-                setupEmailPolling();
-            }
-            
         } catch (error) {
             console.error("Error applying new settings:", error);
             showSystemError(`Ошибка при применении настроек: ${error.message}`);
+        }
+    }
+
+    async function handleSaveSettingsAndTransition(newSettings) {
+        await handleSaveSettings(newSettings);
+        if (settingsModalContainer.classList.contains('hidden')) { // From setup view
+            if (state.settings.geminiApiKey) {
+                showChatView();
+            } else {
+                showSetupView('api-keys');
+            }
+        } else { // From modal
+            hideSettings();
         }
     }
     
@@ -358,7 +401,7 @@ if (!window.isSecretaryPlusAppInitialized) {
         if (confirm('Вы уверены, что хотите начать новый чат? Вся текущая история будет удалена.')) {
             state.messages = [];
             state.lastSeenEmailId = null;
-            renderMainContent();
+            renderChatInterface();
         }
     }
 
@@ -443,7 +486,6 @@ if (!window.isSecretaryPlusAppInitialized) {
                 case 'analyze_email':
                 case 'analyze_document':
                 case 'analyze_contact':
-                    // These actions involve sending the item's data back to Gemini for analysis
                     systemPrompt = `Проанализируй этот элемент и предложи контекстные действия: ${JSON.stringify(payload)}`;
                     break;
                 case 'download_ics':
@@ -456,7 +498,7 @@ if (!window.isSecretaryPlusAppInitialized) {
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
-                    return; // No need to call Gemini
+                    return;
                 case 'create_meet_with':
                     systemPrompt = `Создай событие в календаре для видеовстречи с ${payload.name} (${payload.email}) на ближайшее удобное время.`;
                     break;
@@ -505,7 +547,6 @@ if (!window.isSecretaryPlusAppInitialized) {
                     const latestEmail = recentEmails[0];
                     if (latestEmail.id !== state.lastSeenEmailId) {
                         state.lastSeenEmailId = latestEmail.id;
-                        // Avoid notifying about our own sent emails
                         if (latestEmail.from.includes(state.userProfile.email)) return;
                         
                         const notificationPrompt = `Только что пришло новое письмо от ${latestEmail.from} с темой "${latestEmail.subject}". Хочешь, я его проанализирую?`;
@@ -531,7 +572,7 @@ if (!window.isSecretaryPlusAppInitialized) {
             userProfile: state.userProfile,
             proxies: state.proxies,
         }, {
-            onSave: handleSaveSettings,
+            onSave: handleSaveSettingsAndTransition,
             onClose: hideSettings,
             onLogin: handleLogin,
             onLogout: handleLogout,
@@ -546,10 +587,9 @@ if (!window.isSecretaryPlusAppInitialized) {
             onCleanupProxies: handleCleanupProxies,
             onProxyReorder: handleProxyReorder,
             onProxyRefresh: handleProxyRefresh,
-        });
+        }, false, initialTab);
         settingsModalContainer.appendChild(modal);
         settingsModalContainer.classList.remove('hidden');
-        document.querySelector(`#desktop-settings-nav a[data-tab="${initialTab}"]`)?.click();
     }
     
     function hideSettings() { settingsModalContainer.classList.add('hidden'); }
@@ -561,7 +601,7 @@ if (!window.isSecretaryPlusAppInitialized) {
                 errorMessage,
                 appStructure: APP_STRUCTURE_CONTEXT,
                 apiKey: state.settings.geminiApiKey,
-                proxyUrl: null, // Use direct connection for reliability
+                proxyUrl: null,
             });
         };
         const modal = createHelpModal(hideHelp, state.settings, analyzeErrorFn);
@@ -581,7 +621,7 @@ if (!window.isSecretaryPlusAppInitialized) {
     function showCameraView() {
         cameraViewContainer.innerHTML = '';
         const cameraView = createCameraView(
-            (image) => handleSendMessage('', image), // Send empty prompt with image
+            (image) => handleSendMessage('', image),
             hideCameraView
         );
         cameraViewContainer.appendChild(cameraView);
@@ -594,9 +634,8 @@ if (!window.isSecretaryPlusAppInitialized) {
         try {
             const newProxy = await supabaseService.addProxy(proxyData);
             state.proxies.push(newProxy);
-            // sort by priority again
             state.proxies.sort((a,b) => a.priority - b.priority);
-            showSettings('proxies');
+            renderScreen(); // Re-render setup or settings view
         } catch (error) {
             console.error("Error adding proxy:", error);
             showSystemError(`Не удалось добавить прокси: ${error.message}`);
@@ -607,7 +646,7 @@ if (!window.isSecretaryPlusAppInitialized) {
         try {
             const updatedProxy = await supabaseService.updateProxy(id, updateData);
             state.proxies = state.proxies.map(p => p.id === id ? updatedProxy : p);
-            showSettings('proxies'); // Re-render to show changes
+            renderScreen(); // Re-render
         } catch (error) {
             console.error("Error updating proxy:", error);
             showSystemError(`Не удалось обновить прокси: ${error.message}`);
@@ -619,7 +658,7 @@ if (!window.isSecretaryPlusAppInitialized) {
             try {
                 await supabaseService.deleteProxy(id);
                 state.proxies = state.proxies.filter(p => p.id !== id);
-                showSettings('proxies');
+                renderScreen();
             } catch (error) {
                 console.error("Error deleting proxy:", error);
                 showSystemError(`Не удалось удалить прокси: ${error.message}`);
@@ -658,9 +697,9 @@ if (!window.isSecretaryPlusAppInitialized) {
                 geolocation: `${p.country}, ${p.city || ''}`.replace(/, $/, ''),
                 user_id: state.supabaseUser.id,
             }));
-            const upserted = await supabaseService.upsertProxies(newProxies);
-            state.proxies = await supabaseService.getProxies(); // Refresh the list
-            showSettings('proxies');
+            await supabaseService.upsertProxies(newProxies);
+            state.proxies = await supabaseService.getProxies();
+            renderScreen();
         } catch (error) {
             console.error("Error finding and updating proxies:", error);
             showSystemError(`Ошибка поиска прокси: ${error.message}`);
@@ -695,7 +734,7 @@ if (!window.isSecretaryPlusAppInitialized) {
             }
             state.proxies = await supabaseService.getProxies();
         }
-        showSettings('proxies');
+        renderScreen();
         button.disabled = false;
         button.textContent = 'Проверить все и удалить нерабочие';
     }
@@ -703,7 +742,6 @@ if (!window.isSecretaryPlusAppInitialized) {
     async function handleProxyReorder(reorderedProxies) {
         try {
             await supabaseService.updateProxyPriorities(reorderedProxies);
-            // Optimistically update local state to avoid a full refresh
             const priorityMap = new Map(reorderedProxies.map(p => [p.id, p.priority]));
             state.proxies.forEach(p => {
                 if(priorityMap.has(p.id.toString())) {
@@ -714,17 +752,16 @@ if (!window.isSecretaryPlusAppInitialized) {
         } catch (error) {
             console.error("Failed to reorder proxies:", error);
             showSystemError("Не удалось обновить порядок прокси.");
-            // Force a refresh from DB on error
             state.proxies = await supabaseService.getProxies();
         } finally {
-            showSettings('proxies'); // Re-render with new order
+            renderScreen();
         }
     }
 
     async function handleProxyRefresh() {
         try {
            state.proxies = await supabaseService.getProxies();
-           showSettings('proxies');
+           renderScreen();
         } catch (error) {
            console.error("Failed to refresh proxies:", error);
            showSystemError("Не удалось обновить список прокси.");
@@ -735,14 +772,12 @@ if (!window.isSecretaryPlusAppInitialized) {
     // --- GLOBAL EVENT LISTENERS ---
     
     document.addEventListener('click', (e) => {
-        // Handle contextual action button clicks
         const actionButton = e.target.closest('[data-action-prompt]');
         if (actionButton) {
             handleSendMessage(actionButton.dataset.actionPrompt);
             return;
         }
 
-        // Handle card action clicks
         const cardActionButton = e.target.closest('[data-action]');
         if (cardActionButton && !cardActionButton.hasAttribute('data-action-prompt')) {
              const payload = cardActionButton.dataset.payload ? JSON.parse(cardActionButton.dataset.payload) : {};
@@ -750,7 +785,6 @@ if (!window.isSecretaryPlusAppInitialized) {
              return;
         }
 
-        // Handle quick reply clicks
         const quickReplyButton = e.target.closest('.quick-reply-button');
         if (quickReplyButton) {
             const replyText = quickReplyButton.dataset.replyText;
@@ -764,12 +798,10 @@ if (!window.isSecretaryPlusAppInitialized) {
              const payload = JSON.parse(welcomePromptButton.dataset.payload);
              handleSendMessage(payload.prompt);
         }
-    });
-    
-    // Listen for completion of the setup guide in another window/tab
-    window.addEventListener('message', (event) => {
-        if (event.data === 'setup_completed') {
-            window.location.reload();
+        
+        const launchSetupButton = e.target.closest('[data-action="launch_setup"]');
+        if (launchSetupButton) {
+            showSetupView('profile');
         }
     });
 
@@ -782,6 +814,6 @@ if (!window.isSecretaryPlusAppInitialized) {
     helpButton.addEventListener('click', showHelp);
     statsButton.addEventListener('click', showStats);
 
+    renderScreen();
     initializeAppServices();
-    render();
 }

@@ -91,26 +91,38 @@ function timeAgo(dateString) {
 }
 
 
-export function createSettingsModal(currentSettings, authState, handlers) {
-    const { onSave, onClose, onLogin, onLogout, isSyncing, onForceSync, syncStatus, onProxyAdd, onProxyUpdate, onProxyDelete, onProxyTest, onFindAndUpdateProxies, onCleanupProxies, onProxyReorder, onProxyRefresh } = handlers;
-    const modalOverlay = document.createElement('div');
-    modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
+export function createSettingsModal(currentSettings, authState, handlers, isSetupMode = false, initialTab = 'profile') {
+    const { onSave, onClose, onLogin, onLogout, isSyncing, onForceSync, syncStatus, onProxyAdd, onProxyUpdate, onProxyDelete, onProxyTest, onFindAndUpdateProxies, onCleanupProxies, onProxyReorder, onProxyRefresh, onNavigateBack } = handlers;
     
-    modalOverlay.innerHTML = `
-        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col m-4" id="settings-content">
-            <header class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
-                <h2 class="text-2xl font-bold flex items-center gap-2">${SettingsIcon} Настройки</h2>
-                <button id="close-settings" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Закрыть настройки">&times;</button>
-            </header>
-            
+    const container = document.createElement('div');
+    container.className = isSetupMode
+        ? 'bg-gray-900 w-full h-full flex flex-col'
+        : 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
+
+    const backToAppButtonDisabled = !currentSettings.geminiApiKey;
+    const headerHtml = `
+      <header class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0 bg-gray-800">
+          <h2 class="text-2xl font-bold flex items-center gap-2">${SettingsIcon} ${isSetupMode ? 'Мастер Настройки' : 'Настройки'}</h2>
+          ${isSetupMode ? `
+            <button id="back-to-app" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed" ${backToAppButtonDisabled ? 'disabled title="Для продолжения необходимо сохранить Gemini API ключ"' : 'title="Вернуться в приложение"'}>
+                Вернуться в чат
+            </button>
+          ` : `
+            <button id="close-settings" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Закрыть настройки">&times;</button>
+          `}
+      </header>
+    `;
+    
+    const contentHtml = `
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col m-auto" id="settings-content">
+            ${isSetupMode ? '' : headerHtml}
             <main class="flex-1 flex flex-col md:flex-row overflow-hidden">
                 <aside class="w-52 border-r border-gray-700 p-4 hidden md:block">
                     <nav class="flex flex-col space-y-2" id="desktop-settings-nav">
                         <a href="#profile" class="settings-tab-button active text-left" data-tab="profile">Профиль</a>
-                        <a href="#proxies" class="settings-tab-button" data-tab="proxies">Прокси</a>
-                        <a href="#general" class="settings-tab-button" data-tab="general">Общие</a>
-                        <a href="#service-map" class="settings-tab-button" data-tab="service-map">Назначение сервисов</a>
                         <a href="#api-keys" class="settings-tab-button" data-tab="api-keys">API Ключи</a>
+                        <a href="#proxies" class="settings-tab-button" data-tab="proxies">Прокси</a>
+                        <a href="#service-map" class="settings-tab-button" data-tab="service-map">Назначение сервисов</a>
                         <a href="#sync" class="settings-tab-button" data-tab="sync">Синхронизация</a>
                         <a href="#about" class="settings-tab-button" data-tab="about">О приложении</a>
                     </nav>
@@ -123,7 +135,7 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                     </div>
 
                     <div id="settings-tabs-content">
-                        <!-- Profile Tab -->
+                        <!-- Profile/Auth Tab -->
                         <div id="tab-profile" class="settings-tab-content space-y-6">
                             ${authState.isGoogleConnected && authState.userProfile ? `
                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
@@ -141,13 +153,13 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                             </div>
                             ` : `
                             <div class="p-6 bg-gray-900/50 rounded-lg border border-gray-700 text-center">
-                                 <h3 class="text-lg font-semibold text-gray-200">Требуется вход</h3>
+                                 <h3 class="text-lg font-semibold text-gray-200">Шаг 1: Войдите в аккаунт</h3>
                                  <p class="text-sm text-gray-400 mt-2 mb-6">
                                     Для работы ассистента и сохранения настроек необходимо войти в аккаунт Google.
                                  </p>
-                                 <a href="./setup-guide.html" class="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors text-white no-underline">
-                                     Запустить мастер настройки
-                                 </a>
+                                 <button id="modal-login-button" class="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors text-white">
+                                     Войти через Google
+                                 </button>
                             </div>
                             `}
                              <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
@@ -158,6 +170,27 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                                         <p class="font-semibold">${authState.isSupabaseReady ? 'Подключено к Supabase' : 'Ошибка подключения'}</p>
                                         <p class="text-xs text-gray-400">${authState.isSupabaseReady ? 'Синхронизация и быстрый поиск активны.' : 'Функции ограничены. Проверьте консоль.'}</p>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                         <!-- API Keys Tab -->
+                        <div id="tab-api-keys" class="settings-tab-content space-y-6 hidden">
+                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                                <h3 class="text-lg font-semibold text-gray-200">Ключ Gemini API (Обязательно)</h3>
+                                <div class="space-y-2">
+                                    <label for="gemini-api-key" class="block text-sm font-medium text-gray-300">Gemini API Key</label>
+                                    <input type="password" id="gemini-api-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.geminiApiKey || ''}">
+                                </div>
+                                <p class="text-xs text-gray-400 mt-1">Ключ хранится локально и синхронизируется с облаком. <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-400 hover:underline">Как получить ключ?</a></p>
+                            </div>
+                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                                <h3 class="text-lg font-semibold text-gray-200">Резервное подключение Google</h3>
+                                <p class="text-sm text-gray-400">Этот Client ID используется только для входа, если облачное хранилище недоступно.</p>
+                                <div class="space-y-2 mt-2">
+                                    <label for="google-client-id" class="block text-sm font-medium text-gray-300">Google Client ID</label>
+                                    <input type="text" id="google-client-id" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2" value="${currentSettings.googleClientId || ''}">
+                                    <p class="text-xs text-gray-400 mt-1"><a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-blue-400 hover:underline">Как получить Client ID?</a></p>
                                 </div>
                             </div>
                         </div>
@@ -232,27 +265,6 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                             </div>
                         </div>
 
-                        <!-- API Keys Tab -->
-                        <div id="tab-api-keys" class="settings-tab-content space-y-6 hidden">
-                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                                <h3 class="text-lg font-semibold text-gray-200">Ключ Gemini API</h3>
-                                <div class="space-y-2">
-                                    <label for="gemini-api-key" class="block text-sm font-medium text-gray-300">Gemini API Key</label>
-                                    <input type="password" id="gemini-api-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.geminiApiKey || ''}">
-                                </div>
-                                <p class="text-xs text-gray-400 mt-1">Ключ хранится локально и синхронизируется с облаком. <a href="./setup-guide.html" target="_blank" class="text-blue-400 hover:underline">Как получить ключ?</a></p>
-                            </div>
-                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                                <h3 class="text-lg font-semibold text-gray-200">Резервное подключение Google</h3>
-                                <p class="text-sm text-gray-400">Этот Client ID используется только для входа, если облачное хранилище недоступно.</p>
-                                <div class="space-y-2 mt-2">
-                                    <label for="google-client-id" class="block text-sm font-medium text-gray-300">Google Client ID</label>
-                                    <input type="text" id="google-client-id" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2" value="${currentSettings.googleClientId || ''}">
-                                    <p class="text-xs text-gray-400 mt-1"><a href="./setup-guide.html" target="_blank" class="text-blue-400 hover:underline">Как получить Client ID?</a></p>
-                                </div>
-                            </div>
-                        </div>
-
                         <!-- Sync Tab -->
                         <div id="tab-sync" class="settings-tab-content hidden space-y-6">
                         </div>
@@ -264,29 +276,47 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                 </div>
             </main>
 
-            <footer class="flex justify-end p-4 border-t border-gray-700 flex-shrink-0">
-                <button id="save-settings" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold transition-colors">Сохранить и закрыть</button>
+            <footer class="flex justify-end p-4 border-t border-gray-700 flex-shrink-0 bg-gray-800">
+                <button id="save-settings" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold transition-colors">Сохранить</button>
             </footer>
         </div>
     `;
 
+    if (isSetupMode) {
+        container.innerHTML = `
+            ${headerHtml}
+            <div class="flex-1 overflow-hidden">
+                ${contentHtml}
+            </div>
+        `;
+    } else {
+        container.innerHTML = contentHtml;
+    }
+
+    const modalContent = container.querySelector('#settings-content');
+
     // --- Event Listeners ---
     
-    modalOverlay.querySelector('#close-settings').addEventListener('click', onClose);
-    modalOverlay.querySelector('#save-settings').addEventListener('click', () => {
+    const backToAppButton = container.querySelector('#back-to-app');
+    if(backToAppButton) backToAppButton.addEventListener('click', onNavigateBack);
+    
+    const closeButton = container.querySelector('#close-settings');
+    if (closeButton) closeButton.addEventListener('click', onClose);
+
+    container.querySelector('#save-settings').addEventListener('click', () => {
         const newSettings = {
-            geminiApiKey: modalOverlay.querySelector('#gemini-api-key')?.value.trim() ?? '',
-            googleClientId: modalOverlay.querySelector('#google-client-id')?.value.trim() ?? '',
-            timezone: modalOverlay.querySelector('#timezone-select')?.value ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
-            enableEmailPolling: modalOverlay.querySelector('#email-polling-toggle')?.checked ?? true,
-            enableAutoSync: modalOverlay.querySelector('#auto-sync-enabled-toggle')?.checked ?? true,
-            useProxy: modalOverlay.querySelector('#use-proxy-toggle')?.checked ?? true,
+            geminiApiKey: container.querySelector('#gemini-api-key')?.value.trim() ?? '',
+            googleClientId: container.querySelector('#google-client-id')?.value.trim() ?? '',
+            timezone: container.querySelector('#timezone-select')?.value ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+            enableEmailPolling: container.querySelector('#email-polling-toggle')?.checked ?? true,
+            enableAutoSync: container.querySelector('#auto-sync-enabled-toggle')?.checked ?? true,
+            useProxy: container.querySelector('#use-proxy-toggle')?.checked ?? true,
             serviceMap: {
-                calendar: modalOverlay.querySelector('#calendar-provider-select')?.value ?? 'google',
-                tasks: modalOverlay.querySelector('#tasks-provider-select')?.value ?? 'google',
-                contacts: modalOverlay.querySelector('#contacts-provider-select')?.value ?? 'google',
-                files: modalOverlay.querySelector('#files-provider-select')?.value ?? 'google',
-                notes: modalOverlay.querySelector('#notes-provider-select')?.value ?? 'supabase',
+                calendar: container.querySelector('#calendar-provider-select')?.value ?? 'google',
+                tasks: container.querySelector('#tasks-provider-select')?.value ?? 'google',
+                contacts: container.querySelector('#contacts-provider-select')?.value ?? 'google',
+                files: container.querySelector('#files-provider-select')?.value ?? 'google',
+                notes: container.querySelector('#notes-provider-select')?.value ?? 'supabase',
             }
         };
         onSave(newSettings);
@@ -333,8 +363,8 @@ export function createSettingsModal(currentSettings, authState, handlers) {
     }
 
 
-    modalOverlay.addEventListener('click', (e) => {
-        if (e.target === modalOverlay) onClose();
+    container.addEventListener('click', (e) => {
+        if (!isSetupMode && e.target === container) onClose();
 
         const analysisButton = e.target.closest('[data-action="analyze-error"]');
         if (analysisButton) {
@@ -355,9 +385,9 @@ export function createSettingsModal(currentSettings, authState, handlers) {
         }
     });
 
-    const tabButtons = modalOverlay.querySelectorAll('.settings-tab-button');
-    const tabContents = modalOverlay.querySelectorAll('.settings-tab-content');
-    const mobileNav = modalOverlay.querySelector('#mobile-settings-nav');
+    const tabButtons = container.querySelectorAll('.settings-tab-button');
+    const tabContents = container.querySelectorAll('.settings-tab-content');
+    const mobileNav = container.querySelector('#mobile-settings-nav');
     
     tabButtons.forEach(button => {
         const option = document.createElement('option');
@@ -368,21 +398,21 @@ export function createSettingsModal(currentSettings, authState, handlers) {
 
     const switchTab = (tabId) => {
         tabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
-        mobileNav.value = tabId;
+        if (mobileNav) mobileNav.value = tabId;
         tabContents.forEach(content => {
             content.classList.toggle('hidden', content.id !== `tab-${tabId}`);
         });
     };
-
-    modalOverlay.querySelector('#desktop-settings-nav').addEventListener('click', (e) => {
+    
+    container.querySelector('#desktop-settings-nav').addEventListener('click', (e) => {
         e.preventDefault();
         const button = e.target.closest('.settings-tab-button');
         if (button) switchTab(button.dataset.tab);
     });
     
-    mobileNav.addEventListener('change', (e) => switchTab(e.target.value));
+    if(mobileNav) mobileNav.addEventListener('change', (e) => switchTab(e.target.value));
     
-    const timezoneSelect = modalOverlay.querySelector('#timezone-select');
+    const timezoneSelect = container.querySelector('#timezone-select');
     if (timezoneSelect && 'supportedValuesOf' in Intl) {
         const timezones = Intl.supportedValuesOf('timeZone');
         timezoneSelect.innerHTML = timezones.map(tz =>
@@ -393,11 +423,14 @@ export function createSettingsModal(currentSettings, authState, handlers) {
         timezoneSelect.disabled = true;
     }
     
-    const logoutButton = modalOverlay.querySelector('#modal-logout-button');
+    const loginButton = container.querySelector('#modal-login-button');
+    if (loginButton) loginButton.addEventListener('click', onLogin);
+
+    const logoutButton = container.querySelector('#modal-logout-button');
     if (logoutButton) logoutButton.addEventListener('click', onLogout);
 
 
-    const syncTab = modalOverlay.querySelector('#tab-sync');
+    const syncTab = container.querySelector('#tab-sync');
     if (!authState.isSupabaseReady) {
         syncTab.innerHTML = `<p class="text-center text-gray-400">Синхронизация доступна только при подключении к облаку.</p>`;
     } else {
@@ -451,7 +484,7 @@ export function createSettingsModal(currentSettings, authState, handlers) {
     }
     
     // --- Proxy Tab Logic ---
-    const proxyTab = modalOverlay.querySelector('#tab-proxies');
+    const proxyTab = container.querySelector('#tab-proxies');
     if (authState.isSupabaseReady) {
         const proxyListContainer = proxyTab.querySelector('#proxy-list-container');
         const findProxiesAiButton = proxyTab.querySelector('#find-proxies-ai-button');
@@ -530,7 +563,7 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                     <footer class="p-4 bg-gray-900/50 rounded-b-lg flex justify-end gap-2" id="test-modal-footer" style="display: none;"></footer>
                 </div>
             `;
-            modalOverlay.querySelector('#proxy-test-modal-container').appendChild(testModal);
+            container.querySelector('#proxy-test-modal-container').appendChild(testModal);
             
             const content = testModal.querySelector('#test-modal-content');
             const footer = testModal.querySelector('#test-modal-footer');
@@ -680,7 +713,7 @@ export function createSettingsModal(currentSettings, authState, handlers) {
         proxyTab.innerHTML = `<p class="text-center text-gray-400">Управление прокси доступно только при подключении к облаку.</p>`;
     }
 
-    const aboutTab = modalOverlay.querySelector('#tab-about');
+    const aboutTab = container.querySelector('#tab-about');
     fetch('./app-info.json')
         .then(response => response.ok ? response.json() : Promise.reject('File not found'))
         .then(data => {
@@ -717,6 +750,8 @@ export function createSettingsModal(currentSettings, authState, handlers) {
             aboutTab.innerHTML = `<p class="text-center text-gray-400">Не удалось загрузить информацию о приложении.</p>`;
         });
 
+    // Set initial tab
+    switchTab(initialTab);
 
-    return modalOverlay;
+    return container;
 }
