@@ -475,7 +475,7 @@ function showProfileModal() {
                 errorMessage: error,
                 context: context,
                 apiKey: state.settings.geminiApiKey,
-                proxyUrl: null,
+                proxyUrl: null, // Always call directly, proxy is for user prompts
             });
         },
         onViewData: async ({ tableName }) => {
@@ -486,7 +486,7 @@ function showProfileModal() {
         },
     };
     
-    const modal = createProfileModal(state.userProfile, state.settings, handlers, state.syncStatus, syncTasks);
+    const modal = createProfileModal(state.userProfile, state.settings, handlers, state.syncStatus, syncTasks, supabaseService?.url);
     showModal(modal);
 }
 
