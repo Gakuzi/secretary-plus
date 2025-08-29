@@ -2,6 +2,7 @@
 
 
 
+
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
@@ -551,19 +552,25 @@ async function main() {
     settingsButton.addEventListener('click', showSettingsModal);
     helpButton.addEventListener('click', showHelpModal);
     statsButton.addEventListener('click', showStatsModal);
-    
-    const savedWizardState = sessionStorage.getItem('wizardState');
-    
+
+    // Check if we are returning from an OAuth flow.
+    // This is the most critical part of the fix to prevent wiping state.
+    const isAuthCallback = window.location.hash.includes('access_token') && window.location.hash.includes('provider_token');
+
     const settings = getSettings();
-    if (!settings.geminiApiKey) {
-         // Clear potentially conflicting old data before starting the wizard fresh.
-         // This is crucial for fixing authentication loops on mobile devices.
-         localStorage.removeItem('secretary-plus-settings-v4');
-         localStorage.removeItem('secretary-plus-sync-status-v1');
-         sessionStorage.removeItem('wizardState');
+    const savedWizardState = sessionStorage.getItem('wizardState');
+
+    // Condition to show the initial setup wizard:
+    // - No Gemini API key is saved.
+    // - AND we are NOT in the middle of an auth callback.
+    if (!settings.geminiApiKey && !isAuthCallback) {
+        // This is a true first run. Clear any potentially conflicting old data.
+        localStorage.removeItem('secretary-plus-settings-v4');
+        localStorage.removeItem('secretary-plus-sync-status-v1');
+        sessionStorage.removeItem('wizardState');
         
-         wizardContainer.innerHTML = '';
-         const wizard = createSetupWizard({
+        wizardContainer.innerHTML = '';
+        const wizard = createSetupWizard({
             onComplete: async (newSettings) => {
                 state.settings = newSettings;
                 saveSettings(newSettings);
@@ -578,12 +585,46 @@ async function main() {
             googleProvider,
             supabaseConfig: SUPABASE_CONFIG,
             googleClientId: GOOGLE_CLIENT_ID,
-            resumeState: savedWizardState ? JSON.parse(savedWizardState) : null
-         });
-         wizardContainer.appendChild(wizard);
+            resumeState: null // Cleared state, so no resume
+        });
+        wizardContainer.appendChild(wizard);
     } else {
+        // This path is for returning users OR for the auth callback.
+        // Initialize all services first. This allows the Supabase client
+        // to process the token from the URL hash if it's an auth callback.
         await initializeAppServices();
-        renderMainContent();
+
+        // After services are initialized and auth is potentially handled,
+        // check if settings are still incomplete (e.g., missing API key).
+        if (!state.settings.geminiApiKey) {
+            // We might be authenticated now but still need to complete the setup.
+            wizardContainer.innerHTML = '';
+            const wizard = createSetupWizard({
+                onComplete: async (newSettings) => {
+                    state.settings = newSettings;
+                    saveSettings(newSettings);
+                    wizardContainer.innerHTML = '';
+                    // Re-initialize services with the newly saved settings.
+                    await initializeAppServices();
+                    renderMainContent();
+                },
+                onExit: () => {
+                    wizardContainer.innerHTML = '';
+                    // Even if wizard is exited, render the main content.
+                    // The app will be in a limited state.
+                    renderMainContent();
+                },
+                googleProvider,
+                supabaseConfig: SUPABASE_CONFIG,
+                googleClientId: GOOGLE_CLIENT_ID,
+                // Pass the saved state to resume the wizard at the correct step.
+                resumeState: savedWizardState ? JSON.parse(savedWizardState) : null
+            });
+            wizardContainer.appendChild(wizard);
+        } else {
+            // All settings are present. Render the main application interface.
+            renderMainContent();
+        }
     }
 }
 
