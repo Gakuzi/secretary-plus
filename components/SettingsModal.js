@@ -2,7 +2,7 @@ import { getSettings, saveSettings } from '../utils/storage.js';
 import { testProxyConnection, findProxiesWithGemini } from '../services/geminiService.js';
 import * as Icons from './icons/Icons.js';
 
-export function createSettingsModal({ settings, supabaseService, geminiApiKey, onClose, onSave }) {
+export function createSettingsModal({ settings, supabaseService, onClose, onSave }) {
     const modalElement = document.createElement('div');
     modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4';
 
@@ -12,6 +12,7 @@ export function createSettingsModal({ settings, supabaseService, geminiApiKey, o
         savedProxies: [],
         foundProxies: [],
         testingProxyUrl: null,
+        testingProxyId: null,
     };
     
     const render = () => {
@@ -35,8 +36,19 @@ export function createSettingsModal({ settings, supabaseService, geminiApiKey, o
                     <!-- Proxy Manager Section -->
                     ${settings.isSupabaseEnabled && supabaseService ? `
                     <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                        <h3 class="font-semibold text-lg">Менеджер Прокси</h3>
-                        <p class="text-xs text-gray-400 mb-4">Используйте ИИ для поиска и тестирования прокси-серверов, если API Gemini недоступен в вашем регионе.</p>
+                        <div class="flex justify-between items-center mb-4">
+                            <div>
+                                <h3 class="font-semibold text-lg">Менеджер Прокси</h3>
+                                <p class="text-xs text-gray-400">Используйте ИИ для поиска и тестирования прокси-серверов.</p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <label for="use-proxy-toggle" class="font-medium text-sm">Использовать прокси</label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="use-proxy-toggle" ${settings.useProxy ? 'checked' : ''}>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
                         <div class="grid md:grid-cols-2 gap-6">
                             <!-- Left Panel: Saved Proxies -->
                             <div>
@@ -77,7 +89,10 @@ export function createSettingsModal({ settings, supabaseService, geminiApiKey, o
             <div class="proxy-list-item">
                 <div class="status-indicator ${p.last_status === 'ok' ? 'status-ok' : p.last_status === 'error' ? 'status-error' : 'status-untested'}"></div>
                 <div class="flex-1 font-mono text-xs truncate" title="${p.url}">${p.url}</div>
-                <button data-action="delete-proxy" data-id="${p.id}" class="px-2 py-0.5 text-xs bg-red-800 hover:bg-red-700 rounded-full">&times;</button>
+                <div class="flex items-center gap-1">
+                    <button data-action="retest-proxy" data-id="${p.id}" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 rounded">Тест</button>
+                    <button data-action="delete-proxy" data-id="${p.id}" class="p-1 text-xs bg-red-800 hover:bg-red-700 rounded-full leading-none">${Icons.TrashIcon.replace('width="24" height="24"', 'width="12" height="12"')}</button>
+                </div>
             </div>
         `).join('');
     };
@@ -85,11 +100,11 @@ export function createSettingsModal({ settings, supabaseService, geminiApiKey, o
     const renderFoundProxies = () => {
         if (state.isLoading && !state.testingProxyUrl) return `<p class="text-sm text-gray-500 text-center py-4">Поиск...</p>`;
         if (state.foundProxies.length === 0) return `<p class="text-sm text-gray-500 text-center py-4">Нажмите "Найти", чтобы начать.</p>`;
-        return state.foundProxies.map(url => `
+        return state.foundProxies.map(p => `
              <div class="proxy-list-item">
                 <div class="status-indicator status-untested"></div>
-                <div class="flex-1 font-mono text-xs truncate" title="${url}">${url}</div>
-                <button data-action="test-proxy" data-url="${url}" class="px-2 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 rounded">Тест</button>
+                <div class="flex-1 font-mono text-xs truncate" title="${p.url}">${p.location ? `${p.location}: ` : ''}${p.url}</div>
+                <button data-action="test-proxy" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 rounded">Тест</button>
             </div>
         `).join('');
     };
@@ -107,6 +122,46 @@ export function createSettingsModal({ settings, supabaseService, geminiApiKey, o
             render();
         }
     };
+    
+    const runProxyTest = async (url, id = null) => {
+        state.testingProxyUrl = url;
+        state.testingProxyId = id; // Store ID if we are re-testing
+        const modal = modalElement.querySelector('#proxy-test-modal');
+        const content = modalElement.querySelector('#proxy-test-modal-content');
+        modal.classList.remove('hidden');
+        content.innerHTML = `<p class="font-semibold mb-2">Тестирование...</p><p class="font-mono text-sm text-gray-400 break-all">${url}</p><div class="loading-dots mt-4"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
+        
+        const result = await testProxyConnection({ proxyUrl: url, apiKey: settings.geminiApiKey });
+
+        const testResultHtml = `
+            <div class="w-full text-left text-sm mt-4 space-y-2">
+                <div class="test-result-item">
+                    <span class="test-result-label">Статус</span>
+                    <span class="test-result-value ${result.status === 'ok' ? 'text-green-400' : 'text-red-400'}">${result.status === 'ok' ? 'Успешно' : 'Ошибка'}</span>
+                </div>
+                 ${result.speed !== null ? `<div class="test-result-item">
+                    <span class="test-result-label">Скорость ответа</span>
+                    <span class="test-result-value">${result.speed} мс</span>
+                </div>` : ''}
+                ${result.geolocation ? `<div class="test-result-item">
+                    <span class="test-result-label">Геолокация</span>
+                    <span class="test-result-value">${result.geolocation}</span>
+                </div>` : ''}
+            </div>
+             ${result.status !== 'ok' ? `<p class="text-xs text-gray-500 mt-2 text-center w-full">${result.message}</p>` : ''}
+        `;
+        
+        content.innerHTML = `
+            <p class="font-semibold text-lg mb-2">Результат теста</p>
+            <p class="font-mono text-sm text-gray-400 break-all mb-2">${url}</p>
+            ${testResultHtml}
+            <div class="flex gap-3 mt-6">
+                <button data-action="retest-proxy-from-modal" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md">Повторить</button>
+                <button data-action="reject-proxy" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md">Отклонить</button>
+                ${result.status === 'ok' ? `<button data-action="use-proxy" data-speed="${result.speed}" data-geo="${result.geolocation}" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md">Использовать</button>` : ''}
+            </div>
+        `;
+    };
 
     const handleAction = async (e) => {
         const target = e.target.closest('[data-action]');
@@ -119,6 +174,7 @@ export function createSettingsModal({ settings, supabaseService, geminiApiKey, o
             case 'save': {
                 const newSettings = {
                     geminiApiKey: modalElement.querySelector('#settings-gemini-api-key').value.trim(),
+                    useProxy: modalElement.querySelector('#use-proxy-toggle')?.checked || false,
                 };
                 onSave(newSettings);
                 break;
@@ -128,7 +184,7 @@ export function createSettingsModal({ settings, supabaseService, geminiApiKey, o
                 state.foundProxies = [];
                 render();
                 try {
-                    const proxies = await findProxiesWithGemini({ apiKey: geminiApiKey });
+                    const proxies = await findProxiesWithGemini({ apiKey: settings.geminiApiKey });
                     state.foundProxies = proxies;
                 } catch (err) {
                     alert(`Ошибка поиска прокси: ${err.message}`);
@@ -139,47 +195,44 @@ export function createSettingsModal({ settings, supabaseService, geminiApiKey, o
                 break;
             }
             case 'test-proxy': {
-                const url = target.dataset.url;
-                state.testingProxyUrl = url;
-                const modal = modalElement.querySelector('#proxy-test-modal');
-                const content = modalElement.querySelector('#proxy-test-modal-content');
-                modal.classList.remove('hidden');
-                content.innerHTML = `<p class="font-semibold mb-2">Тестирование...</p><p class="font-mono text-sm text-gray-400 break-all">${url}</p><div class="loading-dots mt-4"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
-
-                const result = await testProxyConnection({ proxyUrl: url, apiKey: geminiApiKey });
-                
-                content.innerHTML = `
-                    <p class="font-semibold text-lg mb-2">Результат теста</p>
-                    <p class="font-mono text-sm text-gray-400 break-all mb-4">${url}</p>
-                    ${result.status === 'ok' 
-                        ? `<p class="text-green-400 font-bold">✓ Успешно</p>`
-                        : `<p class="text-red-400 font-bold">✗ Ошибка</p><p class="text-xs text-gray-500 mt-1">${result.message}</p>`
-                    }
-                    <div class="flex gap-3 mt-6">
-                        <button data-action="retest-proxy" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md">Повторить</button>
-                        <button data-action="reject-proxy" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md">Отклонить</button>
-                        ${result.status === 'ok' ? `<button data-action="use-proxy" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md">Использовать</button>` : ''}
-                    </div>
-                `;
+                await runProxyTest(target.dataset.url);
                 break;
             }
-            case 'retest-proxy': {
-                const button = modalElement.querySelector('[data-action="test-proxy"][data-url="'+state.testingProxyUrl+'"]');
-                if (button) button.click();
+             case 'retest-proxy': {
+                await runProxyTest(target.dataset.url, target.dataset.id);
+                break;
+            }
+            case 'retest-proxy-from-modal': {
+                await runProxyTest(state.testingProxyUrl, state.testingProxyId);
                 break;
             }
             case 'reject-proxy': {
-                state.foundProxies = state.foundProxies.filter(p => p !== state.testingProxyUrl);
+                state.foundProxies = state.foundProxies.filter(p => p.url !== state.testingProxyUrl);
                 state.testingProxyUrl = null;
+                state.testingProxyId = null;
                 modalElement.querySelector('#proxy-test-modal').classList.add('hidden');
                 render();
                 break;
             }
             case 'use-proxy': {
+                const proxyData = { 
+                    url: state.testingProxyUrl, 
+                    last_status: 'ok',
+                    last_speed_ms: target.dataset.speed,
+                    geolocation: target.dataset.geo,
+                };
+
                 try {
-                    await supabaseService.addProxy({ url: state.testingProxyUrl, last_status: 'ok' });
-                    state.foundProxies = state.foundProxies.filter(p => p !== state.testingProxyUrl);
+                    // If we were re-testing a saved proxy
+                    if (state.testingProxyId) {
+                        await supabaseService.updateProxy(state.testingProxyId, proxyData);
+                    } else { // It's a new proxy from the 'found' list
+                        await supabaseService.addProxy(proxyData);
+                        state.foundProxies = state.foundProxies.filter(p => p.url !== state.testingProxyUrl);
+                    }
+                    
                     state.testingProxyUrl = null;
+                    state.testingProxyId = null;
                     modalElement.querySelector('#proxy-test-modal').classList.add('hidden');
                     await loadSavedProxies();
                 } catch (err) {

@@ -5,6 +5,7 @@ import { callGemini, analyzeGenericErrorWithGemini } from './services/geminiServ
 import { getSettings, saveSettings, getSyncStatus, saveSyncStatus } from './utils/storage.js';
 import { createSetupWizard } from './components/SetupWizard.js';
 import { createSettingsModal } from './components/SettingsModal.js';
+import { createProfileModal } from './components/ProfileModal.js';
 import { createStatsModal } from './components/StatsModal.js';
 import { createHelpModal } from './components/HelpModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
@@ -39,6 +40,7 @@ let state = {
     lastSeenEmailId: null,
     syncStatus: getSyncStatus(),
     isSyncing: false,
+    proxyStatus: 'off', // 'off', 'ok', 'error'
 };
 
 // --- SERVICE INSTANCES ---
@@ -71,6 +73,15 @@ function showSystemError(text) {
 }
 
 // --- RENDER FUNCTIONS ---
+function updateProxyStatusIndicator(status) {
+    state.proxyStatus = status;
+    const profileButton = authContainer.querySelector('button');
+    if (profileButton) {
+        profileButton.classList.remove('proxy-status-ok', 'proxy-status-error', 'proxy-status-off');
+        profileButton.classList.add(`proxy-status-${status}`);
+    }
+}
+
 function renderAuth() {
     authContainer.innerHTML = '';
     if (state.isGoogleConnected && state.userProfile) {
@@ -78,7 +89,9 @@ function renderAuth() {
         profileButton.className = 'flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500 rounded-full';
         profileButton.setAttribute('aria-label', 'Открыть профиль пользователя');
         profileButton.innerHTML = `<img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full">`;
+        profileButton.addEventListener('click', showProfileModal);
         authContainer.appendChild(profileButton);
+        updateProxyStatusIndicator(state.proxyStatus);
     }
 }
 
@@ -201,6 +214,9 @@ async function handleLogout() {
     } else {
         await googleProvider.disconnect();
     }
+    // A more robust way to clear state
+    localStorage.removeItem('secretary-plus-settings-v4');
+    localStorage.removeItem('secretary-plus-sync-status-v1');
     window.location.reload();
 }
 
@@ -211,20 +227,32 @@ function handleNewChat() {
     }
 }
 
+async function getActiveProxy() {
+    if (!state.settings.useProxy || !state.isSupabaseReady || !supabaseService) {
+        updateProxyStatusIndicator('off');
+        return null;
+    }
+    const proxies = await supabaseService.getProxies();
+    const sorted = [...proxies]
+        .filter(p => p.is_active && p.last_status === 'ok')
+        .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+    
+    if (sorted.length > 0) {
+        return sorted[0].url;
+    }
+    updateProxyStatusIndicator('error'); // No valid proxies found
+    return null;
+};
+
 async function processBotResponse(prompt, image = null) {
     state.isLoading = true;
     showLoadingIndicator();
-
-    const findBestProxy = async () => {
-        if (!state.isSupabaseReady || !supabaseService) return null;
-        const proxies = await supabaseService.getProxies();
-        const sorted = [...proxies]
-            .filter(p => p.is_active && p.last_status === 'ok')
-            .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
-        return sorted.length > 0 ? sorted[0].url : null;
-    };
+    let proxyUrl = null;
 
     try {
+        proxyUrl = await getActiveProxy();
+        if (proxyUrl) updateProxyStatusIndicator('ok');
+
         const response = await callGemini({
             prompt,
             history: state.messages.slice(0, -1),
@@ -234,8 +262,12 @@ async function processBotResponse(prompt, image = null) {
             isGoogleConnected: state.isGoogleConnected,
             image,
             apiKey: state.settings.geminiApiKey,
-            proxyUrl: await findBestProxy(),
+            proxyUrl: proxyUrl,
         });
+
+        if (response.sender === MessageSender.SYSTEM && proxyUrl) {
+             updateProxyStatusIndicator('error');
+        }
 
         if (response.functionCallName && supabaseService && state.isSupabaseReady) {
             state.actionStats[response.functionCallName] = (state.actionStats[response.functionCallName] || 0) + 1;
@@ -247,6 +279,7 @@ async function processBotResponse(prompt, image = null) {
         renderContextualActions(response.contextualActions);
     } catch (error) {
         showSystemError(`Произошла ошибка: ${error.message}`);
+        if (proxyUrl) updateProxyStatusIndicator('error');
     } finally {
         state.isLoading = false;
         hideLoadingIndicator();
@@ -354,7 +387,6 @@ function showSettingsModal() {
     const modal = createSettingsModal({
         settings: state.settings,
         supabaseService: supabaseService,
-        geminiApiKey: state.settings.geminiApiKey,
         onClose: hideModal,
         onSave: (newSettings) => {
             state.settings = { ...state.settings, ...newSettings };
@@ -367,6 +399,41 @@ function showSettingsModal() {
             initializeAppServices(); // Re-init to apply changes
         },
     });
+    showModal(modal);
+}
+
+function showProfileModal() {
+    const handlers = {
+        onClose: hideModal,
+        onLogout: handleLogout,
+        onSave: (newSettings) => {
+             state.settings = newSettings;
+             saveSettings(state.settings);
+             if (supabaseService) {
+                 supabaseService.saveUserSettings(newSettings)
+                    .then(() => {
+                        hideModal();
+                        initializeAppServices();
+                    })
+                    .catch(e => showSystemError(`Ошибка сохранения настроек в облако: ${e.message}`));
+             } else {
+                hideModal();
+                initializeAppServices();
+             }
+        },
+        onDelete: async () => {
+            if (confirm('Вы уверены, что хотите удалить ВСЕ ваши облачные настройки? Это действие необратимо.')) {
+                try {
+                    await supabaseService.deleteUserSettings();
+                    alert('Настройки в облаке удалены. Локальные настройки остались.');
+                    hideModal();
+                } catch(e) {
+                    showSystemError(`Ошибка удаления настроек: ${e.message}`);
+                }
+            }
+        },
+    };
+    const modal = createProfileModal(state.userProfile, state.settings, handlers);
     showModal(modal);
 }
 

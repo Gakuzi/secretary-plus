@@ -56,11 +56,11 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 <div id="found-proxy-list" class="space-y-2 max-h-40 overflow-y-auto pr-2">
                     ${state.isLoading && !state.testingProxyUrl ? `<p class="text-sm text-gray-500 text-center py-4">Поиск...</p>` :
                      state.foundProxies.length === 0 ? `<p class="text-sm text-gray-500 text-center py-4">Нажмите "Найти", чтобы начать.</p>` :
-                     state.foundProxies.map(url => `
+                     state.foundProxies.map(p => `
                         <div class="proxy-list-item">
                             <div class="status-indicator status-untested"></div>
-                            <div class="flex-1 font-mono text-xs truncate" title="${url}">${url}</div>
-                            <button data-action="test-proxy" data-url="${url}" class="px-2 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 rounded">Тест</button>
+                             <div class="flex-1 font-mono text-xs truncate" title="${p.url}">${p.location ? `${p.location}: ` : ''}${p.url}</div>
+                            <button data-action="test-proxy" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 rounded">Тест</button>
                         </div>
                      `).join('')
                     }
@@ -217,10 +217,10 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         let nextStep = STEPS[nextStepIndex];
 
         // Intelligent skip logic
-        if (nextStep.id === 'gemini' && state.config.geminiApiKey) {
+        if (nextStep && nextStep.id === 'gemini' && state.config.geminiApiKey) {
             nextStepIndex++;
         }
-        if (nextStep.id === 'proxies' && state.authChoice !== 'supabase') {
+        if (nextStep && nextStep.id === 'proxies' && state.authChoice !== 'supabase') {
             nextStepIndex++;
         }
         
@@ -290,6 +290,43 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         render();
     };
 
+    const runProxyTest = async (url) => {
+        state.testingProxyUrl = url;
+        const modal = wizardElement.querySelector('#proxy-test-modal');
+        const content = wizardElement.querySelector('#proxy-test-modal-content');
+        modal.classList.remove('hidden');
+        content.innerHTML = `<p class="font-semibold mb-2">Тестирование...</p><p class="font-mono text-sm text-gray-400 break-all">${url}</p><div class="loading-dots mt-4"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
+        const result = await testProxyConnection({ proxyUrl: url, apiKey: state.config.geminiApiKey });
+
+         const testResultHtml = `
+            <div class="w-full text-left text-sm mt-4 space-y-2">
+                <div class="test-result-item">
+                    <span class="test-result-label">Статус</span>
+                    <span class="test-result-value ${result.status === 'ok' ? 'text-green-400' : 'text-red-400'}">${result.status === 'ok' ? 'Успешно' : 'Ошибка'}</span>
+                </div>
+                 ${result.speed !== null ? `<div class="test-result-item">
+                    <span class="test-result-label">Скорость ответа</span>
+                    <span class="test-result-value">${result.speed} мс</span>
+                </div>` : ''}
+                ${result.geolocation ? `<div class="test-result-item">
+                    <span class="test-result-label">Геолокация</span>
+                    <span class="test-result-value">${result.geolocation}</span>
+                </div>` : ''}
+            </div>
+             ${result.status !== 'ok' ? `<p class="text-xs text-gray-500 mt-2 text-center w-full">${result.message}</p>` : ''}
+        `;
+        
+        content.innerHTML = `
+            <p class="font-semibold text-lg mb-2">Результат теста</p>
+            <p class="font-mono text-sm text-gray-400 break-all mb-2">${url}</p>
+            ${testResultHtml}
+            <div class="flex gap-3 mt-6">
+                <button data-action="retest-proxy" class="px-4 py-2 bg-gray-600 rounded-md">Повторить</button>
+                <button data-action="reject-proxy" class="px-4 py-2 bg-red-600 rounded-md">Отклонить</button>
+                ${result.status === 'ok' ? `<button data-action="use-proxy" data-speed="${result.speed}" data-geo="${result.geolocation}" class="px-4 py-2 bg-blue-600 rounded-md">Использовать</button>` : ''}
+            </div>`;
+    };
+
     const handleAction = async (e) => {
         const target = e.target.closest('[data-action], [data-choice]');
         if (!target) return;
@@ -332,31 +369,15 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 break;
             }
             case 'test-proxy': {
-                const url = target.dataset.url;
-                state.testingProxyUrl = url;
-                const modal = wizardElement.querySelector('#proxy-test-modal');
-                const content = wizardElement.querySelector('#proxy-test-modal-content');
-                modal.classList.remove('hidden');
-                content.innerHTML = `<p class="font-semibold mb-2">Тестирование...</p><p class="font-mono text-sm text-gray-400 break-all">${url}</p><div class="loading-dots mt-4"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
-                const result = await testProxyConnection({ proxyUrl: url, apiKey: state.config.geminiApiKey });
-                content.innerHTML = `
-                    <p class="font-semibold text-lg mb-2">Результат</p>
-                    <p class="font-mono text-sm text-gray-400 mb-4">${url}</p>
-                    ${result.status === 'ok' ? `<p class="text-green-400 font-bold">✓ Успешно</p>` : `<p class="text-red-400 font-bold">✗ Ошибка</p><p class="text-xs text-gray-500 mt-1">${result.message}</p>`}
-                    <div class="flex gap-3 mt-6">
-                        <button data-action="retest-proxy" class="px-4 py-2 bg-gray-600 rounded-md">Повторить</button>
-                        <button data-action="reject-proxy" class="px-4 py-2 bg-red-600 rounded-md">Отклонить</button>
-                        ${result.status === 'ok' ? `<button data-action="use-proxy" class="px-4 py-2 bg-blue-600 rounded-md">Использовать</button>` : ''}
-                    </div>`;
+                await runProxyTest(target.dataset.url);
                 break;
             }
             case 'retest-proxy': {
-                const button = wizardElement.querySelector(`[data-action="test-proxy"][data-url="${state.testingProxyUrl}"]`);
-                if (button) button.click();
+                await runProxyTest(state.testingProxyUrl);
                 break;
             }
             case 'reject-proxy': {
-                state.foundProxies = state.foundProxies.filter(p => p !== state.testingProxyUrl);
+                state.foundProxies = state.foundProxies.filter(p => p.url !== state.testingProxyUrl);
                 state.testingProxyUrl = null;
                 wizardElement.querySelector('#proxy-test-modal').classList.add('hidden');
                 render();
@@ -364,9 +385,14 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             }
             case 'use-proxy': {
                 try {
-                    const newProxy = await supabaseService.addProxy({ url: state.testingProxyUrl, last_status: 'ok' });
+                    const newProxy = await supabaseService.addProxy({ 
+                        url: state.testingProxyUrl, 
+                        last_status: 'ok',
+                        last_speed_ms: target.dataset.speed,
+                        geolocation: target.dataset.geo,
+                    });
                     state.savedProxies.push(newProxy);
-                    state.foundProxies = state.foundProxies.filter(p => p !== state.testingProxyUrl);
+                    state.foundProxies = state.foundProxies.filter(p => p.url !== state.testingProxyUrl);
                     state.testingProxyUrl = null;
                     wizardElement.querySelector('#proxy-test-modal').classList.add('hidden');
                     render();

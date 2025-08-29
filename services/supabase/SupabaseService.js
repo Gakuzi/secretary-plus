@@ -444,27 +444,38 @@ export class SupabaseService {
     async addProxy(proxyData) {
         const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
-
-        const priorityValue = proxyData.priority;
         
         const { data, error } = await this.client
             .from('proxies')
             .insert({ 
                 ...proxyData, 
                 user_id: user.id,
-                priority: !isNaN(priorityValue) ? priorityValue : 0,
             })
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+             // Handle unique constraint violation gracefully
+            if (error.code === '23505') {
+                 const { data: updateData, error: updateError } = await this.client
+                    .from('proxies')
+                    .update({ ...proxyData, last_checked_at: new Date().toISOString() })
+                    .eq('user_id', user.id)
+                    .eq('url', proxyData.url)
+                    .select()
+                    .single();
+                 if (updateError) throw updateError;
+                 return updateData;
+            }
+            throw error;
+        }
         return data;
     }
     
     async updateProxy(id, updateData) {
         const { data, error } = await this.client
             .from('proxies')
-            .update(updateData)
+            .update({ ...updateData, last_checked_at: new Date().toISOString() })
             .eq('id', id)
             .select()
             .single();
