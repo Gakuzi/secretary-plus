@@ -20,7 +20,7 @@
 ```sql
 -- =================================================================
 --  Скрипт настройки базы данных "Секретарь+"
---  Версия: 1.8.0
+--  Версия: 1.9.1
 --  Этот скрипт является идемпотентным. Его можно безопасно 
 --  запускать несколько раз для создания или обновления схемы.
 -- =================================================================
@@ -276,6 +276,19 @@ BEGIN
   VALUES (auth.uid(), new_settings)
   ON CONFLICT (user_id)
   DO UPDATE SET settings = EXCLUDED.settings, updated_at = now();
+END;
+$$;
+
+-- Новая функция для пакетного обновления приоритетов
+CREATE OR REPLACE FUNCTION update_proxy_priorities(updates jsonb)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  UPDATE proxies
+  SET priority = (elem->>'priority')::int
+  FROM jsonb_array_elements(updates) AS elem
+  WHERE id = (elem->>'id')::uuid AND user_id = auth.uid();
 END;
 $$;
 ```

@@ -93,7 +93,7 @@ function timeAgo(dateString) {
 
 
 export function createSettingsModal(currentSettings, authState, handlers) {
-    const { onSave, onClose, onLogin, onLogout, isSyncing, onForceSync, syncStatus, onProxyAdd, onProxyUpdate, onProxyDelete, onProxyTest, onFindAndUpdateProxies, onCleanupProxies } = handlers;
+    const { onSave, onClose, onLogin, onLogout, isSyncing, onForceSync, syncStatus, onProxyAdd, onProxyUpdate, onProxyDelete, onProxyTest, onFindAndUpdateProxies, onCleanupProxies, onProxyReorder } = handlers;
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
     
@@ -214,7 +214,7 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                                 <div class="flex items-center justify-between mb-4">
                                     <div>
                                         <h3 class="text-lg font-semibold text-gray-200">Список прокси-серверов</h3>
-                                        <p class="text-sm text-gray-400">Добавьте свои прокси. Будет использован самый приоритетный рабочий сервер.</p>
+                                        <p class="text-sm text-gray-400">Перетаскивайте для изменения приоритета.</p>
                                     </div>
                                     <div class="flex gap-2">
                                         <button id="find-proxies-ai-button" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm font-semibold whitespace-nowrap">Найти ИИ</button>
@@ -229,6 +229,7 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                                 </div>
                             </div>
                              <div id="proxy-editor-container"></div>
+                             <div id="proxy-test-modal-container"></div>
                         </div>
 
                         <!-- General Tab -->
@@ -547,57 +548,116 @@ export function createSettingsModal(currentSettings, authState, handlers) {
     // --- Proxy Tab Logic ---
     const proxyListContainer = modalOverlay.querySelector('#proxy-list-container');
     const proxyEditorContainer = modalOverlay.querySelector('#proxy-editor-container');
+    const testModalContainer = modalOverlay.querySelector('#proxy-test-modal-container');
     const addProxyButton = modalOverlay.querySelector('#add-proxy-button');
     const findProxiesAiButton = modalOverlay.querySelector('#find-proxies-ai-button');
     const cleanupProxiesButton = modalOverlay.querySelector('#cleanup-proxies-button');
 
+    function showProxyTestModal(proxy) {
+        const testModal = document.createElement('div');
+        testModal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50';
+        testModal.style.zIndex = '60';
+
+        testModal.innerHTML = `
+            <div class="modal-content bg-gray-800 rounded-lg shadow-xl w-full max-w-md m-4 p-6 space-y-4">
+                <h4 class="text-xl font-bold">Тестирование прокси</h4>
+                <p class="text-sm text-gray-400 break-all">${proxy.url}</p>
+                <div id="test-results-container" class="text-center p-4 bg-gray-900 rounded-md">
+                    <p>Выполняется проверка...</p>
+                </div>
+                <div id="test-actions-container" class="flex justify-end gap-3 pt-4" style="display: none;">
+                    <button id="retest-proxy-button" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md">Повторить</button>
+                    <button id="deactivate-proxy-button" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 rounded-md">Не использовать</button>
+                    <button id="activate-proxy-button" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-md">Использовать</button>
+                </div>
+            </div>
+        `;
+        testModalContainer.innerHTML = '';
+        testModalContainer.appendChild(testModal);
+        
+        const close = () => { testModalContainer.innerHTML = ''; };
+        testModal.addEventListener('click', e => { if (e.target === testModal) close(); });
+
+        const testAndRender = async () => {
+            const resultsContainer = testModal.querySelector('#test-results-container');
+            const actionsContainer = testModal.querySelector('#test-actions-container');
+            resultsContainer.innerHTML = `<p>Выполняется проверка...</p>`;
+            actionsContainer.style.display = 'none';
+
+            const { status, speed } = await onProxyTest(proxy);
+
+            let statusHtml = '';
+            if (status === 'ok') {
+                statusHtml = `<p class="text-green-400 font-semibold text-lg">Работает</p>`;
+            } else {
+                statusHtml = `<p class="text-red-400 font-semibold text-lg">Ошибка</p>`;
+            }
+            resultsContainer.innerHTML = `
+                ${statusHtml}
+                <div class="text-sm text-gray-300 mt-2">
+                    <p>Скорость: ${speed ? `${speed} мс` : 'N/A'}</p>
+                    <p>Геолокация: ${proxy.geolocation || 'Не указана'}</p>
+                </div>
+            `;
+            actionsContainer.style.display = 'flex';
+        };
+
+        testModal.querySelector('#retest-proxy-button').addEventListener('click', testAndRender);
+        testModal.querySelector('#activate-proxy-button').addEventListener('click', () => {
+            onProxyUpdate(proxy.id, { is_active: true });
+            close();
+        });
+        testModal.querySelector('#deactivate-proxy-button').addEventListener('click', () => {
+            onProxyUpdate(proxy.id, { is_active: false });
+            close();
+        });
+
+        testAndRender();
+    }
+    
+    let draggedItem = null;
     function renderProxyList() {
         if (!authState.proxies || authState.proxies.length === 0) {
             proxyListContainer.innerHTML = `<p class="text-center text-gray-400 text-sm py-4">Вы еще не добавили ни одного прокси-сервера.</p>`;
             return;
         }
 
-        proxyListContainer.innerHTML = authState.proxies.map(proxy => {
+        proxyListContainer.innerHTML = '';
+        authState.proxies.forEach(proxy => {
             let statusIndicator = '';
             switch (proxy.last_status) {
-                case 'ok':
-                    statusIndicator = `<div class="w-3 h-3 bg-green-500 rounded-full" title="Работает"></div>`;
-                    break;
-                case 'error':
-                     statusIndicator = `<div class="w-3 h-3 bg-red-500 rounded-full" title="Ошибка"></div>`;
-                    break;
-                case 'testing':
-                    statusIndicator = `<div class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse" title="Тестируется..."></div>`;
-                    break;
-                default:
-                    statusIndicator = `<div class="w-3 h-3 bg-gray-500 rounded-full" title="Не проверен"></div>`;
+                case 'ok': statusIndicator = `<div class="w-3 h-3 bg-green-500 rounded-full" title="Работает"></div>`; break;
+                case 'error': statusIndicator = `<div class="w-3 h-3 bg-red-500 rounded-full" title="Ошибка"></div>`; break;
+                case 'testing': statusIndicator = `<div class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse" title="Тестируется..."></div>`; break;
+                default: statusIndicator = `<div class="w-3 h-3 bg-gray-500 rounded-full" title="Не проверен"></div>`;
             }
-
-            return `
-                <div class="bg-gray-900/50 p-3 rounded-lg flex items-center gap-3">
-                    <div class="flex-1 min-w-0">
-                         <div class="flex items-center gap-3">
-                            ${statusIndicator}
-                            <p class="font-semibold truncate" title="${proxy.alias || proxy.url}">${proxy.alias || proxy.url}</p>
-                        </div>
-                        <p class="text-xs text-gray-400 pl-6">
-                            Приоритет: ${proxy.priority} | 
-                            Скорость: ${proxy.last_speed_ms ? `${proxy.last_speed_ms} мс` : 'N/A'} | 
-                            Локация: ${proxy.geolocation || 'Не указана'}
-                        </p>
+            const item = document.createElement('div');
+            item.className = 'proxy-item bg-gray-900/50 p-3 rounded-lg flex items-center gap-3 cursor-move';
+            item.draggable = true;
+            item.dataset.id = proxy.id;
+            item.innerHTML = `
+                <div class="flex-1 min-w-0 pointer-events-none">
+                     <div class="flex items-center gap-3">
+                        ${statusIndicator}
+                        <p class="font-semibold truncate" title="${proxy.alias || proxy.url}">${proxy.alias || proxy.url}</p>
                     </div>
-                    <div class="flex items-center gap-2 flex-shrink-0">
-                        <label class="toggle-switch-sm">
-                            <input type="checkbox" data-action="toggle-proxy" data-id="${proxy.id}" ${proxy.is_active ? 'checked' : ''}>
-                            <span class="toggle-slider"></span>
-                        </label>
-                         <button data-action="test-proxy" data-id="${proxy.id}" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 rounded-md">Тест</button>
-                         <button data-action="edit-proxy" data-id="${proxy.id}" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded-md">Изм.</button>
-                         <button data-action="delete-proxy" data-id="${proxy.id}" class="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 rounded-md">Удл.</button>
-                    </div>
+                    <p class="text-xs text-gray-400 pl-6">
+                        Приоритет: ${proxy.priority} | 
+                        Скорость: ${proxy.last_speed_ms ? `${proxy.last_speed_ms} мс` : 'N/A'} | 
+                        Локация: ${proxy.geolocation || 'Не указана'}
+                    </p>
                 </div>
-            `;
-        }).join('');
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <label class="toggle-switch-sm">
+                        <input type="checkbox" data-action="toggle-proxy" data-id="${proxy.id}" ${proxy.is_active ? 'checked' : ''}>
+                        <span class="toggle-slider"></span>
+                    </label>
+                     <button data-action="test-proxy" data-id="${proxy.id}" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 rounded-md">Тест</button>
+                     <button data-action="edit-proxy" data-id="${proxy.id}" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded-md">Изм.</button>
+                     <button data-action="delete-proxy" data-id="${proxy.id}" class="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 rounded-md">Удл.</button>
+                </div>`;
+            proxyListContainer.appendChild(item);
+        });
     }
 
     function showProxyEditor(proxy = null) {
@@ -685,11 +745,51 @@ export function createSettingsModal(currentSettings, authState, handlers) {
             if (!proxy) return;
 
             switch (button.dataset.action) {
-                case 'test-proxy': onProxyTest(proxy); break;
+                case 'test-proxy': showProxyTestModal(proxy); break;
                 case 'edit-proxy': showProxyEditor(proxy); break;
                 case 'delete-proxy': onProxyDelete(id); break;
             }
         });
+
+        // Drag and Drop Logic
+        proxyListContainer.addEventListener('dragstart', e => {
+            draggedItem = e.target;
+            setTimeout(() => {
+                e.target.classList.add('dragging');
+            }, 0);
+        });
+        proxyListContainer.addEventListener('dragend', e => {
+            draggedItem.classList.remove('dragging');
+            const newOrderProxies = Array.from(proxyListContainer.querySelectorAll('.proxy-item')).map(item => {
+                return authState.proxies.find(p => p.id === item.dataset.id);
+            });
+            onProxyReorder(newOrderProxies);
+            // Re-render to update priorities in text
+             setTimeout(() => renderProxyList(), 50);
+        });
+        proxyListContainer.addEventListener('dragover', e => {
+            e.preventDefault();
+            const afterElement = getDragAfterElement(proxyListContainer, e.clientY);
+            if (afterElement == null) {
+                proxyListContainer.appendChild(draggedItem);
+            } else {
+                proxyListContainer.insertBefore(draggedItem, afterElement);
+            }
+        });
+
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('.proxy-item:not(.dragging)')];
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
         renderProxyList();
     } else {
         const proxyTab = modalOverlay.querySelector('#tab-proxies');

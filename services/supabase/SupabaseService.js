@@ -482,4 +482,12 @@ export class SupabaseService {
         if (error) throw error;
         return data;
     }
+    
+    async updateProxyPriorities(updates) {
+        const { error } = await this.client.rpc('update_proxy_priorities', { updates });
+        if (error) {
+            console.error('Error updating proxy priorities:', error);
+            throw error;
+        }
+    }
 }

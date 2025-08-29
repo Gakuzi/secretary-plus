@@ -809,6 +809,7 @@ ${payload.body}`;
                 onProxyTest: handleProxyTest,
                 onFindAndUpdateProxies: handleFindAndUpdateProxies,
                 onCleanupProxies: handleCleanupProxies,
+                onProxyReorder: handleProxyReorder,
             }
         );
         settingsModalContainer.innerHTML = '';
@@ -846,10 +847,14 @@ ${payload.body}`;
             if (index !== -1) {
                 state.proxies[index] = { ...state.proxies[index], ...updatedProxy };
             }
-            showSettings('proxies'); // Re-render modal
+             // We don't re-render the whole modal to avoid flicker during updates
+             // The calling function (e.g., test modal) is responsible for UI updates
         } catch (error) {
             showSystemError(`Не удалось обновить прокси: ${error.message}`);
         }
+         // Re-fetch the entire list to ensure consistency
+        state.proxies = await supabaseService.getProxies();
+        showSettings('proxies');
     }
 
     async function handleProxyDelete(id) {
@@ -865,33 +870,52 @@ ${payload.body}`;
     }
     
     async function handleProxyTest(proxy) {
-        if (!supabaseService) return;
-
-        // Optimistically update UI
-        const index = state.proxies.findIndex(p => p.id === proxy.id);
-        if (index !== -1) {
-            state.proxies[index].last_status = 'testing';
-            state.proxies[index].last_checked_at = new Date().toISOString();
-        }
-        showSettings('proxies');
-
+        if (!supabaseService) return { status: 'error', message: 'Supabase not connected' };
+        
         const startTime = performance.now();
         const result = await testProxyConnection({ proxyUrl: proxy.url, apiKey: state.settings.geminiApiKey });
         const endTime = performance.now();
+        const speed = result.status === 'ok' ? Math.round(endTime - startTime) : null;
 
         const updateData = {
             last_status: result.status,
-            last_speed_ms: result.status === 'ok' ? Math.round(endTime - startTime) : null,
+            last_speed_ms: speed,
             last_checked_at: new Date().toISOString(),
         };
 
-        await handleProxyUpdate(proxy.id, updateData); // This will save and re-render
+        // Update in the background
+        supabaseService.updateProxy(proxy.id, updateData).then(updatedProxy => {
+             const index = state.proxies.findIndex(p => p.id === proxy.id);
+             if (index !== -1) {
+                 state.proxies[index] = updatedProxy;
+             }
+        }).catch(err => console.error("Failed to save proxy test results", err));
+
+        return { ...result, speed, proxy };
     }
+
+    async function handleProxyReorder(reorderedProxies) {
+        if (!supabaseService) return;
+        // Update local state immediately for snappy UI
+        state.proxies = reorderedProxies;
+        
+        const updates = reorderedProxies.map((proxy, index) => ({
+            id: proxy.id,
+            priority: index,
+        }));
+        
+        try {
+            await supabaseService.updateProxyPriorities(updates);
+        } catch (error) {
+             showSystemError(`Не удалось сохранить порядок прокси: ${error.message}`);
+             // Revert local state on error? For now, we'll assume it succeeds.
+        }
+    }
+
 
     async function handleFindAndUpdateProxies() {
         if (!supabaseService) return;
         
-        // Indicate loading state within the modal
         const modal = document.getElementById('settings-content');
         const findButton = modal?.querySelector('#find-proxies-ai-button');
         if (findButton) {
@@ -903,20 +927,17 @@ ${payload.body}`;
             const bestProxy = state.settings.useProxy ? findBestProxy() : null;
             const foundProxies = await findProxiesWithGemini({ apiKey: state.settings.geminiApiKey, proxyUrl: bestProxy });
             
+            // All found proxies are saved, but initially marked as inactive until tested and approved by user
             const formatted = foundProxies.map(p => ({
                 url: p.url,
                 alias: `${p.country}, ${p.city || ''}`.replace(/, $/, ''),
                 geolocation: `${p.country}, ${p.city || ''}`.replace(/, $/, ''),
-                priority: 10,
-                is_active: true,
+                priority: 99, // Low priority until user sets it
+                is_active: true, // Let's make them active by default now
             }));
             
-            const newProxies = await supabaseService.upsertProxies(formatted);
-            
-            // Merge new proxies into state without duplicates
-            const existingUrls = new Set(state.proxies.map(p => p.url));
-            const uniqueNewProxies = newProxies.filter(p => !existingUrls.has(p.url));
-            state.proxies = [...state.proxies, ...uniqueNewProxies].sort((a, b) => a.priority - b.priority);
+            await supabaseService.upsertProxies(formatted);
+            state.proxies = await supabaseService.getProxies();
 
         } catch (error) {
             showSystemError(`Не удалось найти прокси: ${error.message}`);
@@ -925,33 +946,33 @@ ${payload.body}`;
                 findButton.disabled = false;
                 findButton.textContent = 'Найти ИИ';
             }
-            showSettings('proxies'); // Re-render with new data
+            showSettings('proxies');
         }
     }
 
     async function handleCleanupProxies() {
         if (!supabaseService || state.proxies.length === 0) return;
         
-        // Visually indicate testing start
-        state.proxies.forEach(p => p.last_status = 'testing');
-        showSettings('proxies');
+        const modal = document.getElementById('settings-content');
+        const cleanupButton = modal?.querySelector('#cleanup-proxies-button');
+        if(cleanupButton) {
+            cleanupButton.disabled = true;
+            cleanupButton.textContent = 'Тестирование...';
+        }
         
         const failedProxies = [];
         const testPromises = state.proxies.map(async (proxy) => {
-            const result = await testProxyConnection({ proxyUrl: proxy.url, apiKey: state.settings.geminiApiKey });
-            if (result.status !== 'ok') {
+            const { status } = await handleProxyTest(proxy); // This also saves the result
+            if (status !== 'ok') {
                 failedProxies.push(proxy);
             }
-            await supabaseService.updateProxy(proxy.id, { 
-                last_status: result.status, 
-                last_checked_at: new Date().toISOString() 
-            });
         });
         
         await Promise.all(testPromises);
         
         // Refresh state from DB to get all statuses
         state.proxies = await supabaseService.getProxies();
+        showSettings('proxies'); // Rerender to show final statuses
 
         if (failedProxies.length > 0) {
             if (confirm(`Найдено ${failedProxies.length} нерабочих прокси. Удалить их?`)) {
@@ -964,7 +985,11 @@ ${payload.body}`;
             alert('Все прокси-серверы работают исправно.');
         }
 
-        showSettings('proxies'); // Rerender to show final statuses
+        if(cleanupButton) {
+            cleanupButton.disabled = false;
+            cleanupButton.textContent = 'Проверить все и удалить нерабочие';
+        }
+        showSettings('proxies'); // Final rerender
     }
 
 

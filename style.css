@@ -410,3 +410,21 @@ input:checked + .toggle-slider:before {
     border-color: #4b5563; /* gray-600 */
     color: var(--text-primary);
 }
+
+/* --- DRAG AND DROP FOR PROXY LIST --- */
+.proxy-item.dragging {
+  opacity: 0.5;
+  background: var(--accent-blue);
+}
+
+.drag-over-indicator {
+  height: 2px;
+  background: var(--accent-blue);
+  margin: 4px 0;
+  border-radius: 1px;
+}
+
+/* --- PROXY TEST MODAL --- */
+#proxy-test-modal-container .modal-content {
+    animation: fadeIn 0.2s ease-out;
+}
