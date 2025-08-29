@@ -8,7 +8,7 @@ function markdownToHTML(text) {
     return text
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
         .replace(/\*(.*?)\*/g, '<em>$1</em>')     // Italic
-        .replace(/`([^`]+)`/g, '<code class="bg-gray-200 dark:bg-gray-700 text-sm rounded px-1 py-0.5">$1</code>') // Inline code
+        .replace(/`([^`]+)`/g, '<code class="bg-slate-200 dark:bg-slate-700 text-sm rounded px-1 py-0.5">$1</code>') // Inline code
         .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-500 dark:text-blue-400 hover:underline">$1</a>') // Link
         .replace(/\n/g, '<br>'); // Newlines
 }
@@ -20,10 +20,10 @@ export function createMessageElement(message) {
     wrapper.className = `flex items-start space-x-3 message-item ${isUser ? 'justify-end' : ''}`;
     wrapper.dataset.messageId = message.id;
 
-    let avatarClass = 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-200';
+    let avatarClass = 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200';
     let avatarText = 'S+';
     let authorNameText = 'Секретарь+';
-    let bubbleClass = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100';
+    let bubbleClass = 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100';
 
     if (isUser) {
         avatarClass = 'bg-blue-500 text-white';
@@ -31,10 +31,10 @@ export function createMessageElement(message) {
         authorNameText = 'Вы';
         bubbleClass = 'bg-blue-500 text-white';
     } else if (isSystem) {
-        avatarClass = 'bg-yellow-400 text-yellow-900';
+        avatarClass = 'bg-amber-400 text-amber-900';
         avatarText = '!';
         authorNameText = 'Система';
-        bubbleClass = 'bg-yellow-50 border border-yellow-200 text-yellow-900 dark:bg-yellow-900/20 dark:border-yellow-800/50 dark:text-yellow-200';
+        bubbleClass = 'bg-amber-50 border border-amber-200 text-amber-900 dark:bg-amber-900/20 dark:border-amber-800/50 dark:text-amber-200';
     }
 
     const avatar = document.createElement('div');
@@ -47,47 +47,53 @@ export function createMessageElement(message) {
     const authorName = document.createElement('div');
     authorName.className = 'font-bold';
     authorName.textContent = authorNameText;
-
-    const messageBubble = document.createElement('div');
-    messageBubble.className = `p-3 rounded-lg mt-1 ${bubbleClass}`;
     
-    if (message.text) {
-        const textElement = document.createElement('div');
-        if (isSystem) {
-            textElement.innerHTML = `<div class="flex items-start gap-2"><span class="w-5 h-5 mt-0.5 flex-shrink-0">${Icons.AlertTriangleIcon}</span><div>${markdownToHTML(message.text)}</div></div>`;
-        } else {
-            textElement.innerHTML = markdownToHTML(message.text);
-        }
-        messageBubble.appendChild(textElement);
-    }
+    contentContainer.appendChild(authorName);
 
-    if (message.image) {
-        const imageElement = document.createElement('img');
-        imageElement.src = `data:${message.image.mimeType};base64,${message.image.base64}`;
-        imageElement.className = 'mt-2 rounded-lg max-w-xs';
-        messageBubble.appendChild(imageElement);
-    }
-    
+    // KEY CHANGE: If there is a card, we don't use a bubble. The card is the message.
     if (message.card) {
         const cardElement = createResultCardElement(message.card);
-        // For system cards, we might want a different background or styling
+        cardElement.classList.add('mt-1'); // Add margin that the bubble would have had
+        
         if (isSystem) {
-            cardElement.classList.remove('dark:bg-gray-700/50', 'dark:border-gray-600');
-            cardElement.classList.add('bg-transparent', 'border-none', 'dark:bg-transparent', 'dark:border-none', 'p-0', 'mt-3');
+            // For system cards, we might want a different background or styling
+            cardElement.classList.remove('dark:bg-slate-800');
+            cardElement.classList.add('bg-transparent', 'dark:bg-transparent', 'p-0', 'shadow-none');
         }
-        messageBubble.appendChild(cardElement);
+
+        contentContainer.appendChild(cardElement);
+
+    } else { // Handle regular text/image messages with a bubble
+        const messageBubble = document.createElement('div');
+        messageBubble.className = `p-3 rounded-lg mt-1 ${bubbleClass}`;
+        
+        if (message.text) {
+            const textElement = document.createElement('div');
+            if (isSystem) {
+                textElement.innerHTML = `<div class="flex items-start gap-2"><span class="w-5 h-5 mt-0.5 flex-shrink-0">${Icons.AlertTriangleIcon}</span><div>${markdownToHTML(message.text)}</div></div>`;
+            } else {
+                textElement.innerHTML = markdownToHTML(message.text);
+            }
+            messageBubble.appendChild(textElement);
+        }
+
+        if (message.image) {
+            const imageElement = document.createElement('img');
+            imageElement.src = `data:${message.image.mimeType};base64,${message.image.base64}`;
+            imageElement.className = 'mt-2 rounded-lg max-w-xs';
+            messageBubble.appendChild(imageElement);
+        }
+        
+        contentContainer.appendChild(messageBubble);
     }
-
-    contentContainer.appendChild(authorName);
-    contentContainer.appendChild(messageBubble);
-
+    
     if (message.suggestedReplies && message.suggestedReplies.length > 0) {
         const repliesContainer = document.createElement('div');
         repliesContainer.className = 'mt-2 flex flex-wrap gap-2 quick-replies-container';
         
         message.suggestedReplies.forEach(replyText => {
             const button = document.createElement('button');
-            button.className = 'quick-reply-button bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 px-3 py-1.5 rounded-full text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-all';
+            button.className = 'quick-reply-button bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600 px-3 py-1.5 rounded-full text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition-all';
             button.textContent = replyText;
             button.dataset.replyText = replyText;
             repliesContainer.appendChild(button);

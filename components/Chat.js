@@ -189,7 +189,7 @@ function lockRecording() {
 
     document.getElementById('internal-left-actions').classList.add('hidden');
     document.getElementById('cancel-recording-button').classList.remove('hidden');
-    document.getElementById('input-bar').classList.add('recording-locked', 'bg-gray-200', 'dark:bg-gray-700');
+    document.getElementById('input-bar').classList.add('recording-locked', 'bg-slate-200', 'dark:bg-slate-700');
     document.getElementById('locked-recording-indicator').classList.remove('hidden');
 
     sendButton.classList.remove('hidden');
@@ -217,7 +217,7 @@ function stopRecording(isCancel) {
     
     document.getElementById('internal-left-actions').classList.remove('hidden');
     document.getElementById('cancel-recording-button').classList.add('hidden');
-    document.getElementById('input-bar').classList.remove('recording-locked', 'bg-gray-200', 'dark:bg-gray-700');
+    document.getElementById('input-bar').classList.remove('recording-locked', 'bg-slate-200', 'dark:bg-slate-700');
     
     chatInput.placeholder = 'Сообщение...';
     voiceRecordButton.classList.remove('bg-red-500', 'hover:bg-red-600', 'scale-110');
@@ -245,7 +245,7 @@ export function createChatInterface(onSendMessage, showCameraView, onSystemError
     onNewChatCallback = onNewChat;
 
     const chatWrapper = document.createElement('div');
-    chatWrapper.className = 'flex flex-col h-full bg-gray-50 dark:bg-gray-900';
+    chatWrapper.className = 'flex flex-col h-full bg-slate-50 dark:bg-slate-900';
     chatWrapper.addEventListener('dragover', handleDragOver);
     chatWrapper.addEventListener('dragleave', handleDragLeave);
     chatWrapper.addEventListener('drop', handleDrop);
@@ -255,20 +255,20 @@ export function createChatInterface(onSendMessage, showCameraView, onSystemError
 
         <!-- This panel appears during hold-to-record -->
         <div id="recording-indicator-panel" class="hidden fixed inset-x-0 bottom-24 flex items-center justify-center pointer-events-none">
-            <div class="flex items-center gap-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm shadow-lg rounded-full px-6 py-3 border border-gray-200 dark:border-gray-700">
+            <div class="flex items-center gap-4 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm shadow-lg rounded-full px-6 py-3 border border-slate-200 dark:border-slate-700">
                 <div class="flex items-center gap-2 text-red-500">
                     <span class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
                     <span class="font-mono font-semibold text-lg recording-timer">0:00</span>
                 </div>
-                <div class="text-gray-600 dark:text-gray-400">Отпустите, чтобы отправить</div>
-                <div class="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                <div class="text-slate-600 dark:text-slate-400">Отпустите, чтобы отправить</div>
+                <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400">
                     ${Icons.LockIcon}
                     <span>Проведите вверх, чтобы зафиксировать</span>
                 </div>
             </div>
         </div>
 
-        <div id="input-bar-container" class="p-2 sm:p-4 border-t border-gray-200 dark:border-gray-700">
+        <div id="input-bar-container" class="p-2 sm:p-4 border-t border-slate-200 dark:border-slate-700">
             <!-- Contextual Actions Frame -->
             <div id="contextual-actions-frame" style="display: none;">
                 <div id="action-bar-container" class="flex items-center justify-center flex-wrap gap-2">
@@ -276,19 +276,19 @@ export function createChatInterface(onSendMessage, showCameraView, onSystemError
                 </div>
             </div>
             <div class="flex items-end w-full gap-2">
-                 <div id="bottom-left-actions" class="flex items-center self-end flex-shrink-0 text-gray-500 dark:text-gray-400">
-                     <button id="new-chat-button-bottom" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Начать новый чат">
+                 <div id="bottom-left-actions" class="flex items-center self-end flex-shrink-0 text-slate-500 dark:text-slate-400">
+                     <button id="new-chat-button-bottom" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" aria-label="Начать новый чат">
                         ${Icons.NewChatIcon}
                     </button>
-                    <button id="camera-button" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Сделать фото">
+                    <button id="camera-button" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" aria-label="Сделать фото">
                         ${Icons.CameraIcon}
                     </button>
-                    <button id="attach-button" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Прикрепить файл">
+                    <button id="attach-button" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" aria-label="Прикрепить файл">
                         ${Icons.AttachmentIcon}
                     </button>
                 </div>
 
-                <div id="input-bar" class="flex items-end w-full flex-1 gap-2 bg-white dark:bg-gray-800 rounded-2xl p-1 border border-gray-300 dark:border-gray-700 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
+                <div id="input-bar" class="flex items-end w-full flex-1 gap-2 bg-white dark:bg-slate-800 rounded-2xl p-1 border border-slate-300 dark:border-slate-700 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
                     <div id="internal-left-actions" class="flex items-center self-end flex-shrink-0 pl-2">
                         <!-- This container is for elements inside the input bar that might appear during special states, like recording lock -->
                     </div>
@@ -297,7 +297,7 @@ export function createChatInterface(onSendMessage, showCameraView, onSystemError
                     <input type="file" id="file-input" class="hidden" accept="image/*,application/pdf">
 
                     <!-- Cancel button for locked recording -->
-                    <button id="cancel-recording-button" class="hidden self-end flex-shrink-0 p-2 rounded-full text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Отменить запись">
+                    <button id="cancel-recording-button" class="hidden self-end flex-shrink-0 p-2 rounded-full text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" aria-label="Отменить запись">
                         ${Icons.TrashIcon}
                     </button>
 
@@ -313,7 +313,7 @@ export function createChatInterface(onSendMessage, showCameraView, onSystemError
                         <button id="send-button" class="hidden flex items-center justify-center w-8 h-8 rounded-full bg-blue-500 hover:bg-blue-600 text-white transition-colors" aria-label="Отправить">
                             ${Icons.SendIcon}
                         </button>
-                        <button id="voice-record-button" class="flex items-center justify-center w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors" aria-label="Записать голосовое сообщение">
+                        <button id="voice-record-button" class="flex items-center justify-center w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 transition-colors" aria-label="Записать голосовое сообщение">
                             ${Icons.MicrophoneIcon}
                         </button>
                     </div>
@@ -421,11 +421,11 @@ export function showLoadingIndicator() {
     const loadingElement = document.createElement('div');
     loadingElement.className = 'flex items-start space-x-3 message-item loading-indicator';
     loadingElement.innerHTML = `
-        <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0 bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-300">S+</div>
+        <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0 bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300">S+</div>
         <div class="max-w-xl">
-            <div class="font-bold text-gray-800 dark:text-gray-100">Секретарь+</div>
-            <div class="p-3 rounded-lg mt-1 bg-gray-100 dark:bg-gray-700 flex items-center">
-                <span class="text-gray-700 dark:text-gray-200">Думаю</span>
+            <div class="font-bold text-slate-800 dark:text-slate-100">Секретарь+</div>
+            <div class="p-3 rounded-lg mt-1 bg-slate-100 dark:bg-slate-700 flex items-center">
+                <span class="text-slate-700 dark:text-slate-200">Думаю</span>
                 <div class="loading-dots">
                     <div class="dot"></div>
                     <div class="dot"></div>
@@ -460,7 +460,7 @@ export function renderContextualActions(actions) {
     container.innerHTML = actions.map(action => {
         const iconSVG = Icons[action.icon] || '';
         return `
-            <button class="action-bar-button flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-md text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-600 transition-all">
+            <button class="action-bar-button flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-md text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-600 transition-all">
                 ${iconSVG ? `<span class="w-4 h-4">${iconSVG}</span>` : ''}
                 ${action.label}
             </button>

@@ -9,67 +9,46 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-    <!-- Google API -->
-    <script src="https://apis.google.com/js/api.js"></script>
-    <script src="https://accounts.google.com/gsi/client"></script>
-    <!-- Chart.js for data visualization -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="./style.css">
+    <!-- pdf.js for PDF processing -->
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs" type="module"></script>
+    <!-- Chart.js for statistics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- Google API Client Library -->
+    <script src="https://apis.google.com/js/api.js" async defer></script>
     <!-- Supabase Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- PDF.js library -->
-    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.js"></script>
-    <!-- ES Module Import Map -->
-    <script type="importmap">
-    {
-      "imports": {
-        "@google/genai": "https://esm.sh/@google/genai"
-      }
-    }
-    </script>
+<script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.16.0"
+  }
+}
+</script>
 </head>
-<body class="bg-gray-50 text-gray-800 dark:bg-gray-900 dark:text-gray-100 font-sans">
-    <!-- This container is for the main application UI -->
-    <div id="app" class="flex flex-col h-screen">
-      <!-- App Header -->
-      <header class="grid grid-cols-3 items-center p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-md">
-        <div class="flex justify-start">
-             <div id="auth-container">
-                <!-- Auth button / user profile will be rendered here -->
-             </div>
-        </div>
-        <div class="flex justify-center">
-            <a href="" class="text-xl font-bold text-gray-900 dark:text-gray-100 text-center">Секретарь+</a>
-        </div>
-        <div id="header-actions" class="flex justify-end items-center space-x-2">
-            <button id="stats-button" class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" aria-label="Открыть статистику">
-              <!-- Stats Icon SVG will be injected here -->
-            </button>
-            <button id="help-button" class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" aria-label="Открыть помощь">
-              <!-- Help Icon SVG will be injected here -->
-            </button>
-            <button id="settings-button" class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" aria-label="Открыть настройки">
-              <!-- Settings Icon SVG will be injected here -->
-            </button>
-        </div>
-      </header>
-
-      <!-- Main Content -->
-      <main id="main-content" class="flex-1 overflow-hidden">
-        <!-- Welcome screen or chat will be rendered here -->
-      </main>
+<body class="font-sans bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-100 h-screen overflow-hidden flex flex-col">
+    <div id="app" class="flex flex-col h-full">
+        <header class="flex justify-between items-center p-2 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0 bg-white dark:bg-slate-800 shadow-sm">
+            <a href="/" class="flex items-center gap-3" aria-label="Перезагрузить приложение">
+                <div class="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center font-bold text-lg">
+                    S+
+                </div>
+                <h1 class="text-xl font-bold text-slate-800 dark:text-slate-100">Секретарь+</h1>
+            </a>
+            <div class="flex items-center gap-2">
+                <div id="auth-container" class="relative"></div>
+                <button id="stats-button" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Статистика"></button>
+                <button id="help-button" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Помощь"></button>
+                <button id="settings-button" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Настройки"></button>
+            </div>
+        </header>
+        <main id="main-content" class="flex-1 overflow-hidden relative"></main>
     </div>
-
-    <!-- This container is for the new unified Setup Wizard -->
     <div id="setup-wizard-container"></div>
-    
-    <!-- This container is for all other modals (Help, Stats, Profile) -->
     <div id="modal-container"></div>
-
-    <!-- Camera View (hidden by default) -->
     <div id="camera-view-container" class="hidden"></div>
-    
-    <!-- Main app script -->
-    <script type="module" src="./index.js"></script>
+    <script type="module" src="./index.tsx"></script>
 </body>
 </html>

@@ -289,30 +289,30 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                  const isSomeoneElseEditing = proxyState.editingId !== null && !isEditing;
 
                  const urlContent = isEditing
-                    ? `<input type="text" class="proxy-edit-input w-full bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 font-mono text-xs" value="${p.url}">`
+                    ? `<input type="text" class="proxy-edit-input w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-0.5 font-mono text-xs" value="${p.url}">`
                     : `<div class="flex-1 font-mono text-xs truncate" title="${p.url}">${p.url}</div>`;
 
                  const actionButtons = isEditing
                     ? `
                         <button data-action="save-edit-proxy" data-id="${p.id}" class="px-2 py-0.5 text-xs bg-green-600 hover:bg-green-500 text-white rounded">Сохр.</button>
-                        <button data-action="cancel-edit-proxy" class="px-2 py-0.5 text-xs bg-gray-500 hover:bg-gray-400 text-white rounded">Отм.</button>
+                        <button data-action="cancel-edit-proxy" class="px-2 py-0.5 text-xs bg-slate-500 hover:bg-slate-400 text-white rounded">Отм.</button>
                     `
                     : `
-                        <button data-action="edit-proxy" data-id="${p.id}" class="px-2 py-0.5 text-xs bg-gray-500 hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500 text-white rounded" ${isSomeoneElseEditing || p.isTesting ? 'disabled' : ''}>Ред.</button>
-                        <button data-action="retest-proxy" data-id="${p.id}" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-gray-500 hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500 text-white rounded" ${isSomeoneElseEditing || p.isTesting ? 'disabled' : ''}>${p.isTesting ? '...' : 'Тест'}</button>
+                        <button data-action="edit-proxy" data-id="${p.id}" class="px-2 py-0.5 text-xs bg-slate-500 hover:bg-slate-600 dark:bg-slate-600 dark:hover:bg-slate-500 text-white rounded" ${isSomeoneElseEditing || p.isTesting ? 'disabled' : ''}>Ред.</button>
+                        <button data-action="retest-proxy" data-id="${p.id}" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-slate-500 hover:bg-slate-600 dark:bg-slate-600 dark:hover:bg-slate-500 text-white rounded" ${isSomeoneElseEditing || p.isTesting ? 'disabled' : ''}>${p.isTesting ? '...' : 'Тест'}</button>
                         <button data-action="delete-proxy" data-id="${p.id}" class="p-1 text-xs bg-red-700 hover:bg-red-600 dark:bg-red-800 dark:hover:bg-red-700 text-white rounded-full leading-none" ${isSomeoneElseEditing || p.isTesting ? 'disabled' : ''}>${Icons.TrashIcon.replace('width="24" height="24"', 'width="12" height="12"')}</button>
                     `;
 
                 return `
-                <div class="proxy-list-item bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 ${isSomeoneElseEditing ? 'opacity-50' : ''}" draggable="${!isEditing}" data-id="${p.id}" data-index="${index}">
-                    <div class="flex-shrink-0 cursor-grab text-gray-400 dark:text-gray-500" title="Перетащить для изменения приоритета">${Icons.MenuIcon}</div>
+                <div class="proxy-list-item bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-700 ${isSomeoneElseEditing ? 'opacity-50' : ''}" draggable="${!isEditing}" data-id="${p.id}" data-index="${index}">
+                    <div class="flex-shrink-0 cursor-grab text-slate-400 dark:text-slate-500" title="Перетащить для изменения приоритета">${Icons.MenuIcon}</div>
                      <label class="toggle-switch" style="transform: scale(0.7); margin: 0 -4px;">
                         <input type="checkbox" data-action="toggle-proxy" data-id="${p.id}" ${p.is_active ? 'checked' : ''} ${isEditing || p.isTesting ? 'disabled' : ''}>
                         <span class="toggle-slider"></span>
                     </label>
                     <div class="status-indicator ${statusIndicatorClass}" title="Статус: ${p.last_status || 'untested'}"></div>
                     ${urlContent}
-                    ${p.last_status === 'ok' && p.last_speed_ms ? `<span class="text-xs text-gray-500 dark:text-gray-400">${p.last_speed_ms}ms</span>` : ''}
+                    ${p.last_status === 'ok' && p.last_speed_ms ? `<span class="text-xs text-slate-500 dark:text-slate-400">${p.last_speed_ms}ms</span>` : ''}
                     <div class="flex items-center gap-1">
                         ${actionButtons}
                     </div>
@@ -329,39 +329,39 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 const isTesting = p.testStatus === 'testing';
 
                 return `
-                 <div class="proxy-list-item bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700">
+                 <div class="proxy-list-item bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-700">
                     <div class="status-indicator ${statusIndicatorClass}" title="${p.testMessage || ''}"></div>
                     <div class="flex-1 font-mono text-xs truncate" title="${p.url}">${p.location ? `${p.location}: ` : ''}${p.url}</div>
-                    ${p.testStatus === 'ok' && p.testSpeed ? `<span class="text-xs text-gray-500 dark:text-gray-400">${p.testSpeed}ms</span>` : ''}
+                    ${p.testStatus === 'ok' && p.testSpeed ? `<span class="text-xs text-slate-500 dark:text-slate-400">${p.testSpeed}ms</span>` : ''}
                     <div class="flex items-center gap-1">
-                        <button data-action="test-found-proxy" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded" ${isTesting ? 'disabled' : ''}>${testButtonText}</button>
+                        <button data-action="test-found-proxy" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded" ${isTesting ? 'disabled' : ''}>${testButtonText}</button>
                         <button data-action="add-proxy-from-found" data-url="${p.url}" data-location="${p.location || ''}" class="px-2 py-0.5 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded" ${isTesting ? 'disabled' : ''}>Добавить</button>
                     </div>
                 </div>`;
             }).join('');
             
             managerContainer.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl w-full max-w-3xl flex flex-col h-full sm:h-auto sm:max-h-[80vh] animate-fadeIn">
-                    <header class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl w-full max-w-3xl flex flex-col h-full sm:h-auto sm:max-h-[80vh] animate-fadeIn">
+                    <header class="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
                         <h3 class="text-lg font-bold">Менеджер прокси-серверов</h3>
-                        <button data-action="close-manager" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">&times;</button>
+                        <button data-action="close-manager" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">&times;</button>
                     </header>
-                    <main class="p-4 space-y-4 overflow-y-auto bg-gray-50 dark:bg-gray-900/70">
+                    <main class="p-4 space-y-4 overflow-y-auto bg-slate-50 dark:bg-slate-900/70">
                         <div>
                             <h4 class="font-semibold mb-2">Мои прокси (приоритет сверху вниз)</h4>
-                            <div id="saved-proxy-list-dnd" class="space-y-2 p-2 bg-gray-100 dark:bg-gray-900/50 rounded-md min-h-[80px]">
-                                ${proxyState.isLoading && proxyState.saved.length === 0 ? '<p class="text-center text-sm text-gray-500">Загрузка...</p>' : proxyState.saved.length === 0 ? '<p class="text-center text-sm text-gray-500">Список пуст.</p>' : savedProxiesHtml}
+                            <div id="saved-proxy-list-dnd" class="space-y-2 p-2 bg-slate-100 dark:bg-slate-900/50 rounded-md min-h-[80px]">
+                                ${proxyState.isLoading && proxyState.saved.length === 0 ? '<p class="text-center text-sm text-slate-500">Загрузка...</p>' : proxyState.saved.length === 0 ? '<p class="text-center text-sm text-slate-500">Список пуст.</p>' : savedProxiesHtml}
                             </div>
                         </div>
                         <div>
                             <h4 class="font-semibold mb-2">Поиск прокси</h4>
                             <div id="found-proxy-list" class="space-y-2">
-                                ${proxyState.isLoading && proxyState.found.length > 0 ? '<p class="text-center text-sm text-gray-500">Поиск...</p>' : proxyState.found.length > 0 ? foundProxiesHtml : ''}
+                                ${proxyState.isLoading && proxyState.found.length > 0 ? '<p class="text-center text-sm text-slate-500">Поиск...</p>' : proxyState.found.length > 0 ? foundProxiesHtml : ''}
                             </div>
                         </div>
                     </main>
-                    <footer class="p-4 bg-gray-100 dark:bg-gray-700/50 flex justify-between items-center">
-                        <button data-action="add-proxy-manual" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md font-semibold text-sm">Добавить вручную</button>
+                    <footer class="p-4 bg-slate-100 dark:bg-slate-700/50 flex justify-between items-center">
+                        <button data-action="add-proxy-manual" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md font-semibold text-sm">Добавить вручную</button>
                         <button data-action="find-proxies-ai" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold text-sm" ${proxyState.isLoading ? 'disabled' : ''}>${proxyState.isLoading ? 'Поиск...' : 'Найти с помощью ИИ'}</button>
                     </footer>
                 </div>
@@ -548,28 +548,28 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
 
         if (state.isShowingSql) {
             databaseTabContent = `
-                <div class="p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 h-full flex flex-col">
+                <div class="p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 h-full flex flex-col">
                     <div class="flex justify-between items-center mb-2">
                         <h3 class="text-lg font-semibold">Актуальный SQL-скрипт</h3>
-                        <button data-action="copy-sql" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md text-sm">Копировать</button>
+                        <button data-action="copy-sql" class="px-3 py-1 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md text-sm">Копировать</button>
                     </div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Выполните этот скрипт в SQL Editor вашего проекта Supabase для обновления схемы.</p>
-                    <pre class="flex-1 bg-white dark:bg-gray-900 p-3 rounded-md overflow-auto text-xs whitespace-pre-wrap font-mono"><code id="sql-code-block">${SUPABASE_SCHEMA_SQL}</code></pre>
-                    <button data-action="hide-sql" class="mt-4 w-full px-4 py-2 bg-gray-500 hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500 text-white rounded-md text-sm font-semibold">Назад к настройкам</button>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Выполните этот скрипт в SQL Editor вашего проекта Supabase для обновления схемы.</p>
+                    <pre class="flex-1 bg-white dark:bg-slate-900 p-3 rounded-md overflow-auto text-xs whitespace-pre-wrap font-mono"><code id="sql-code-block">${SUPABASE_SCHEMA_SQL}</code></pre>
+                    <button data-action="hide-sql" class="mt-4 w-full px-4 py-2 bg-slate-500 hover:bg-slate-600 dark:bg-slate-600 dark:hover:bg-slate-500 text-white rounded-md text-sm font-semibold">Назад к настройкам</button>
                 </div>
             `;
         } else {
             databaseTabContent = `
-                <div class="p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div class="p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
                     <h3 class="text-lg font-semibold">Управление базой данных</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 mb-4">
+                    <p class="text-sm text-slate-600 dark:text-slate-400 mt-1 mb-4">
                        Для безопасного автоматического обновления схемы базы данных требуется настроить "Управляющий воркер".
                     </p>
                      <button data-action="launch-db-wizard" class="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-semibold">
                         ${Icons.SettingsIcon}
                         <span>Запустить мастер настройки</span>
                     </button>
-                    <p class="text-xs text-gray-500 mt-4 text-center">
+                    <p class="text-xs text-slate-500 mt-4 text-center">
                         Или вы можете обновить схему вручную.
                         <button data-action="show-sql" class="text-blue-500 dark:text-blue-400 hover:underline bg-transparent border-none p-0">Показать SQL-скрипт</button>
                     </p>
@@ -578,21 +578,21 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
         }
     
         modalElement.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-4xl sm:rounded-lg shadow-xl relative">
-                <header class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+            <div class="bg-white dark:bg-slate-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-4xl sm:rounded-lg shadow-xl relative">
+                <header class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
                     <h2 class="text-xl font-bold flex items-center gap-2">${Icons.SettingsIcon} Настройки</h2>
-                    <button data-action="close" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">&times;</button>
+                    <button data-action="close" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">&times;</button>
                 </header>
-                <main class="flex-1 flex flex-col sm:flex-row overflow-hidden bg-gray-50 dark:bg-gray-900/70">
+                <main class="flex-1 flex flex-col sm:flex-row overflow-hidden bg-slate-50 dark:bg-slate-900/70">
                     <!-- Tabs and Sidebar -->
-                    <nav class="sm:hidden flex-shrink-0 border-b border-gray-200 dark:border-gray-700 p-2 flex items-center justify-around gap-2 bg-white dark:bg-gray-800">
+                    <nav class="sm:hidden flex-shrink-0 border-b border-slate-200 dark:border-slate-700 p-2 flex items-center justify-around gap-2 bg-white dark:bg-slate-800">
                          <a href="#api-keys" class="settings-tab-button active text-center flex-1" data-tab="api-keys">Ключи</a>
                          ${settings.isSupabaseEnabled && supabaseService ? `
                             <a href="#proxy" class="settings-tab-button text-center flex-1" data-tab="proxy">Прокси</a>
                             <a href="#database" class="settings-tab-button text-center flex-1" data-tab="database">База данных</a>
                          ` : ''}
                     </nav>
-                    <aside class="hidden sm:flex w-52 border-r border-gray-200 dark:border-gray-700 p-4 flex-shrink-0 bg-white dark:bg-gray-800">
+                    <aside class="hidden sm:flex w-52 border-r border-slate-200 dark:border-slate-700 p-4 flex-shrink-0 bg-white dark:bg-slate-800">
                         <nav class="flex flex-col space-y-2 w-full">
                              <a href="#api-keys" class="settings-tab-button active text-left" data-tab="api-keys">Ключи API</a>
                              ${settings.isSupabaseEnabled && supabaseService ? `
@@ -604,19 +604,19 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                     <div class="flex-1 p-4 sm:p-6 overflow-y-auto" id="settings-tabs-content">
                         <!-- API Keys Tab -->
                         <div id="tab-api-keys" class="settings-tab-content space-y-6">
-                            <div class="p-4 bg-white dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <div class="p-4 bg-white dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
                                 <h3 class="font-semibold text-lg">Ключи и Подключения</h3>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mb-4"><a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">Получить ключ Gemini API &rarr;</a></p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mb-4"><a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">Получить ключ Gemini API &rarr;</a></p>
                                 <div class="space-y-4">
                                     <div>
                                         <label class="text-sm font-medium">Gemini API Key</label>
-                                        <input type="password" id="settings-gemini-api-key" class="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md p-2 mt-1" value="${settings.geminiApiKey || ''}">
+                                        <input type="password" id="settings-gemini-api-key" class="w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 mt-1" value="${settings.geminiApiKey || ''}">
                                     </div>
                                     ${settings.isSupabaseEnabled && supabaseService ? `
                                     <div>
                                         <label class="text-sm font-medium">URL Управляющего Воркера</label>
-                                        <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">URL для безопасного управления схемой БД. Можно настроить с помощью мастера на вкладке "База данных".</p>
-                                        <input type="url" id="settings-management-worker-url" class="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md p-2 mt-1 font-mono text-sm" placeholder="https://my-worker.example.workers.dev" value="${settings.managementWorkerUrl || ''}">
+                                        <p class="text-xs text-slate-500 dark:text-slate-500 mt-1">URL для безопасного управления схемой БД. Можно настроить с помощью мастера на вкладке "База данных".</p>
+                                        <input type="url" id="settings-management-worker-url" class="w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 mt-1 font-mono text-sm" placeholder="https://my-worker.example.workers.dev" value="${settings.managementWorkerUrl || ''}">
                                     </div>
                                     ` : ''}
                                 </div>
@@ -626,11 +626,11 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                         <!-- Proxy Manager Tab -->
                         <div id="tab-proxy" class="settings-tab-content hidden space-y-6">
                            ${settings.isSupabaseEnabled && supabaseService ? `
-                             <div class="p-4 bg-white dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                             <div class="p-4 bg-white dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
                                 <div class="flex justify-between items-center mb-4">
                                     <div>
                                         <h3 class="font-semibold text-lg">Настройки Прокси</h3>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400">Используйте прокси-серверы для обхода региональных ограничений Gemini.</p>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400">Используйте прокси-серверы для обхода региональных ограничений Gemini.</p>
                                     </div>
                                     <div class="flex items-center gap-3">
                                         <label for="use-proxy-toggle" class="font-medium text-sm">Использовать прокси</label>
@@ -640,7 +640,7 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                                         </label>
                                     </div>
                                 </div>
-                                <button data-action="manage-proxies" class="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-md text-sm font-semibold">
+                                <button data-action="manage-proxies" class="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded-md text-sm font-semibold">
                                     Управление списком прокси-серверов
                                 </button>
                             </div>` : ''}
@@ -652,7 +652,7 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                         </div>
                     </div>
                 </main>
-                <footer class="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end flex-shrink-0 bg-white dark:bg-gray-800">
+                <footer class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end flex-shrink-0 bg-white dark:bg-slate-800">
                     <button data-action="save" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold">Сохранить и закрыть</button>
                 </footer>
             </div>`;

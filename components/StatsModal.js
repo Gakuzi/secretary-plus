@@ -47,13 +47,13 @@ export function createStatsModal(statsData, onClose) {
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
 
     modalOverlay.innerHTML = `
-        <div class="bg-white dark:bg-gray-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-lg shadow-xl" id="stats-content">
-            <header class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <div class="bg-white dark:bg-slate-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-lg shadow-xl" id="stats-content">
+            <header class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
                 <h2 class="text-xl sm:text-2xl font-bold flex items-center gap-2">${ChartBarIcon} Статистика</h2>
-                <button id="close-stats" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" aria-label="Закрыть статистику">&times;</button>
+                <button id="close-stats" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Закрыть статистику">&times;</button>
             </header>
             
-            <main class="p-4 sm:p-6 flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900/50">
+            <main class="p-4 sm:p-6 flex-1 flex items-center justify-center bg-slate-50 dark:bg-slate-900/50">
                 <!-- Chart or empty state will be rendered here -->
             </main>
         </div>
@@ -64,7 +64,7 @@ export function createStatsModal(statsData, onClose) {
 
     if (dataEntries.length === 0) {
         mainContent.innerHTML = `
-            <div class="text-center text-gray-500 dark:text-gray-400">
+            <div class="text-center text-slate-500 dark:text-slate-400">
                 <p class="font-semibold text-lg">Данных пока нет</p>
                 <p>Начните использовать ассистента, и здесь появится статистика выполненных действий.</p>
             </div>
@@ -81,11 +81,11 @@ export function createStatsModal(statsData, onClose) {
         const data = dataEntries.map(([, value]) => value);
         
         const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const legendColor = isDarkMode ? '#d1d5db' : '#374151';
-        const tooltipBgColor = isDarkMode ? '#111827' : '#ffffff';
-        const tooltipTitleColor = isDarkMode ? '#f9fafb' : '#111827';
-        const tooltipBodyColor = isDarkMode ? '#d1d5db' : '#4b5563';
-        const tooltipBorderColor = isDarkMode ? '#4b5563' : '#e5e7eb';
+        const legendColor = isDarkMode ? '#cbd5e1' : '#334155';
+        const tooltipBgColor = isDarkMode ? '#0f172a' : '#ffffff';
+        const tooltipTitleColor = isDarkMode ? '#f8fafc' : '#0f172a';
+        const tooltipBodyColor = isDarkMode ? '#cbd5e1' : '#475569';
+        const tooltipBorderColor = isDarkMode ? '#475569' : '#e2e8f0';
 
 
         // Use a timeout to ensure the canvas is in the DOM and has dimensions before Chart.js tries to render to it.
@@ -99,7 +99,7 @@ export function createStatsModal(statsData, onClose) {
                         label: 'Количество вызовов',
                         data: data,
                         backgroundColor: CHART_COLORS,
-                        borderColor: isDarkMode ? '#1f2937' : '#f9fafb', // dark:bg-gray-800 vs light:bg-gray-50
+                        borderColor: isDarkMode ? '#1e293b' : '#f1f5f9', // dark:bg-slate-800 vs light:bg-slate-100
                         borderWidth: 2,
                         hoverOffset: 8
                     }]

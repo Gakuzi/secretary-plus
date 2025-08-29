@@ -5,7 +5,7 @@ import * as Icons from './icons/Icons.js';
 
 export function createSetupWizard({ onComplete, onExit, googleProvider, supabaseConfig, googleClientId, resumeState = null }) {
     const wizardElement = document.createElement('div');
-    wizardElement.className = 'fixed inset-0 bg-gray-900 z-50 flex items-center justify-center p-4';
+    wizardElement.className = 'fixed inset-0 bg-slate-900 z-50 flex items-center justify-center p-4';
     
     let state = {
         currentStep: 0,
@@ -57,54 +57,54 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                  if (p.last_status === 'error') statusIndicatorClass = 'status-error';
 
                 return `
-                <div class="proxy-list-item bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700" draggable="true" data-id="${p.id}" data-index="${index}">
-                    <div class="flex-shrink-0 cursor-grab text-gray-400 dark:text-gray-500" title="Перетащить для изменения приоритета">${Icons.MenuIcon}</div>
+                <div class="proxy-list-item bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-700" draggable="true" data-id="${p.id}" data-index="${index}">
+                    <div class="flex-shrink-0 cursor-grab text-slate-400 dark:text-slate-500" title="Перетащить для изменения приоритета">${Icons.MenuIcon}</div>
                      <label class="toggle-switch" style="transform: scale(0.7); margin: 0 -4px;">
                         <input type="checkbox" data-action="toggle-proxy" data-id="${p.id}" ${p.is_active ? 'checked' : ''}>
                         <span class="toggle-slider"></span>
                     </label>
                     <div class="status-indicator ${statusIndicatorClass}" title="Статус: ${p.last_status || 'untested'}"></div>
                     <div class="flex-1 font-mono text-xs truncate" title="${p.url}">${p.url}</div>
-                    ${p.last_status === 'ok' && p.last_speed_ms ? `<span class="text-xs text-gray-500 dark:text-gray-400">${p.last_speed_ms}ms</span>` : ''}
+                    ${p.last_status === 'ok' && p.last_speed_ms ? `<span class="text-xs text-slate-500 dark:text-slate-400">${p.last_speed_ms}ms</span>` : ''}
                     <div class="flex items-center gap-1">
-                        <button data-action="retest-proxy" data-id="${p.id}" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded">Тест</button>
+                        <button data-action="retest-proxy" data-id="${p.id}" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded">Тест</button>
                         <button data-action="delete-proxy" data-id="${p.id}" class="p-1 text-xs bg-red-700 dark:bg-red-800 hover:bg-red-600 dark:hover:bg-red-700 text-white rounded-full leading-none">${Icons.TrashIcon.replace('width="24" height="24"', 'width="12" height="12"')}</button>
                     </div>
                 </div>`;
             }).join('');
 
             const foundProxiesHtml = proxyState.found.map(p => `
-                 <div class="proxy-list-item bg-white dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700">
+                 <div class="proxy-list-item bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-700">
                     <div class="status-indicator status-untested"></div>
                     <div class="flex-1 font-mono text-xs truncate" title="${p.url}">${p.location ? `${p.location}: ` : ''}${p.url}</div>
                     <div class="flex items-center gap-1">
-                        <button data-action="test-found-proxy" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded">Тест</button>
+                        <button data-action="test-found-proxy" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded">Тест</button>
                         <button data-action="add-proxy-from-found" data-url="${p.url}" data-location="${p.location || ''}" class="px-2 py-0.5 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded">Добавить</button>
                     </div>
                 </div>`).join('');
             
             managerContainer.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl w-full max-w-2xl flex flex-col h-full sm:h-auto sm:max-h-[80vh] animate-fadeIn">
-                    <header class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl w-full max-w-2xl flex flex-col h-full sm:h-auto sm:max-h-[80vh] animate-fadeIn">
+                    <header class="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
                         <h3 class="text-lg font-bold">Менеджер прокси-серверов</h3>
-                        <button data-action="close-manager" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">&times;</button>
+                        <button data-action="close-manager" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">&times;</button>
                     </header>
-                    <main class="p-4 space-y-4 overflow-y-auto bg-gray-50 dark:bg-gray-900/70">
+                    <main class="p-4 space-y-4 overflow-y-auto bg-slate-50 dark:bg-slate-900/70">
                         <div>
                             <h4 class="font-semibold mb-2">Мои прокси (приоритет сверху вниз)</h4>
-                            <div id="saved-proxy-list-dnd" class="space-y-2 p-2 bg-gray-100 dark:bg-gray-900/50 rounded-md min-h-[80px]">
-                                ${proxyState.isLoading && proxyState.saved.length === 0 ? '<p class="text-center text-sm text-gray-500">Загрузка...</p>' : proxyState.saved.length === 0 ? '<p class="text-center text-sm text-gray-500">Список пуст.</p>' : savedProxiesHtml}
+                            <div id="saved-proxy-list-dnd" class="space-y-2 p-2 bg-slate-100 dark:bg-slate-900/50 rounded-md min-h-[80px]">
+                                ${proxyState.isLoading && proxyState.saved.length === 0 ? '<p class="text-center text-sm text-slate-500">Загрузка...</p>' : proxyState.saved.length === 0 ? '<p class="text-center text-sm text-slate-500">Список пуст.</p>' : savedProxiesHtml}
                             </div>
                         </div>
                         <div>
                             <h4 class="font-semibold mb-2">Поиск прокси</h4>
                             <div id="found-proxy-list" class="space-y-2">
-                                ${proxyState.isLoading && proxyState.found.length > 0 ? '<p class="text-center text-sm text-gray-500">Поиск...</p>' : proxyState.found.length > 0 ? foundProxiesHtml : ''}
+                                ${proxyState.isLoading && proxyState.found.length > 0 ? '<p class="text-center text-sm text-slate-500">Поиск...</p>' : proxyState.found.length > 0 ? foundProxiesHtml : ''}
                             </div>
                         </div>
                     </main>
-                    <footer class="p-4 bg-gray-100 dark:bg-gray-700/50 flex justify-between items-center">
-                        <button data-action="add-proxy-manual" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md font-semibold text-sm">Добавить вручную</button>
+                    <footer class="p-4 bg-slate-100 dark:bg-slate-700/50 flex justify-between items-center">
+                        <button data-action="add-proxy-manual" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md font-semibold text-sm">Добавить вручную</button>
                         <button data-action="find-proxies-ai" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold text-sm" ${proxyState.isLoading ? 'disabled' : ''}>${proxyState.isLoading ? 'Поиск...' : 'Найти с помощью ИИ'}</button>
                     </footer>
                 </div>
@@ -262,7 +262,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
 
         if (state.currentStep > 0) {
             const backBtn = document.createElement('button');
-            backBtn.className = 'px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md text-sm font-semibold';
+            backBtn.className = 'px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md text-sm font-semibold';
             backBtn.textContent = 'Назад';
             backBtn.dataset.action = 'back';
             footerEl.appendChild(backBtn);
@@ -272,7 +272,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
 
         const addNextButton = (text = 'Далее', skip = false) => {
             const nextBtn = document.createElement('button');
-            nextBtn.className = `px-6 py-2 rounded-md font-semibold text-white ${skip ? 'bg-gray-500 hover:bg-gray-600' : 'bg-blue-600 hover:bg-blue-700'}`;
+            nextBtn.className = `px-6 py-2 rounded-md font-semibold text-white ${skip ? 'bg-slate-500 hover:bg-slate-600' : 'bg-blue-600 hover:bg-blue-700'}`;
             nextBtn.textContent = text;
             nextBtn.dataset.action = 'next';
             footerEl.appendChild(nextBtn);
@@ -282,21 +282,21 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             case 'welcome':
                 contentEl.innerHTML = `
                     <h2 class="text-2xl font-bold mb-4">Настройка «Секретарь+»</h2>
-                    <p class="text-gray-600 dark:text-gray-300">Этот мастер поможет вам настроить все необходимые параметры для работы приложения.</p>`;
+                    <p class="text-slate-600 dark:text-slate-300">Этот мастер поможет вам настроить все необходимые параметры для работы приложения.</p>`;
                 addNextButton('Начать');
                 break;
             case 'connection':
                 contentEl.innerHTML = `
                     <h2 class="text-2xl font-bold mb-4">Выбор способа подключения</h2>
-                    <p class="mb-6 text-gray-500 dark:text-gray-400"><strong>Рекомендуется использовать Supabase</strong> для синхронизации и расширенных функций.</p>
+                    <p class="mb-6 text-slate-500 dark:text-slate-400"><strong>Рекомендуется использовать Supabase</strong> для синхронизации и расширенных функций.</p>
                     <div class="grid md:grid-cols-2 gap-6">
-                        <div class="choice-card p-4 border-2 border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer transition-all hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:border-blue-500 dark:hover:border-blue-500 ${state.authChoice === 'supabase' ? 'border-blue-500 bg-blue-500/5 dark:bg-blue-500/10 shadow-md' : ''}" data-choice="supabase">
+                        <div class="choice-card p-4 border-2 border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:border-blue-500 dark:hover:border-blue-500 ${state.authChoice === 'supabase' ? 'border-blue-500 bg-blue-500/5 dark:bg-blue-500/10 shadow-md' : ''}" data-choice="supabase">
                             <h3 class="font-bold text-lg">Supabase (Рекомендуется)</h3>
-                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Синхронизация настроек и данных, управление прокси.</p>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Синхронизация настроек и данных, управление прокси.</p>
                         </div>
-                        <div class="choice-card p-4 border-2 border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer transition-all hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:border-blue-500 dark:hover:border-blue-500 ${state.authChoice === 'direct' ? 'border-blue-500 bg-blue-500/5 dark:bg-blue-500/10 shadow-md' : ''}" data-choice="direct">
+                        <div class="choice-card p-4 border-2 border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:border-blue-500 dark:hover:border-blue-500 ${state.authChoice === 'direct' ? 'border-blue-500 bg-blue-500/5 dark:bg-blue-500/10 shadow-md' : ''}" data-choice="direct">
                             <h3 class="font-bold text-lg">Прямое подключение Google</h3>
-                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Простой режим, настройки хранятся только в браузере.</p>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Простой режим, настройки хранятся только в браузере.</p>
                         </div>
                     </div>`;
                 addNextButton();
@@ -304,14 +304,14 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             case 'auth':
                 contentEl.innerHTML = `
                      <h2 class="text-2xl font-bold mb-4">Аутентификация</h2>
-                     <p class="mb-6 text-gray-500 dark:text-gray-400">Войдите в свой аккаунт Google, чтобы предоставить приложению разрешения.</p>
-                     <div class="p-6 bg-gray-100 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center min-h-[200px]">
+                     <p class="mb-6 text-slate-500 dark:text-slate-400">Войдите в свой аккаунт Google, чтобы предоставить приложению разрешения.</p>
+                     <div class="p-6 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center min-h-[200px]">
                         ${state.isLoading ? `<div class="text-center"><p>Ожидание...</p></div>` :
                          state.isAuthenticated && state.userProfile ? `
                             <div class="text-center">
                                 <img src="${state.userProfile.imageUrl}" class="w-20 h-20 rounded-full mx-auto mb-4">
                                 <p class="font-bold text-lg">${state.userProfile.name}</p>
-                                <p class="text-sm text-gray-500 dark:text-gray-400">${state.userProfile.email}</p>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">${state.userProfile.email}</p>
                                 <p class="text-green-600 dark:text-green-400 mt-4">✓ Вход выполнен успешно</p>
                             </div>` : 
                             `<button data-action="login" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center gap-2">${Icons.GoogleIcon}<span>Войти через Google</span></button>`
@@ -322,12 +322,12 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
              case 'gemini':
                 contentEl.innerHTML = `
                     <h2 class="text-2xl font-bold mb-4">Gemini API</h2>
-                    <p class="mb-6 text-gray-500 dark:text-gray-400">Получите ключ Gemini API из Google AI Studio. Он необходим для работы ассистента.</p>
-                     <div class="p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-4"><a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">Получить ключ здесь &rarr;</a></p>
+                    <p class="mb-6 text-slate-500 dark:text-slate-400">Получите ключ Gemini API из Google AI Studio. Он необходим для работы ассистента.</p>
+                     <div class="p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4"><a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">Получить ключ здесь &rarr;</a></p>
                         <div>
                             <label class="text-sm font-medium">Gemini API Key</label>
-                            <input type="password" id="geminiApiKey" class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md p-2 mt-1" value="${state.config.geminiApiKey || ''}">
+                            <input type="password" id="geminiApiKey" class="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 mt-1" value="${state.config.geminiApiKey || ''}">
                         </div>
                     </div>`;
                 addNextButton();
@@ -335,8 +335,8 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             case 'proxies':
                  contentEl.innerHTML = `
                     <h2 class="text-2xl font-bold mb-4">Настройка Прокси (Опционально)</h2>
-                    <p class="mb-6 text-gray-500 dark:text-gray-400">Если API Gemini недоступен в вашем регионе, вы можете настроить прокси-серверы для обхода ограничений.</p>
-                    <div class="p-6 bg-gray-100 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center gap-4">
+                    <p class="mb-6 text-slate-500 dark:text-slate-400">Если API Gemini недоступен в вашем регионе, вы можете настроить прокси-серверы для обхода ограничений.</p>
+                    <div class="p-6 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-4">
                         <div class="flex items-center gap-4">
                             <label for="use-proxy-toggle-wizard" class="font-medium">Использовать прокси</label>
                             <label class="toggle-switch">
@@ -344,7 +344,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
-                        <button data-action="manage-proxies" class="w-full max-w-sm flex items-center justify-center gap-2 px-4 py-3 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md font-semibold transition-colors">
+                        <button data-action="manage-proxies" class="w-full max-w-sm flex items-center justify-center gap-2 px-4 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md font-semibold transition-colors">
                             ${Icons.SettingsIcon}
                             <span>Открыть менеджер прокси</span>
                         </button>
@@ -355,8 +355,8 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             case 'finish':
                 contentEl.innerHTML = `
                     <h2 class="text-2xl font-bold mb-4">🎉 Настройка завершена!</h2>
-                    <p class="mb-6 text-gray-500 dark:text-gray-400">Нажмите "Завершить", чтобы сохранить настройки и запустить приложение.</p>
-                    <div class="p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 text-sm space-y-2">
+                    <p class="mb-6 text-slate-500 dark:text-slate-400">Нажмите "Завершить", чтобы сохранить настройки и запустить приложение.</p>
+                    <div class="p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 text-sm space-y-2">
                         <p><strong>Режим:</strong> ${state.authChoice === 'supabase' ? 'Supabase' : 'Прямое подключение'}</p>
                         <p><strong>Google Аккаунт:</strong> ${state.userProfile?.email || 'Не выполнен вход'}</p>
                         <p><strong>Gemini API Ключ:</strong> ${state.config.geminiApiKey ? '✓ Указан' : '✗ Не указан'}</p>
@@ -374,16 +374,16 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         const stepIndex = STEPS.findIndex(s => s.id === STEPS[state.currentStep].id);
         const stepConfig = STEPS[stepIndex];
         wizardElement.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col relative text-gray-800 dark:text-gray-100">
-                <header class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-2xl w-full max-w-4xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col relative text-slate-800 dark:text-slate-100">
+                <header class="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
                     <div>
                         <h1 class="text-xl font-bold">Мастер Настройки Секретарь+</h1>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Шаг ${stepIndex + 1} из ${STEPS.length}: ${stepConfig.title}</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Шаг ${stepIndex + 1} из ${STEPS.length}: ${stepConfig.title}</p>
                     </div>
-                    <button data-action="exit" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></button>
+                    <button data-action="exit" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></button>
                 </header>
-                <main class="flex-1 p-6 overflow-y-auto bg-gray-50 dark:bg-gray-900/70" id="wizard-content"></main>
-                <footer class="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center" id="wizard-footer"></footer>
+                <main class="flex-1 p-6 overflow-y-auto bg-slate-50 dark:bg-slate-900/70" id="wizard-content"></main>
+                <footer class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center" id="wizard-footer"></footer>
             </div>`;
         renderStepContent();
     };

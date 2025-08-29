@@ -5,26 +5,26 @@
   width: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #f3f4f6; /* gray-100 */
+  background: #f1f5f9; /* slate-100 */
 }
 ::-webkit-scrollbar-thumb {
-  background-color: #d1d5db; /* gray-300 */
+  background-color: #cbd5e1; /* slate-300 */
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #9ca3af; /* gray-400 */
+  background-color: #94a3b8; /* slate-400 */
 }
 
 /* Custom Scrollbar for Dark Theme */
 @media (prefers-color-scheme: dark) {
   ::-webkit-scrollbar-track {
-    background: #1f2937; /* dark:gray-800 */
+    background: #1e293b; /* dark:slate-800 */
   }
   ::-webkit-scrollbar-thumb {
-    background-color: #4b5563; /* dark:gray-600 */
+    background-color: #475569; /* dark:slate-600 */
   }
   ::-webkit-scrollbar-thumb:hover {
-    background-color: #6b7280; /* dark:gray-500 */
+    background-color: #64748b; /* dark:slate-500 */
   }
 }
 
@@ -40,7 +40,7 @@
 .loading-dots .dot {
   width: 6px;
   height: 6px;
-  background-color: #9ca3af; /* gray-400 */
+  background-color: #94a3b8; /* slate-400 */
   border-radius: 50%;
   animation: loading-blink 1.4s infinite both;
 }
@@ -102,7 +102,7 @@
     border-radius: 9999px; /* rounded-full */
     flex-shrink: 0;
 }
-.status-untested { background-color: #6b7280; } /* gray-500 */
+.status-untested { background-color: #64748b; } /* slate-500 */
 .status-ok { background-color: #22c55e; } /* green-500 */
 .status-error { background-color: #ef4444; } /* red-500 */
 .status-testing {
@@ -149,13 +149,13 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: #d1d5db; /* gray-300 */
+    background-color: #cbd5e1; /* slate-300 */
     transition: .4s;
     border-radius: 22px;
 }
 @media (prefers-color-scheme: dark) {
   .toggle-slider {
-    background-color: #4b5563; /* dark:gray-600 */
+    background-color: #475569; /* dark:slate-600 */
   }
 }
 .toggle-slider:before {
@@ -227,10 +227,10 @@ body.recording-active {
 }
 @media (prefers-color-scheme: dark) {
   #auth-container button::after {
-     border: 2px solid #1f2937; /* dark:border-gray-800 */
+     border: 2px solid #1e293b; /* dark:border-slate-800 */
   }
 }
-#auth-container button.proxy-status-off::after { background-color: #6b7280; } /* gray-500 */
+#auth-container button.proxy-status-off::after { background-color: #64748b; } /* slate-500 */
 #auth-container button.proxy-status-connecting::after {
     background-color: #f59e0b; /* amber-500 */
     animation: pulse 1.5s infinite;

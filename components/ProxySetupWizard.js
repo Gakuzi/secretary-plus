@@ -80,9 +80,9 @@ export function createProxySetupWizard({ onClose }) {
                 contentHtml = `
                     <p class="mb-4">Этот мастер поможет вам настроить **Прокси-воркер** — сервис для обхода региональных ограничений Gemini API.</p>
                     <p class="mb-4">Он будет безопасно перенаправлять ваши запросы к Google.</p>
-                     <div class="p-3 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md text-sm space-y-2">
+                     <div class="p-3 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-sm space-y-2">
                         <p><strong>Что вам понадобится:</strong></p>
-                        <ul class="list-disc list-inside text-gray-600 dark:text-gray-400">
+                        <ul class="list-disc list-inside text-slate-600 dark:text-slate-400">
                             <li>Аккаунт <a href="https://cloudflare.com" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">Cloudflare</a> (бесплатного тарифа достаточно).</li>
                         </ul>
                     </div>
@@ -92,7 +92,7 @@ export function createProxySetupWizard({ onClose }) {
             case 'create-worker':
                 contentHtml = `
                     <p class="mb-4">Войдите в ваш аккаунт Cloudflare и создайте новый Worker.</p>
-                    <ol class="list-decimal list-inside space-y-2 text-gray-700 dark:text-gray-300">
+                    <ol class="list-decimal list-inside space-y-2 text-slate-700 dark:text-slate-300">
                         <li>В <a href="https://dash.cloudflare.com/" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">панели Cloudflare</a>, перейдите в <strong>Workers & Pages</strong>.</li>
                         <li>Нажмите <strong>Create application</strong>, затем <strong>Create Worker</strong>.</li>
                         <li>Придумайте уникальное имя для воркера (например, \`my-gemini-proxy-123\`) и нажмите <strong>Deploy</strong>.</li>
@@ -103,12 +103,12 @@ export function createProxySetupWizard({ onClose }) {
             case 'deploy-code':
                 contentHtml = `
                     <p class="mb-4">Теперь перейдите в редактор кода вашего нового воркера (<strong>Edit code</strong>), удалите всё содержимое и вставьте код ниже.</p>
-                    <div class="rounded-md border border-gray-200 dark:border-gray-700">
-                        <div class="flex justify-between items-center bg-gray-100 dark:bg-gray-900 px-4 py-2 text-xs text-gray-500 dark:text-gray-400 rounded-t-md">
+                    <div class="rounded-md border border-slate-200 dark:border-slate-700">
+                        <div class="flex justify-between items-center bg-slate-100 dark:bg-slate-900 px-4 py-2 text-xs text-slate-500 dark:text-slate-400 rounded-t-md">
                             <span>JAVASCRIPT (CLOUDFLARE WORKER)</span>
-                            <button class="text-xs font-semibold bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 px-2 py-1 rounded-md transition-colors" data-action="copy-code">Копировать</button>
+                            <button class="text-xs font-semibold bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 px-2 py-1 rounded-md transition-colors" data-action="copy-code">Копировать</button>
                         </div>
-                        <pre class="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-b-md overflow-x-auto"><code id="worker-code-block" class="text-sm whitespace-pre font-mono">${PROXY_WORKER_CODE}</code></pre>
+                        <pre class="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-b-md overflow-x-auto"><code id="worker-code-block" class="text-sm whitespace-pre font-mono">${PROXY_WORKER_CODE}</code></pre>
                     </div>
                      <p class="mt-4">После вставки кода нажмите <strong>Save and Deploy</strong> в интерфейсе Cloudflare. После этого вы можете перейти к следующему шагу.</p>
                 `;
@@ -117,37 +117,37 @@ export function createProxySetupWizard({ onClose }) {
             case 'save-url':
                 contentHtml = `
                     <p class="mb-4">Отлично! Теперь скопируйте URL вашего развернутого воркера и вставьте его в поле ниже.</p>
-                    <p class="text-xs text-gray-500 mb-4">Этот URL будет добавлен в ваш список прокси в основных настройках приложения.</p>
+                    <p class="text-xs text-slate-500 mb-4">Этот URL будет добавлен в ваш список прокси в основных настройках приложения.</p>
                     <div class="mb-4">
                         <label for="worker-url-input" class="font-semibold text-sm">URL Прокси-воркера:</label>
-                        <input type="url" id="worker-url-input" class="flex-1 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md p-2 font-mono text-sm" placeholder="https://my-gemini-proxy.example.workers.dev" value="${state.workerUrl}">
+                        <input type="url" id="worker-url-input" class="flex-1 w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 font-mono text-sm" placeholder="https://my-gemini-proxy.example.workers.dev" value="${state.workerUrl}">
                     </div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">После сохранения вы можете управлять этим прокси через **Настройки &rarr; Прокси**.</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">После сохранения вы можете управлять этим прокси через **Настройки &rarr; Прокси**.</p>
                 `;
                 break;
         }
 
         const footerHtml = `
             <div class="flex-1">
-                ${state.currentStep > 0 ? `<button data-action="back" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md text-sm font-semibold">Назад</button>` : ''}
+                ${state.currentStep > 0 ? `<button data-action="back" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md text-sm font-semibold">Назад</button>` : ''}
             </div>
             ${state.currentStep < WIZARD_STEPS.length - 1 ? 
                 `<button data-action="next" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold">Далее</button>` : 
-                `<button data-action="finish" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold disabled:bg-gray-400 dark:disabled:bg-gray-500" ${!state.workerUrl ? 'disabled' : ''}>Добавить и закрыть</button>`
+                `<button data-action="finish" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold disabled:bg-slate-400 dark:disabled:bg-slate-500" ${!state.workerUrl ? 'disabled' : ''}>Добавить и закрыть</button>`
             }
         `;
 
         wizardElement.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 rounded-lg shadow-2xl w-full max-w-2xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col relative animate-fadeIn">
-                <header class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+            <div class="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg shadow-2xl w-full max-w-2xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col relative animate-fadeIn">
+                <header class="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
                     <div>
                         <h2 class="text-xl font-bold">Мастер настройки Прокси-воркера</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Шаг ${state.currentStep + 1} / ${WIZARD_STEPS.length}: ${stepConfig.title}</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Шаг ${state.currentStep + 1} / ${WIZARD_STEPS.length}: ${stepConfig.title}</p>
                     </div>
-                    <button data-action="close" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">&times;</button>
+                    <button data-action="close" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">&times;</button>
                 </header>
-                <main class="flex-1 p-6 overflow-y-auto bg-gray-50 dark:bg-gray-900/50">${contentHtml}</main>
-                <footer class="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">${footerHtml}</footer>
+                <main class="flex-1 p-6 overflow-y-auto bg-slate-50 dark:bg-slate-900/50">${contentHtml}</main>
+                <footer class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">${footerHtml}</footer>
             </div>
         `;
     };
