@@ -270,7 +270,9 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
     };
 
     const handleLogin = async () => {
-        const resumeData = { ...state, currentStep: 2 }; // Return to Auth step
+        // Omit non-serializable or transient state before saving to sessionStorage.
+        const { testingProxies, testResults, ...stateToSave } = state;
+        const resumeData = { ...stateToSave, currentStep: 2 }; // Return to Auth step
         sessionStorage.setItem('wizardState', JSON.stringify(resumeData));
 
         if (state.authChoice === 'supabase') {
