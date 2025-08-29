@@ -11,6 +11,14 @@
     <link rel="stylesheet" href="setup-guide.css">
     <!-- Supabase Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+     <!-- ES Module Import Map -->
+    <script type="importmap">
+    {
+      "imports": {
+        "@google/genai": "https://esm.sh/@google/genai"
+      }
+    }
+    </script>
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans">
     <div class="flex min-h-screen">
@@ -23,8 +31,8 @@
                     <li><a href="#auth-choice" class="nav-link" data-step="1">1. Выбор способа</a></li>
                     <li><a href="#supabase-setup" class="nav-link" data-step="2">2. Настройка Supabase</a></li>
                     <li><a href="#google-cloud-setup" class="nav-link" data-step="3">3. Настройка Google Cloud</a></li>
-                    <li><a href="#proxy-setup" class="nav-link" data-step="4">4. (Опц.) Настройка Прокси</a></li>
-                    <li><a href="#gemini-setup" class="nav-link" data-step="5">5. Настройка Gemini API</a></li>
+                    <li><a href="#gemini-setup" class="nav-link" data-step="4">4. Настройка Gemini API</a></li>
+                    <li><a href="#proxy-setup" class="nav-link" data-step="5">5. (Опц.) Настройка Прокси</a></li>
                     <li><a href="#final-step" class="nav-link" data-step="6">6. Завершение</a></li>
                 </ul>
             </nav>
@@ -90,54 +98,15 @@
 
                     <div class="step">
                         <h3 class="step-title">Шаг 2.2: Настройка базы данных</h3>
-                        <div class="note">
-                            <p><strong>Мы добавили автоматическую настройку!</strong> Вместо ручного копирования SQL-кода вы можете использовать наш новый инструмент, который сделает все за вас.</p>
-                        </div>
-                        
-                        <div id="auto-setup-block" class="bg-gray-800 border border-gray-700 rounded-lg p-6 mt-4">
-                            <h4 class="text-xl font-semibold text-white mb-4">Вариант А: Автоматическая настройка (Рекомендуется)</h4>
-                            <div class="space-y-6">
-                                <div>
-                                    <h5 class="font-semibold mb-2">Шаг 1: Сгенерируйте токен доступа</h5>
-                                    <ul class="list-disc list-inside text-gray-400 mt-1 pl-4 text-sm">
-                                        <li><a href="https://supabase.com/dashboard/account/tokens" target="_blank">Откройте страницу токенов доступа</a> в вашем аккаунте Supabase.</li>
-                                        <li>Нажмите "Generate New Token".</li>
-                                        <li>Дайте ему имя (например, "Secretary Setup") и нажмите "Generate Token".</li>
-                                        <li>Скопируйте сгенерированный токен и вставьте его в поле ниже.</li>
-                                    </ul>
-                                    <div class="mt-3">
-                                        <label for="supabase-token-input" class="block text-sm font-medium text-gray-300 mb-1">Токен доступа (Access Token)</label>
-                                        <input type="password" id="supabase-token-input" placeholder="Вставьте ваш токен (начинается с sup_...)" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 font-mono">
-                                    </div>
-                                </div>
-                                 <div>
-                                    <h5 class="font-semibold mb-2">Шаг 2: Найдите ID вашего проекта</h5>
-                                     <ul class="list-disc list-inside text-gray-400 mt-1 pl-4 text-sm">
-                                         <li>Перейдите в настройки вашего проекта: `Project Settings` > `General`.</li>
-                                         <li>Найдите поле `Reference ID` и скопируйте его.</li>
-                                     </ul>
-                                     <div class="mt-3">
-                                        <label for="supabase-project-id" class="block text-sm font-medium text-gray-300 mb-1">ID вашего проекта (Project Reference ID)</label>
-                                        <input type="text" id="supabase-project-id" placeholder="Вставьте ваш Project Reference ID" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 font-mono">
-                                     </div>
-                                </div>
-                                <div>
-                                    <h5 class="font-semibold mb-2">Шаг 3: Запустите настройку</h5>
-                                    <button id="run-sql-auto" class="wizard-nav-button next-button w-full text-center justify-center">Запустить автоматическую настройку</button>
-                                </div>
-                            </div>
-                            <div id="auto-setup-status-container" class="mt-4 text-sm">
-                                 <div id="auto-setup-progress" class="hidden mt-4 space-y-2 progress-steps">
-                                    <!-- Progress steps will be injected here by JS -->
-                                 </div>
-                                 <div id="auto-setup-result" class="hidden mt-4"></div>
-                            </div>
-                        </div>
-
-                        <details class="mt-6">
-                            <summary class="cursor-pointer text-gray-400 hover:text-white transition">Вариант Б: Ручная настройка</summary>
-                             <div class="mt-4 code-block">
-                                <pre><code id="sql-script-content">-- =================================================================
+                        <p>Вам необходимо выполнить SQL-скрипт для создания таблиц и настройки политик безопасности. Это надежный способ гарантировать правильную работу базы данных.</p>
+                         <ol>
+                            <li>В меню вашего нового проекта выберите <strong>SQL Editor</strong> (редактор SQL).</li>
+                            <li>Нажмите <strong>"+ New query"</strong>.</li>
+                            <li>Скопируйте и вставьте весь SQL-скрипт ниже в редактор.</li>
+                            <li>Нажмите <strong>"RUN"</strong>.</li>
+                        </ol>
+                        <div class="code-block mt-4">
+                            <pre><code id="sql-script-content">-- =================================================================
 --  Скрипт настройки базы данных "Секретарь+"
 --  Версия: 1.8.0
 --  Этот скрипт является идемпотентным. Его можно безопасно 
@@ -398,12 +367,11 @@ BEGIN
 END;
 $$;
 </code></pre>
-                                <button class="copy-button" data-copy-target="sql-script-content">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
-                                    <span class="copy-text">Копировать</span>
-                                </button>
-                            </div>
-                        </details>
+                            <button class="copy-button" data-copy-target="sql-script-content">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                                <span class="copy-text">Копировать</span>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="step">
@@ -483,110 +451,56 @@ $$;
                     </footer>
                 </section>
                 
-                <!-- Proxy Setup -->
-                <section id="proxy-setup" class="wizard-step" style="display: none;">
-                    <h2 class="section-title">4. (Опционально) Настройка Прокси-сервера</h2>
-                    <p class="mb-6">Если доступ к API Gemini ограничен в вашем регионе (например, в России), вы можете настроить бесплатный прокси-сервер. Он будет перенаправлять запросы от приложения к серверам Google, обходя блокировки. Это безопасно, так как код сервера будет принадлежать вам.</p>
-                    <p>Ниже приведены инструкции для двух популярных и надежных сервисов. Выберите один из них.</p>
-                
-                    <div class="step">
-                        <h3 class="step-title">Вариант A: Cloudflare Workers (Рекомендуется)</h3>
-                        <p>Cloudflare предоставляет очень щедрый бесплатный тариф, которого более чем достаточно для личного использования.</p>
-                        <ol>
-                            <li><a href="https://dash.cloudflare.com/sign-up" target="_blank" rel="noopener noreferrer">Зарегистрируйтесь</a> или войдите в аккаунт Cloudflare.</li>
-                            <li>В левом меню выберите <strong>Workers & Pages</strong>.</li>
-                            <li>Нажмите <strong>Create application</strong> > <strong>Create Worker</strong>.</li>
-                            <li>Придумайте имя для вашего worker (например, `gemini-proxy`) и нажмите <strong>Deploy</strong>.</li>
-                            <li>После развертывания нажмите <strong>Edit code</strong>.</li>
-                            <li>Полностью замените существующий код на тот, что указан ниже.</li>
-                        </ol>
-                        <div class="code-block">
-                            <pre><code id="cloudflare-script-content">export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    const targetUrl = 'https://generativelanguage.googleapis.com' + url.pathname + url.search;
-    
-    const newRequest = new Request(targetUrl, {
-      method: request.method,
-      headers: request.headers,
-      body: request.body,
-      redirect: 'follow',
-    });
-
-    return fetch(newRequest);
-  },
-};
-</code></pre>
-                            <button class="copy-button" data-copy-target="cloudflare-script-content">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
-                                <span class="copy-text">Копировать</span>
-                            </button>
-                        </div>
-                        <ol start="7">
-                            <li>Нажмите <strong>Save and deploy</strong>.</li>
-                            <li>Вернитесь на страницу вашего worker. Сверху вы найдете его URL (например, `https://gemini-proxy.your-username.workers.dev`). <strong>Скопируйте этот URL.</strong></li>
-                            <li>Вставьте скопированный URL в поле "Прокси-сервер для Gemini API" в настройках приложения.</li>
-                        </ol>
-                    </div>
-
-                    <div class="step">
-                        <h3 class="step-title">Вариант B: Vercel Edge Functions</h3>
-                         <p>Vercel также предоставляет отличный бесплатный тариф и простую настройку.</p>
-                        <ol>
-                            <li><a href="https://vercel.com/signup" target="_blank" rel="noopener noreferrer">Зарегистрируйтесь</a> на Vercel, удобнее всего через GitHub.</li>
-                            <li>Создайте новый пустой репозиторий на <a href="https://github.com/new" target="_blank">GitHub</a> (например, `gemini-proxy`).</li>
-                            <li>В этом репозитории создайте папку `api`, а внутри нее — файл `proxy.js`.</li>
-                            <li>Вставьте в файл `proxy.js` следующий код:</li>
-                        </ol>
-                         <div class="code-block">
-                            <pre><code id="vercel-script-content">export const config = {
-  runtime: 'edge',
-};
-
-export default async function handler(request) {
-  const url = new URL(request.url);
-  const targetUrl = `https://generativelanguage.googleapis.com${url.pathname.replace('/api/proxy', '')}${url.search}`;
-
-  return fetch(targetUrl, {
-    headers: request.headers,
-    method: request.method,
-    body: request.body,
-    redirect: 'follow',
-  });
-}
-</code></pre>
-                            <button class="copy-button" data-copy-target="vercel-script-content">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
-                                <span class="copy-text">Копировать</span>
-                            </button>
-                        </div>
-                         <ol start="5">
-                             <li><a href="https://vercel.com/new" target="_blank" rel="noopener noreferrer">Создайте новый проект на Vercel</a>, импортировав созданный репозиторий с GitHub. Vercel автоматически определит настройки. Нажмите <strong>Deploy</strong>.</li>
-                            <li>После развертывания перейдите в панель управления проектом. В разделе <strong>Domains</strong> вы найдете URL вашего проекта (например, `https://gemini-proxy.vercel.app`).</li>
-                            <li>К этому URL добавьте `/api/proxy`. Ваш полный URL для настроек будет выглядеть так: `https://gemini-proxy.vercel.app/api/proxy`. <strong>Скопируйте его.</strong></li>
-                             <li>Вставьте этот URL в поле "Прокси-сервер для Gemini API" в настройках приложения.</li>
-                        </ol>
-                    </div>
-
-                    <footer class="wizard-footer">
-                        <button class="wizard-nav-button back-button" data-back="3">Назад</button>
-                        <button class="wizard-nav-button next-button" data-next="5">Далее</button>
-                    </footer>
-                </section>
-                
                 <!-- Gemini Setup -->
                 <section id="gemini-setup" class="wizard-step" style="display: none;">
-                    <h2 class="section-title">5. Настройка Gemini API</h2>
+                    <h2 class="section-title">4. Настройка Gemini API</h2>
                     <p class="mb-6">Gemini — это модель искусственного интеллекта от Google, которая является "мозгом" ассистента. Вам нужен API-ключ для отправки запросов.</p>
                     <div class="step">
                          <ol>
                             <li><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Откройте Google AI Studio</a>.</li>
                             <li>Нажмите <strong>"Create API key in new project"</strong>.</li>
-                            <li>Скопируйте сгенерированный ключ и сохраните его.</li>
+                            <li>Скопируйте сгенерированный ключ и вставьте его в поле ниже. Он понадобится на следующем шаге.</li>
                         </ol>
+                         <div class="input-group mt-4">
+                            <label for="wizard-gemini-api-key">Gemini API Key</label>
+                            <input type="password" id="wizard-gemini-api-key" placeholder="Вставьте ваш Gemini API Key">
+                        </div>
                         <p class="note">Ваш ключ будет храниться только локально в вашем браузере и никуда не передается.</p>
                     </div>
                      <footer class="wizard-footer">
+                        <button class="wizard-nav-button back-button" data-back="3">Назад</button>
+                        <button class="wizard-nav-button next-button" data-next="5">Далее</button>
+                    </footer>
+                </section>
+
+                <!-- Proxy Setup -->
+                <section id="proxy-setup" class="wizard-step" style="display: none;">
+                    <h2 class="section-title">5. (Опционально) Настройка Прокси-серверов</h2>
+                    <p class="mb-4">Если доступ к API Gemini ограничен в вашем регионе, вы можете автоматически найти и протестировать рабочие прокси-серверы. Они будут сохранены в вашу конфигурацию для обхода ограничений.</p>
+                    
+                    <div class="step">
+                        <h3 class="step-title">Шаг 5.1: Интеллектуальный поиск</h3>
+                        <p class="mb-4">Нажмите кнопку ниже, чтобы использовать ИИ для поиска актуальных прокси-серверов в интернете.</p>
+                        <button id="find-proxies-ai" class="wizard-nav-button next-button">Найти прокси с помощью ИИ</button>
+                        <div id="proxy-finder-status" class="mt-4 text-sm"></div>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div class="step">
+                            <h3 class="step-title">Шаг 5.2: Результаты поиска</h3>
+                            <div id="found-proxies-container" class="proxy-list-container">
+                                <p class="text-gray-400 text-center py-4">Здесь появятся найденные прокси...</p>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <h3 class="step-title">Шаг 5.3: Выбранные прокси</h3>
+                             <div id="selected-proxies-container" class="proxy-list-container">
+                                <p class="text-gray-400 text-center py-4">Добавьте прокси из списка слева, чтобы сохранить их.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <footer class="wizard-footer">
                         <button class="wizard-nav-button back-button" data-back="4">Назад</button>
                         <button class="wizard-nav-button next-button" data-next="6">Далее</button>
                     </footer>
@@ -646,6 +560,6 @@ export default async function handler(request) {
             </div>
         </main>
     </div>
-    <script src="setup-guide.js"></script>
+    <script type="module" src="setup-guide.js"></script>
 </body>
 </html>

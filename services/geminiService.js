@@ -925,3 +925,47 @@ ${errorMessage}
         return `### Ошибка при анализе\nНе удалось связаться с Gemini для анализа ошибки. Пожалуйста, проверьте свой API ключ и подключение к интернету.\n\n**Исходная ошибка:**\n\`\`\`\n${errorMessage}\n\`\`\``;
     }
 };
+
+export const findProxiesWithGemini = async ({ apiKey, proxyUrl }) => {
+    if (!apiKey) {
+        throw new Error("Ключ Gemini API не предоставлен.");
+    }
+    const clientOptions = { apiKey };
+    if (proxyUrl) {
+        clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
+    }
+    const ai = new GoogleGenAI(clientOptions);
+
+    const prompt = `Найди 10 общедоступных (бесплатных) прокси-серверов, которые могут работать с Google API из разных стран.
+    Предоставь ответ в формате JSON. Каждый объект должен содержать поля "url", "country" и "city".
+    Пример: [{"url": "https://example.com/proxy", "country": "USA", "city": "California"}]`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            url: { type: Type.STRING },
+                            country: { type: Type.STRING },
+                            city: { type: Type.STRING }
+                        },
+                        required: ["url", "country"]
+                    }
+                }
+            }
+        });
+        
+        const jsonText = response.text.trim();
+        return JSON.parse(jsonText);
+
+    } catch (error) {
+        console.error("Error finding proxies with Gemini:", error);
+        throw new Error("Не удалось найти прокси с помощью ИИ. Проверьте API ключ и сетевое соединение.");
+    }
+};

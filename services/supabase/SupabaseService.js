@@ -460,4 +460,26 @@ export class SupabaseService {
         if (error) throw error;
         return { success: true };
     }
+    
+    async upsertProxies(proxies) {
+        const { data: { user } } = await this.client.auth.getUser();
+        if (!user) throw new Error("User not authenticated.");
+
+        const formattedProxies = proxies.map(p => ({
+            user_id: user.id,
+            url: p.url,
+            alias: p.alias,
+            priority: p.priority,
+            is_active: p.is_active,
+            geolocation: p.geolocation,
+        }));
+
+        const { data, error } = await this.client
+            .from('proxies')
+            .upsert(formattedProxies, { onConflict: 'user_id, url' })
+            .select();
+
+        if (error) throw error;
+        return data;
+    }
 }

@@ -93,7 +93,7 @@ function timeAgo(dateString) {
 
 
 export function createSettingsModal(currentSettings, authState, handlers) {
-    const { onSave, onClose, onLogin, onLogout, isSyncing, onForceSync, syncStatus, onProxyAdd, onProxyUpdate, onProxyDelete, onProxyTest } = handlers;
+    const { onSave, onClose, onLogin, onLogout, isSyncing, onForceSync, syncStatus, onProxyAdd, onProxyUpdate, onProxyDelete, onProxyTest, onFindAndUpdateProxies, onCleanupProxies } = handlers;
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
     
@@ -209,10 +209,16 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                                     <h3 class="text-lg font-semibold text-gray-200">Список прокси-серверов</h3>
                                     <p class="text-sm text-gray-400">Добавьте свои прокси. Будет использован самый приоритетный рабочий сервер.</p>
                                 </div>
-                                <button id="add-proxy-button" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md text-sm font-semibold whitespace-nowrap">Добавить прокси</button>
+                                <div class="flex gap-2">
+                                    <button id="find-proxies-ai-button" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm font-semibold whitespace-nowrap">Найти ИИ</button>
+                                    <button id="add-proxy-button" class="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-sm font-semibold whitespace-nowrap">Добавить</button>
+                                </div>
                             </div>
                             <div id="proxy-list-container" class="space-y-2">
                                 <!-- Proxy list will be rendered here -->
+                            </div>
+                             <div class="mt-4 pt-4 border-t border-gray-700">
+                                <button id="cleanup-proxies-button" class="w-full px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold">Проверить все и удалить нерабочие</button>
                             </div>
                         </div>
                          <div id="proxy-editor-container"></div>
@@ -512,6 +518,8 @@ export function createSettingsModal(currentSettings, authState, handlers) {
     const proxyListContainer = modalOverlay.querySelector('#proxy-list-container');
     const proxyEditorContainer = modalOverlay.querySelector('#proxy-editor-container');
     const addProxyButton = modalOverlay.querySelector('#add-proxy-button');
+    const findProxiesAiButton = modalOverlay.querySelector('#find-proxies-ai-button');
+    const cleanupProxiesButton = modalOverlay.querySelector('#cleanup-proxies-button');
 
     function renderProxyList() {
         if (!authState.proxies || authState.proxies.length === 0) {
@@ -628,6 +636,9 @@ export function createSettingsModal(currentSettings, authState, handlers) {
 
     if (authState.isSupabaseReady) {
         addProxyButton.addEventListener('click', () => showProxyEditor());
+        findProxiesAiButton.addEventListener('click', onFindAndUpdateProxies);
+        cleanupProxiesButton.addEventListener('click', onCleanupProxies);
+
         proxyListContainer.addEventListener('click', (e) => {
             const button = e.target.closest('button[data-action]');
             const toggle = e.target.closest('input[data-action="toggle-proxy"]');
