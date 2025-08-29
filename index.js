@@ -484,11 +484,16 @@ function showDbSetupWizard() {
         settings: state.settings,
         supabaseConfig: SUPABASE_CONFIG,
         onClose: () => { wizardContainer.innerHTML = ''; },
-        onSave: (newSettings) => {
+        onSave: async (newSettings) => {
             state.settings = newSettings;
+             if (supabaseService) {
+                await supabaseService.saveUserSettings(newSettings);
+            }
             saveSettings(newSettings);
             wizardContainer.innerHTML = '';
             alert('Настройки Управляющего воркера сохранены!');
+            // Re-run migrations with the new worker URL
+            await runSchemaMigrations();
         }
      });
      wizardContainer.appendChild(wizard);
@@ -548,18 +553,20 @@ async function runSchemaMigrations() {
             let currentVersion = 0;
 
             try {
-                const versionResult = await supabaseService.executeSql(state.settings.managementWorkerUrl, 'SELECT version FROM public.schema_migrations WHERE id = 1;');
-                if (versionResult && versionResult.length > 0) {
+                const versionResult = await supabaseService.executeSql(state.settings.managementWorkerUrl, 'SELECT version FROM public.schema_migrations;');
+                if (versionResult && versionResult.length > 0 && versionResult[0].version) {
                     currentVersion = versionResult[0].version;
                 }
             } catch (e) {
+                // This error is expected if the migrations table doesn't exist yet.
                 if (e.message.includes('relation "public.schema_migrations" does not exist')) {
                     currentVersion = 0;
                 } else {
+                    // Rethrow unexpected errors.
                     throw e;
                 }
             }
-
+            
             if (currentVersion >= LATEST_SCHEMA_VERSION) {
                 updateState('success', 'Ваша база данных в актуальном состоянии.');
                 return new Promise(resolve => setTimeout(() => { modal.remove(); resolve(); }, 1500));
@@ -570,8 +577,16 @@ async function runSchemaMigrations() {
             for (const migration of migrationsToRun) {
                 updateState('migrating', `Шаг ${migration.version}/${LATEST_SCHEMA_VERSION}: ${migration.description}`);
                 await supabaseService.executeSql(state.settings.managementWorkerUrl, migration.sql);
-                const updateVersionSql = `UPDATE public.schema_migrations SET version = ${migration.version}, last_updated = now() WHERE id = 1;`;
-                await supabaseService.executeSql(state.settings.managementWorkerUrl, updateVersionSql);
+                // The first migration creates the table, subsequent ones update it.
+                const updateVersionSql = currentVersion === 0 && migration.version === 1 
+                    ? `UPDATE public.schema_migrations SET version = 1, last_updated = now() WHERE id = 1;`
+                    : `UPDATE public.schema_migrations SET version = ${migration.version}, last_updated = now() WHERE id = 1;`;
+
+                // Run the version update only after the migration table exists.
+                if (migration.version >= 1) {
+                    await supabaseService.executeSql(state.settings.managementWorkerUrl, updateVersionSql);
+                }
+                currentVersion = migration.version;
             }
 
             updateState('success');
@@ -581,16 +596,23 @@ async function runSchemaMigrations() {
             console.error("Migration failed:", error);
             updateState('error', null, error.message);
             // This promise will not resolve, halting app execution until fixed.
-            return new Promise((_, reject) => {
-                 modal.addEventListener('click', e => {
+            return new Promise((resolve, reject) => {
+                 const newModal = document.getElementById('migration-modal'); // Re-find the modal
+                 if (!newModal) return reject();
+                 
+                 const actionHandler = e => {
                     const action = e.target.dataset.action;
                     if (action === 'retry') {
-                        performMigration().then(() => reject()); // Resolve outer promise on success
+                        newModal.removeEventListener('click', actionHandler);
+                        performMigration().then(resolve).catch(reject);
                     } else if (action === 'open-wizard') {
+                        newModal.removeEventListener('click', actionHandler);
                         modal.remove();
                         showDbSetupWizard();
+                        reject(); // Stop execution as the wizard takes over.
                     }
-                });
+                };
+                newModal.addEventListener('click', actionHandler);
             });
         }
     };

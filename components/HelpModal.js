@@ -170,12 +170,14 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
 
         const launchDbWizardButton = e.target.closest('[data-action="launch-db-wizard"]');
         if (launchDbWizardButton) {
+            onClose(); // Close help modal before opening wizard
             onLaunchDbWizard();
             return;
         }
 
         const launchProxyWizardButton = e.target.closest('[data-action="launch-proxy-wizard"]');
         if (launchProxyWizardButton) {
+            onClose(); // Close help modal before opening wizard
             onLaunchProxyWizard();
             return;
         }
@@ -229,11 +231,11 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
         handleAction(e);
     });
     
-    // Default to 'about' tab
+    // Default to 'error-analysis' tab
     modalOverlay.querySelectorAll('.settings-tab-button').forEach(btn => btn.classList.remove('active'));
-    modalOverlay.querySelectorAll(`.settings-tab-button[data-tab="about"]`).forEach(btn => btn.classList.add('active'));
+    modalOverlay.querySelectorAll(`.settings-tab-button[data-tab="error-analysis"]`).forEach(btn => btn.classList.add('active'));
     modalOverlay.querySelectorAll('.settings-tab-content').forEach(content => {
-        content.classList.toggle('hidden', content.id !== 'tab-about');
+        content.classList.toggle('hidden', content.id !== 'tab-error-analysis');
     });
 
     return modalOverlay;

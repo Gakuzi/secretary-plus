@@ -456,13 +456,27 @@ export class SupabaseService {
             body: JSON.stringify({ query: sql }),
         });
 
+        const text = await response.text();
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error("Management worker error:", errorText);
-            throw new Error(`DB management worker failed with status ${response.status}: ${errorText}`);
+            console.error("Management worker error response:", text);
+            // Try to parse the error from the worker's JSON response
+            try {
+                 const errorJson = JSON.parse(text);
+                 if (errorJson.error) {
+                     throw new Error(`DB worker failed: ${errorJson.error}`);
+                 }
+            } catch (e) {
+                // Fallback if parsing fails
+            }
+            throw new Error(`DB management worker failed with status ${response.status}: ${text}`);
         }
 
-        return response.json();
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            console.error("Failed to parse JSON response from worker:", text);
+            throw new Error("Received invalid JSON from the DB management worker.");
+        }
     }
 
 
