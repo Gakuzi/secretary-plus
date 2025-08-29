@@ -23,7 +23,7 @@ async function handleRequest(request) {
 
     // IMPORTANT: Replace with YOUR project reference ID
     const PROJECT_REF = 'YOUR_PROJECT_REF';
-    const SUPABASE_API_URL = \`https://api.supabase.com/v1/projects/\${PROJECT_REF}/query\`;
+    const SUPABASE_API_URL = \`https://api.supabase.com/v1/projects/\${PROJECT_REF}/sql\`;
 
     try {
         const { query } = await request.json();
@@ -270,12 +270,16 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                     });
                     const responseText = await response.text();
                     if (!response.ok) {
-                        throw new Error(`Воркер вернул ошибку ${response.status}: ${responseText}`);
+                        throw new Error(\`Воркер вернул ошибку ${response.status}: ${responseText}\`);
                     }
                     const data = JSON.parse(responseText);
-                    if (!Array.isArray(data) || data[0]['?column?'] !== 1) {
+                    // Supabase returns an array for a successful query
+                    if (!Array.isArray(data)) {
                         if (JSON.stringify(data).includes("Authentication failed")) {
                              throw new Error('Ошибка аутентификации. Проверьте токен, сохраненный в переменных окружения воркера.');
+                        }
+                        if (data.error) {
+                             throw new Error(`API Error: ${data.error.message}`);
                         }
                         throw new Error('Воркер вернул неожиданный ответ.');
                     }

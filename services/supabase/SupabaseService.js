@@ -511,7 +511,7 @@ export class SupabaseService {
                 // Pass the Google token to the worker for potential validation if needed
                 'Authorization': `Bearer ${session.provider_token}`
             },
-            body: JSON.stringify({ sql: sqlScript }),
+            body: JSON.stringify({ query: sqlScript }),
         });
 
         if (!response.ok) {

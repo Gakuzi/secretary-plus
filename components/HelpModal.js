@@ -71,7 +71,7 @@ const SUPABASE_SETUP_MD = `
 ### Шаг 2: Выполнение SQL-скрипта
 1.  В меню вашего нового проекта выберите **SQL Editor** (редактор SQL).
 2.  Нажмите **"+ New query"**.
-3.  Скопируйте и вставьте SQL-скрипт по [этой ссылке](https://github.com/user/repo/blob/main/SUPABASE_SETUP.md) в редактор.
+3.  Скопируйте и вставьте весь SQL-скрипт из файла \`SUPABASE_SETUP.md\` (находится в корне проекта) в редактор.
 4.  Нажмите **"RUN"**. Этот скрипт создаст все необходимые таблицы и настроит политики безопасности.
 `;
 
@@ -147,7 +147,8 @@ function createGuideFromMarkdown(markdown) {
             } else if (line.trim().length > 0) {
                 const processedLine = line
                  .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">$1</a>')
-                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                 .replace(/`([^`]+)`/g, '<code class="bg-gray-700 text-sm rounded px-1 py-0.5">$1</code>');
                 partHtml += `<p class="text-gray-300">${processedLine}</p>`;
             }
         });
@@ -289,22 +290,78 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
             const codeId = projectRefInput.dataset.targetCodeId;
             const codeElement = modalOverlay.querySelector(`#${codeId}`);
             if (codeElement) {
-                const projectRef = projectRefInput.value.trim();
                 const originalCode = decodeURIComponent(codeElement.dataset.originalCode);
-                const placeholder = projectRef || 'YOUR_PROJECT_REF';
-                codeElement.textContent = originalCode.replace('YOUR_PROJECT_REF', placeholder);
+                codeElement.textContent = originalCode.replace(/YOUR_PROJECT_REF/g, projectRefInput.value.trim() || 'YOUR_PROJECT_REF');
             }
         }
     });
 
-    modalOverlay.addEventListener('click', async (e) => {
-        // Close modal
-        if (e.target.closest('#close-help') || e.target === modalOverlay) {
-            onClose();
+    const handleAction = (e) => {
+        const target = e.target.closest('[data-action]');
+        if (target) {
+            // Handle actions here if needed in the future
+        }
+        
+        const copyButton = e.target.closest('.copy-code-button');
+        if (copyButton) {
+            const targetId = copyButton.dataset.targetId;
+            const codeElement = modalOverlay.querySelector(`#${targetId}`);
+            if (codeElement) {
+                navigator.clipboard.writeText(codeElement.textContent).then(() => {
+                    copyButton.textContent = 'Скопировано!';
+                    setTimeout(() => { copyButton.textContent = 'Копировать'; }, 2000);
+                }).catch(err => {
+                    console.error('Failed to copy text: ', err);
+                    alert('Не удалось скопировать текст.');
+                });
+            }
+        }
+
+         const relaunchButton = e.target.closest('#relaunch-wizard-button');
+         if (relaunchButton) {
+            onRelaunchWizard();
+            return;
+         }
+
+        const launchDbWizardButton = e.target.closest('[data-action="launch-db-wizard"]');
+        if (launchDbWizardButton) {
+            onLaunchDbWizard();
             return;
         }
 
-        // Tab switching logic
+        const analyzeButton = e.target.closest('#analyze-error-button');
+        if (analyzeButton) {
+            const textarea = modalOverlay.querySelector('#error-input-area');
+            const validationMsg = modalOverlay.querySelector('#error-validation-message');
+            const resultContainer = modalOverlay.querySelector('#error-analysis-result');
+            const errorText = textarea.value.trim();
+
+            if (!errorText) {
+                validationMsg.textContent = 'Пожалуйста, вставьте сообщение об ошибке.';
+                return;
+            }
+            validationMsg.textContent = '';
+            analyzeButton.disabled = true;
+            analyzeButton.innerHTML = `<div class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div> <span>Анализ...</span>`;
+            resultContainer.style.display = 'block';
+            resultContainer.innerHTML = `<div class="flex items-center justify-center h-48"><div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;
+            
+            analyzeErrorFn(errorText).then(analysis => {
+                resultContainer.innerHTML = `<div class="prose prose-invert max-w-none text-gray-300">${markdownToHTML(analysis)}</div>`;
+            }).catch(err => {
+                resultContainer.innerHTML = `<p class="text-red-400">Не удалось выполнить анализ: ${err.message}</p>`;
+            }).finally(() => {
+                analyzeButton.disabled = false;
+                analyzeButton.textContent = 'Проанализировать';
+            });
+        }
+    };
+    
+    modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay || e.target.closest('#close-help')) {
+            onClose();
+        }
+
         const tabButton = e.target.closest('.settings-tab-button');
         if (tabButton) {
             e.preventDefault();
@@ -317,112 +374,28 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                 content.classList.toggle('hidden', content.id !== `tab-${tabId}`);
             });
             
-            if(tabId === 'instructions') {
+            if (tabId === 'instructions') {
                 loadInstructions();
             }
-            return;
-        }
-        
-        // Copy Code Button
-        const copyButton = e.target.closest('.copy-code-button');
-        if(copyButton) {
-            const targetId = copyButton.dataset.targetId;
-            const codeElement = modalOverlay.querySelector(`#${targetId}`);
-            const codeToCopy = codeElement.textContent;
-
-            if (codeToCopy.includes('YOUR_PROJECT_REF')) {
-                alert('Пожалуйста, введите ваш Project ID в поле ниже, прежде чем копировать.');
-                return;
-            }
-
-            navigator.clipboard.writeText(codeToCopy).then(() => {
-                copyButton.textContent = 'Скопировано!';
-                setTimeout(() => { copyButton.textContent = 'Копировать'; }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy text: ', err);
-                copyButton.textContent = 'Ошибка';
-                setTimeout(() => { copyButton.textContent = 'Копировать'; }, 2000);
-            });
-        }
-        
-        // Copy Report Button
-        const copyReportButton = e.target.closest('#copy-report-button');
-        if (copyReportButton) {
-             const reportText = copyReportButton.dataset.report;
-             navigator.clipboard.writeText(reportText).then(() => {
-                copyReportButton.textContent = 'Отчет скопирован!';
-                setTimeout(() => { copyReportButton.textContent = 'Скопировать отчет'; }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy report: ', err);
-                copyReportButton.textContent = 'Ошибка копирования';
-            });
         }
 
-
-        // Action buttons
-        const analyzeButton = e.target.closest('#analyze-error-button');
-        const relaunchButton = e.target.closest('#relaunch-wizard-button');
-        const launchDbWizardButton = e.target.closest('[data-action="launch-db-wizard"]');
-
-        if (launchDbWizardButton) {
-            onLaunchDbWizard();
-            return;
-        }
-
-        if (analyzeButton) {
-            const errorInput = modalOverlay.querySelector('#error-input-area');
-            const resultContainer = modalOverlay.querySelector('#error-analysis-result');
-            const validationMessage = modalOverlay.querySelector('#error-validation-message');
-            
-            validationMessage.textContent = '';
-            const errorMessage = errorInput.value.trim();
-
-            if (!errorMessage) {
-                validationMessage.textContent = "Пожалуйста, вставьте сообщение об ошибке.";
-                return;
-            }
-            if (!settings.geminiApiKey) {
-                validationMessage.textContent = "Ключ Gemini API не настроен. Добавьте его в настройках.";
-                return;
-            }
-
-            resultContainer.style.display = 'block';
-            resultContainer.innerHTML = `<div class="flex items-center justify-center h-48"><div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;
-            analyzeButton.disabled = true;
-            analyzeButton.textContent = "Анализирую...";
-
-            try {
-                const analysis = await analyzeErrorFn(errorMessage);
-                const fullReport = `--- ОТЧЕТ ОБ ОШИБКЕ ДЛЯ СЕКРЕТАРЬ+ ---\n\n## Исходная ошибка:\n\`\`\`\n${errorMessage}\n\`\`\`\n\n## Анализ ИИ:\n${analysis}`;
-                resultContainer.innerHTML = `
-                    <div class="prose prose-invert max-w-none">${markdownToHTML(analysis)}</div>
-                    <div class="mt-6 border-t border-gray-700 pt-4 flex flex-col sm:flex-row gap-3">
-                        <button id="copy-report-button" data-report="${encodeURIComponent(fullReport)}" class="w-full flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md font-semibold transition-colors">Скопировать отчет</button>
-                        <a href="https://t.me/eklimov" target="_blank" class="w-full flex-1 px-4 py-2 bg-sky-500 hover:bg-sky-600 rounded-md font-semibold transition-colors text-center">Связаться с автором</a>
-                    </div>
-                `;
-            } catch (error) {
-                resultContainer.innerHTML = `<p class="text-red-400">Не удалось выполнить анализ: ${error.message}</p>`;
-            } finally {
-                analyzeButton.disabled = false;
-                analyzeButton.textContent = "Проанализировать";
-            }
-        }
-
-        if (relaunchButton && onRelaunchWizard) {
-            onRelaunchWizard();
-        }
+        handleAction(e);
     });
-    
-    // Set initial tab after rendering
-    if (initialTab) {
-        const tabButton = modalOverlay.querySelector(`.settings-tab-button[data-tab="${initialTab}"]`);
-        if (tabButton) {
-            // Use timeout to ensure all elements are in the DOM before simulating click
-            setTimeout(() => tabButton.click(), 0);
+
+    const activateInitialTab = () => {
+        modalOverlay.querySelectorAll('.settings-tab-button').forEach(btn => btn.classList.remove('active'));
+        modalOverlay.querySelectorAll('.settings-tab-content').forEach(content => content.classList.add('hidden'));
+
+        modalOverlay.querySelectorAll(`.settings-tab-button[data-tab="${initialTab}"]`).forEach(btn => btn.classList.add('active'));
+        const initialTabContent = modalOverlay.querySelector(`#tab-${initialTab}`);
+        if (initialTabContent) {
+            initialTabContent.classList.remove('hidden');
         }
-    }
+         if (initialTab === 'instructions') {
+            loadInstructions();
+        }
+    };
 
-
+    activateInitialTab();
     return modalOverlay;
 }

@@ -100,6 +100,8 @@ const sendMessageHandler = () => {
 
 // --- UI Updates ---
 function updateInputUI() {
+    if (!chatInput) return;
+    
     const hasText = chatInput.value.trim().length > 0;
     
     // Auto-resize textarea
@@ -382,7 +384,16 @@ export function createChatInterface(onSendMessage, showCameraView, onSystemError
         }
     );
 
+    // Initial UI update. Call it once immediately for a quick layout.
     updateInputUI();
+    
+    // Call it again once fonts are loaded to ensure the textarea height is calculated
+    // correctly with the final font metrics. This fixes layout shifts on initial load.
+    document.fonts.ready.then(() => {
+        if (chatInput) { // Ensure element still exists if the view is destroyed
+            updateInputUI();
+        }
+    });
 
     return chatWrapper;
 }
