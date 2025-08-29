@@ -365,30 +365,157 @@ async function handleCardAction(e) {
 async function handleQuickReply(e) {
     const target = e.target.closest('.quick-reply-button');
     if (!target || target.disabled) return;
-
-    const replyText = target.dataset.replyText;
+    
+    // Give visual feedback and disable other buttons
     const container = target.closest('.quick-replies-container');
+    container.querySelectorAll('button').forEach(btn => {
+        btn.disabled = true;
+    });
+    target.classList.add('clicked');
+    
+    await handleSendMessage(target.dataset.replyText);
+}
 
-    if (container) {
-        container.querySelectorAll('.quick-reply-button').forEach(btn => {
-            btn.disabled = true;
-            if (btn === target) {
-                btn.classList.add('clicked');
-            }
+// --- MODAL & VIEW MANAGEMENT ---
+
+function showSetupWizard(resumeState = null) {
+    wizardContainer.innerHTML = '';
+    const onComplete = (newSettings) => {
+        saveSettings(newSettings);
+        wizardContainer.innerHTML = '';
+        window.location.reload();
+    };
+    const onExit = () => {
+        wizardContainer.innerHTML = '';
+        if (state.settings.geminiApiKey) {
+            onAppReady();
+        }
+    };
+    const wizard = createSetupWizard({ onComplete, onExit, googleProvider, supabaseConfig: SUPABASE_CONFIG, googleClientId: GOOGLE_CLIENT_ID, resumeState });
+    wizardContainer.appendChild(wizard);
+}
+
+function showSettingsModal() {
+    modalContainer.innerHTML = '';
+    const onSave = async (newSettings) => {
+        state.settings = newSettings;
+        saveSettings(newSettings);
+        if (state.isSupabaseReady && supabaseService) {
+            await supabaseService.saveUserSettings(newSettings);
+        }
+        modalContainer.innerHTML = '';
+        await initializeAppServices();
+    };
+    const modal = createSettingsModal({
+        settings: state.settings,
+        supabaseService: supabaseService,
+        onClose: () => modalContainer.innerHTML = '',
+        onSave,
+    });
+    modalContainer.appendChild(modal);
+}
+
+function showProfileModal() {
+    modalContainer.innerHTML = '';
+    const onSave = async (newSettings) => {
+        state.settings = newSettings;
+        saveSettings(newSettings);
+        if (state.isSupabaseReady && supabaseService) {
+            await supabaseService.saveUserSettings(newSettings);
+        }
+        modalContainer.innerHTML = '';
+        await initializeAppServices();
+    };
+    const onDelete = async () => {
+        if (confirm('Вы уверены, что хотите удалить ВСЕ свои настройки из облака Supabase? Это действие необратимо.')) {
+            await supabaseService.deleteUserSettings();
+            alert('Настройки удалены из облака.');
+            modalContainer.innerHTML = '';
+        }
+    };
+    const onForceSync = async () => {
+        await runAllSyncs();
+        showProfileModal();
+    };
+     const onAnalyzeError = async ({ context, error }) => {
+        return await analyzeSyncErrorWithGemini({
+            errorMessage: error,
+            context: context,
+            appStructure: APP_STRUCTURE_CONTEXT,
+            apiKey: state.settings.geminiApiKey,
+            proxyUrl: await getActiveProxy()
         });
-    }
+    };
+    const onViewData = async ({ tableName }) => {
+        return await supabaseService.getSampleData(tableName);
+    };
 
-    if (replyText) {
-        await handleSendMessage(replyText);
-    }
+    const modal = createProfileModal(
+        state.userProfile,
+        state.settings,
+        {
+            onClose: () => modalContainer.innerHTML = '',
+            onSave,
+            onLogout: handleLogout,
+            onDelete,
+            onForceSync,
+            onAnalyzeError,
+            onViewData,
+        },
+        state.syncStatus,
+        syncTasks,
+        state.settings.isSupabaseEnabled ? SUPABASE_CONFIG.url : null
+    );
+    modalContainer.appendChild(modal);
+}
 
-    // Wait a bit before removing to show feedback
-    setTimeout(() => {
-        container?.remove();
-    }, 300);
+function showStatsModal() {
+    modalContainer.innerHTML = '';
+    const modal = createStatsModal(state.actionStats, () => modalContainer.innerHTML = '');
+    modalContainer.appendChild(modal);
+}
+
+function showHelpModal() {
+    modalContainer.innerHTML = '';
+    const onRelaunchWizard = () => {
+        if (confirm('Это действие удалит ваши текущие настройки из браузера. Вы уверены?')) {
+            localStorage.removeItem('secretary-plus-settings-v4');
+            showSetupWizard();
+        }
+    };
+     const analyzeErrorFn = async (errorMessage) => {
+         return await analyzeSyncErrorWithGemini({
+            errorMessage: errorMessage,
+            context: 'Пользователь вручную вставил ошибку для анализа в Центре Помощи.',
+            appStructure: APP_STRUCTURE_CONTEXT,
+            apiKey: state.settings.geminiApiKey,
+            proxyUrl: await getActiveProxy()
+        });
+     };
+
+    const modal = createHelpModal({
+        onClose: () => modalContainer.innerHTML = '',
+        settings: state.settings,
+        analyzeErrorFn,
+        onRelaunchWizard
+    });
+    modalContainer.appendChild(modal);
+}
+
+function showCameraView() {
+    cameraViewContainer.innerHTML = '';
+    cameraViewContainer.classList.remove('hidden');
+    const onCapture = (image) => handleSendMessage('', image);
+    const onClose = () => {
+        cameraViewContainer.classList.add('hidden');
+        cameraViewContainer.innerHTML = '';
+    };
+    const cameraView = createCameraView(onCapture, onClose);
+    cameraViewContainer.appendChild(cameraView);
 }
 
 // --- EMAIL POLLING ---
+
 function setupEmailPolling() {
     if (emailCheckInterval) clearInterval(emailCheckInterval);
     if (!state.settings.enableEmailPolling || !state.isGoogleConnected) return;
@@ -396,188 +523,86 @@ function setupEmailPolling() {
     emailCheckInterval = setInterval(async () => {
         try {
             const emails = await googleProvider.getRecentEmails({ max_results: 1 });
-            if (emails && emails.length > 0) {
+            if (emails.length > 0) {
                 const latestEmail = emails[0];
                 if (latestEmail.id !== state.lastSeenEmailId) {
                     state.lastSeenEmailId = latestEmail.id;
-                    const prompt = `Только что пришло новое письмо от ${latestEmail.from} с темой "${latestEmail.subject}". Проанализируй его содержимое и предложи действия. Содержимое: ${latestEmail.body}`;
+                    const from = latestEmail.from.replace(/<.*?>/g, '').trim();
+                    const prompt = `Мне пришло новое письмо от ${from} с темой "${latestEmail.subject}". Проанализируй его содержимое и предложи действия. Данные: ${JSON.stringify(latestEmail)}`;
                     await handleSendMessage(prompt, null, { silent: true });
                 }
             }
         } catch (error) {
             console.error("Email polling failed:", error);
-            // Don't show system error for background task
         }
-    }, 60 * 1000); // Check every 60 seconds
+    }, 60 * 1000); // Check every minute
 }
 
-// --- MODAL HANDLERS ---
-function showProfileModal() {
-    modalContainer.innerHTML = '';
-    const profileModal = createProfileModal(
-        state.userProfile,
-        state.settings,
-        {
-            onClose: () => modalContainer.innerHTML = '',
-            onSave: async (newSettings) => {
-                state.settings = newSettings;
-                saveSettings(newSettings);
-                if (supabaseService && state.isSupabaseReady) {
-                    await supabaseService.saveUserSettings(newSettings);
-                }
-                modalContainer.innerHTML = '';
-                // Re-initialize services that depend on settings
-                await initializeAppServices();
-            },
-            onLogout: handleLogout,
-            onDelete: async () => {
-                if (confirm('Вы уверены, что хотите удалить все свои данные из облака? Это действие необратимо.')) {
-                    await supabaseService.deleteUserSettings();
-                    alert('Данные удалены.');
-                }
-            },
-            onForceSync: async () => {
-                 await runAllSyncs();
-            },
-            onAnalyzeError: async ({ context, error }) => {
-                return await analyzeSyncErrorWithGemini({
-                    errorMessage: error,
-                    context: context,
-                    appStructure: APP_STRUCTURE_CONTEXT,
-                    apiKey: state.settings.geminiApiKey,
-                    proxyUrl: await getActiveProxy()
-                });
-            },
-            onViewData: async ({ tableName }) => {
-                if (!supabaseService) return { error: 'Supabase не подключен.' };
-                return await supabaseService.getSampleData(tableName);
-            }
-        },
-        state.syncStatus,
-        syncTasks,
-        supabaseService?.url
-    );
-    modalContainer.appendChild(profileModal);
+// --- GLOBAL EVENT LISTENERS ---
+// Using event delegation on the document body for dynamic elements
+
+document.body.addEventListener('click', (e) => {
+    handleQuickReply(e);
+    handleCardAction(e);
+
+    const contextualAction = e.target.closest('[data-action-prompt]');
+    if (contextualAction) {
+        const prompt = contextualAction.dataset.actionPrompt;
+        renderContextualActions(null); // Hide actions after click
+        handleSendMessage(prompt);
+        return;
+    }
+
+     const welcomePrompt = e.target.closest('[data-action="welcome_prompt"]');
+    if (welcomePrompt) {
+        const payload = JSON.parse(welcomePrompt.dataset.payload);
+        handleSendMessage(payload.prompt);
+        return;
+    }
+
+    const openWizardButton = e.target.closest('#open-wizard-from-welcome');
+    if(openWizardButton) {
+        showSetupWizard();
+        return;
+    }
+});
+
+// --- APP INITIALIZATION ---
+
+function onAppReady() {
+    renderMainContent();
+    initializeAppServices();
 }
 
-function showSettingsModal() {
-    modalContainer.innerHTML = '';
-    const settingsModal = createSettingsModal({
-        settings: state.settings,
-        supabaseService,
-        onClose: () => modalContainer.innerHTML = '',
-        onSave: async (newSettings) => {
-            const shouldReload = state.settings.isSupabaseEnabled !== newSettings.isSupabaseEnabled ||
-                               state.settings.geminiApiKey !== newSettings.geminiApiKey;
-
-            state.settings = newSettings;
-            saveSettings(newSettings);
-            
-            if (supabaseService && state.isSupabaseReady) {
-               await supabaseService.saveUserSettings(newSettings);
-            }
-
-            modalContainer.innerHTML = '';
-            
-            if (shouldReload) {
-                window.location.reload();
-            } else {
-                await initializeAppServices(); // Re-init with new settings
-            }
-        }
-    });
-    modalContainer.appendChild(settingsModal);
-}
-
-
-function showStatsModal() {
-    modalContainer.innerHTML = '';
-    const statsModal = createStatsModal(state.actionStats, () => modalContainer.innerHTML = '');
-    modalContainer.appendChild(statsModal);
-}
-
-function showHelpModal() {
-    modalContainer.innerHTML = '';
-    const helpModal = createHelpModal({
-        onClose: () => modalContainer.innerHTML = '',
-        settings: state.settings,
-        analyzeErrorFn: async (errorMessage) => {
-            return analyzeSyncErrorWithGemini({
-                errorMessage,
-                context: 'Пользователь анализирует ошибку вручную через Центр Помощи.',
-                appStructure: APP_STRUCTURE_CONTEXT,
-                apiKey: state.settings.geminiApiKey,
-                proxyUrl: await getActiveProxy(),
-            });
-        },
-        onRelaunchWizard: () => {
-             if (confirm('Вы уверены? Это сотрет текущие настройки в браузере и перезапустит мастер настройки.')) {
-                localStorage.removeItem('secretary-plus-settings-v4');
-                window.location.reload();
-             }
-        }
-    });
-    modalContainer.appendChild(helpModal);
-}
-
-
-function showCameraView() {
-    cameraViewContainer.innerHTML = '';
-    const cameraView = createCameraView(
-        (image) => {
-            handleSendMessage('Что на этом фото?', image);
-        },
-        () => {
-            cameraViewContainer.classList.add('hidden');
-        }
-    );
-    cameraViewContainer.appendChild(cameraView);
-    cameraViewContainer.classList.remove('hidden');
-}
-
-
-// --- INITIALIZATION ---
-async function init() {
-    // Inject icons
-    settingsButton.innerHTML = SettingsIcon;
-    statsButton.innerHTML = ChartBarIcon;
-    helpButton.innerHTML = QuestionMarkCircleIcon;
-
-    // Add main event listeners
-    settingsButton.addEventListener('click', showSettingsModal);
-    statsButton.addEventListener('click', showStatsModal);
-    helpButton.addEventListener('click', showHelpModal);
-    document.body.addEventListener('click', handleCardAction);
-    document.body.addEventListener('click', handleQuickReply);
-
-    const onWizardComplete = async (finalSettings) => {
-        saveSettings(finalSettings);
+function showInitialScreen() {
+    const wizardResumeStateRaw = sessionStorage.getItem('wizardState');
+    if (wizardResumeStateRaw) {
         sessionStorage.removeItem('wizardState');
-        wizardContainer.innerHTML = '';
-        await initializeAppServices();
-        renderMainContent();
-    };
-
-    const onWizardExit = () => {
-        sessionStorage.removeItem('wizardState');
-        wizardContainer.innerHTML = '';
-        renderMainContent(); // Show welcome screen if not configured
-    };
+        try {
+            const resumeState = JSON.parse(wizardResumeStateRaw);
+            showSetupWizard(resumeState);
+            return;
+        } catch (e) {
+            console.error("Failed to parse wizard resume state", e);
+        }
+    }
     
-    const resumeStateJSON = sessionStorage.getItem('wizardState');
-    if (resumeStateJSON) {
-        sessionStorage.removeItem('wizardState'); // Clear it immediately
-        const resumeState = JSON.parse(resumeStateJSON);
-        const wizard = createSetupWizard({ onComplete: onWizardComplete, onExit: onWizardExit, googleProvider, supabaseConfig: SUPABASE_CONFIG, googleClientId: GOOGLE_CLIENT_ID, resumeState });
-        wizardContainer.appendChild(wizard);
-    } else if (!state.settings.geminiApiKey) {
-        const wizard = createSetupWizard({ onComplete: onWizardComplete, onExit: onWizardExit, googleProvider, supabaseConfig: SUPABASE_CONFIG, googleClientId: GOOGLE_CLIENT_ID });
-        wizardContainer.appendChild(wizard);
+    // Show wizard if Gemini key is missing
+    if (!state.settings.geminiApiKey) {
+        showSetupWizard();
     } else {
-        await initializeAppServices();
-        renderMainContent();
+        onAppReady();
     }
 }
 
-// Start the application
-init();
+// Setup header buttons
+settingsButton.innerHTML = SettingsIcon;
+statsButton.innerHTML = ChartBarIcon;
+helpButton.innerHTML = QuestionMarkCircleIcon;
+
+settingsButton.addEventListener('click', showSettingsModal);
+statsButton.addEventListener('click', showStatsModal);
+helpButton.addEventListener('click', showHelpModal);
+
+// Start the app
+showInitialScreen();

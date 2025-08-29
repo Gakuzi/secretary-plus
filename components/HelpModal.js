@@ -1,4 +1,6 @@
 import { QuestionMarkCircleIcon, CodeIcon } from './icons/Icons.js';
+import { getSettings } from '../utils/storage.js';
+import { SUPABASE_CONFIG } from '../config.js';
 
 // A simple markdown to HTML converter, duplicated for use in this component.
 function markdownToHTML(text) {
@@ -13,6 +15,71 @@ function markdownToHTML(text) {
         .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-4 mb-2">$1</h1>') // h1
         .replace(/^- (.*$)/gim, '<li class="ml-4 list-disc">$1</li>') // li
         .replace(/\n/g, '<br>'); // Newlines
+}
+
+
+function createGuideFromMarkdown(markdown) {
+    const settings = getSettings();
+    const supabaseUrl = settings.isSupabaseEnabled ? settings.supabaseUrl || SUPABASE_CONFIG.url : '';
+    const projectRef = supabaseUrl ? new URL(supabaseUrl).hostname.split('.')[0] : '';
+
+    const parts = markdown.split('---');
+    let partIndex = 0;
+    const finalHtml = parts.map(part => {
+        let inCodeBlock = false;
+        let codeLang = '';
+        let codeContent = '';
+        let partHtml = '<div class="space-y-4">';
+        
+        part.trim().split('\n').forEach(line => {
+            if (line.startsWith('```')) {
+                if (inCodeBlock) {
+                    const isManagementWorker = codeContent.includes('YOUR_PROJECT_REF');
+                    let interactiveSection = '';
+                    if (isManagementWorker) {
+                         interactiveSection = `
+                            <div class="p-3 bg-gray-900 border-t border-gray-700 text-sm">
+                                <label for="project-ref-input" class="font-semibold">Ваш Project ID:</label>
+                                <input type="text" id="project-ref-input" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 font-mono text-sm" value="${projectRef}" placeholder="вставьте сюда ваш ID проекта">
+                                <p class="text-xs text-gray-500 mt-1">ID был автоматически определен из ваших настроек Supabase.</p>
+                            </div>
+                         `;
+                    }
+                    partHtml += `
+                        <div class="guide-code-block" data-block-id="code-block-${partIndex}">
+                            <div class="flex justify-between items-center bg-gray-900 px-4 py-2 border-b border-gray-700 text-xs text-gray-400">
+                                <span>${codeLang.toUpperCase()}</span>
+                                <button class="copy-code-button" data-target-id="code-block-${partIndex}">Копировать</button>
+                            </div>
+                            <pre><code id="code-block-${partIndex}">${codeContent.trim()}</code></pre>
+                             ${interactiveSection}
+                        </div>`;
+                    inCodeBlock = false;
+                    codeContent = '';
+                    partIndex++;
+                } else {
+                    inCodeBlock = true;
+                    codeLang = line.substring(3).trim();
+                }
+            } else if (inCodeBlock) {
+                codeContent += line + '\n';
+            } else if (line.startsWith('# ')) {
+                partHtml += `<h2 class="text-2xl font-bold border-b border-gray-700 pb-2">${line.substring(2)}</h2>`;
+            } else if (line.startsWith('### ')) {
+                 partHtml += `<h3 class="text-xl font-semibold mt-4">${line.substring(4)}</h3>`;
+            } else if (line.trim().length > 0) {
+                const processedLine = line
+                 .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">$1</a>')
+                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                partHtml += `<p class="text-gray-300">${processedLine}</p>`;
+            }
+        });
+
+        partHtml += '</div>';
+        return partHtml;
+    }).join('<hr class="my-8 border-gray-700">');
+
+    return `<div class="prose prose-invert max-w-none">${finalHtml}</div>`;
 }
 
 export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchWizard }) {
@@ -30,14 +97,14 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                 <!-- Mobile Tabs -->
                 <nav class="sm:hidden flex-shrink-0 border-b border-gray-700 p-2 flex items-center justify-around gap-2">
                     <a href="#error-analysis" class="settings-tab-button active text-center flex-1" data-tab="error-analysis">Анализ</a>
-                    <a href="#setup-guide" class="settings-tab-button text-center flex-1" data-tab="setup-guide">Инструкция</a>
+                    <a href="#instructions" class="settings-tab-button text-center flex-1" data-tab="instructions">Инструкции</a>
                     <a href="#dev-tools" class="settings-tab-button text-center flex-1" data-tab="dev-tools">Инструменты</a>
                 </nav>
                 <!-- Desktop Sidebar -->
                 <aside class="hidden sm:flex w-52 border-r border-gray-700 p-4 flex-shrink-0">
                     <nav class="flex flex-col space-y-2 w-full">
                         <a href="#error-analysis" class="settings-tab-button active text-left" data-tab="error-analysis">Анализ ошибок</a>
-                        <a href="#setup-guide" class="settings-tab-button text-left" data-tab="setup-guide">Инструкция</a>
+                        <a href="#instructions" class="settings-tab-button text-left" data-tab="instructions">Инструкции</a>
                         <a href="#dev-tools" class="settings-tab-button text-left" data-tab="dev-tools">Инструменты</a>
                     </nav>
                 </aside>
@@ -61,6 +128,9 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                             <!-- AI analysis result will be displayed here -->
                         </div>
                     </div>
+
+                    <!-- Instructions Tab -->
+                    <div id="tab-instructions" class="settings-tab-content hidden"></div>
 
                     <!-- Setup Guide Tab -->
                     <div id="tab-setup-guide" class="settings-tab-content hidden space-y-6">
@@ -95,6 +165,23 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
         </div>
     `;
 
+    // --- Tab Loading ---
+    const loadInstructions = () => {
+        const guideContainer = modalOverlay.querySelector('#tab-instructions');
+        if (guideContainer.innerHTML !== '') return; // Already loaded or loading
+
+        guideContainer.innerHTML = `<div class="flex items-center justify-center h-48"><div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;
+        fetch('./PROXY_INSTRUCTIONS.md')
+            .then(res => res.ok ? res.text() : Promise.reject(`HTTP error! status: ${res.status}`))
+            .then(markdown => {
+                guideContainer.innerHTML = createGuideFromMarkdown(markdown);
+            })
+            .catch(err => {
+                console.error("Failed to load instructions:", err);
+                guideContainer.innerHTML = `<p class="text-red-400">Не удалось загрузить инструкцию: ${err.message}</p>`;
+            });
+    };
+
     // --- Event Listeners ---
     modalOverlay.addEventListener('click', async (e) => {
         // Close modal
@@ -115,7 +202,40 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
             modalOverlay.querySelectorAll('.settings-tab-content').forEach(content => {
                 content.classList.toggle('hidden', content.id !== `tab-${tabId}`);
             });
+            
+            if(tabId === 'instructions') {
+                loadInstructions();
+            }
             return;
+        }
+        
+        // Copy Code Button
+        const copyButton = e.target.closest('.copy-code-button');
+        if(copyButton) {
+            const targetId = copyButton.dataset.targetId;
+            const codeElement = modalOverlay.querySelector(`#${targetId}`);
+            let codeToCopy = codeElement.textContent;
+            
+            // Handle interactive block
+            const projectRefInput = modalOverlay.querySelector('#project-ref-input');
+            if (projectRefInput && codeToCopy.includes('YOUR_PROJECT_REF')) {
+                const projectRef = projectRefInput.value.trim();
+                if (projectRef) {
+                    codeToCopy = codeToCopy.replace('YOUR_PROJECT_REF', projectRef);
+                } else {
+                    alert('Пожалуйста, введите ваш Project ID.');
+                    return;
+                }
+            }
+
+            navigator.clipboard.writeText(codeToCopy).then(() => {
+                copyButton.textContent = 'Скопировано!';
+                setTimeout(() => { copyButton.textContent = 'Копировать'; }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+                copyButton.textContent = 'Ошибка';
+                setTimeout(() => { copyButton.textContent = 'Копировать'; }, 2000);
+            });
         }
 
         // Action buttons

@@ -60,7 +60,7 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                                     ${settings.isSupabaseEnabled && supabaseService ? `
                                     <div>
                                         <label class="text-sm font-medium">URL Управляющего Воркера</label>
-                                        <p class="text-xs text-gray-500 mt-1">URL вашего Cloudflare Worker для безопасного управления схемой БД. См. PROXY_INSTRUCTIONS.md.</p>
+                                        <p class="text-xs text-gray-500 mt-1">URL для безопасного управления схемой БД. <span class="text-blue-400">Инструкцию по его созданию можно найти в Центре Помощи (кнопка '?' в шапке).</span></p>
                                         <input type="url" id="settings-management-worker-url" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 font-mono text-sm" placeholder="https://my-worker.example.workers.dev" value="${settings.managementWorkerUrl || ''}">
                                     </div>
                                     ` : ''}
