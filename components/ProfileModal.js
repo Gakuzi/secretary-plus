@@ -18,12 +18,21 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
     const { onClose, onSave, onLogout, onDelete, onForceSync, onAnalyzeError, onViewData, onLaunchDbWizard, onUpdateUserRole } = handlers;
     
     let activeTab = 'profile';
-    const isAdmin = currentUserProfile?.role === 'admin';
+    const isOwner = currentUserProfile?.role === 'owner';
+    const isAdmin = currentUserProfile?.role === 'admin' || isOwner;
 
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4 animate-fadeIn';
 
     const render = () => {
+        const roleDisplayMap = {
+            owner: { text: 'Владелец', class: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' },
+            admin: { text: 'Администратор', class: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200' },
+            manager: { text: 'Менеджер', class: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
+            user: { text: 'Пользователь', class: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200' }
+        };
+        const currentUserRoleInfo = roleDisplayMap[currentUserProfile.role] || roleDisplayMap.user;
+
         const profileTabHtml = `
             <div id="tab-profile" class="settings-tab-content grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Left Column: User Info & Actions -->
@@ -32,8 +41,8 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
                         <img src="${currentUserProfile.avatar_url}" alt="${currentUserProfile.full_name}" class="w-24 h-24 rounded-full mx-auto">
                         <p class="text-xl font-bold mt-3">${currentUserProfile.full_name}</p>
                         <p class="text-sm text-slate-500 dark:text-slate-400">${currentUserProfile.email}</p>
-                        <span class="inline-block mt-2 px-3 py-1 text-xs font-semibold rounded-full ${isAdmin ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200' : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200'}">
-                            ${isAdmin ? 'Администратор' : 'Пользователь'}
+                        <span class="inline-block mt-2 px-3 py-1 text-xs font-semibold rounded-full ${currentUserRoleInfo.class}">
+                            ${currentUserRoleInfo.text}
                         </span>
                     </div>
                     <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -83,7 +92,9 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
                                 </tr>
                             </thead>
                             <tbody>
-                                ${allUsers.map(user => `
+                                ${allUsers.map(user => {
+                                    const canEditRole = isOwner && currentUserProfile.id !== user.id && user.role !== 'owner';
+                                    return `
                                     <tr class="border-b border-slate-100 dark:border-slate-800">
                                         <td class="p-2 flex items-center gap-3">
                                             <img src="${user.avatar_url}" class="w-8 h-8 rounded-full" alt="">
@@ -93,14 +104,16 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
                                             </div>
                                         </td>
                                         <td class="p-2">
-                                            <select data-action="change-role" data-user-id="${user.id}" class="bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" ${currentUserProfile.id === user.id ? 'disabled' : ''}>
-                                                <option value="user" ${user.role === 'user' ? 'selected' : ''}>Пользователь</option>
+                                            <select data-action="change-role" data-user-id="${user.id}" class="bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 transition disabled:opacity-50 disabled:cursor-not-allowed" ${!canEditRole ? 'disabled' : ''}>
+                                                <option value="owner" ${user.role === 'owner' ? 'selected' : ''} disabled>Владелец</option>
                                                 <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Администратор</option>
+                                                <option value="manager" ${user.role === 'manager' ? 'selected' : ''}>Менеджер</option>
+                                                <option value="user" ${user.role === 'user' ? 'selected' : ''}>Пользователь</option>
                                             </select>
                                         </td>
                                         <td class="p-2 text-slate-500 dark:text-slate-400">${user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString('ru-RU') : 'Неизвестно'}</td>
                                     </tr>
-                                `).join('')}
+                                `}).join('')}
                             </tbody>
                         </table>
                     </div>

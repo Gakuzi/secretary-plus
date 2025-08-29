@@ -18,6 +18,8 @@ import { SettingsIcon, ChartBarIcon, QuestionMarkCircleIcon } from './components
 import { MessageSender } from './types.js';
 import { SUPABASE_CONFIG, GOOGLE_CLIENT_ID } from './config.js';
 import { createMigrationModal } from './components/MigrationModal.js';
+import { createDbExecutionModal } from './components/DbExecutionModal.js';
+import { FULL_MIGRATION_SQL } from './services/supabase/migrations.js';
 
 
 // --- UTILITY ---
@@ -556,6 +558,10 @@ function showSettingsModal() {
              modalContainer.innerHTML = ''; // Close settings before opening wizard
              showDbSetupWizard();
         },
+        onLaunchDbExecutionModal: () => {
+            modalContainer.innerHTML = ''; // Close settings
+            showDbExecutionModal();
+        },
         onLaunchProxyManager: () => {
             modalContainer.innerHTML = ''; // Close settings before opening manager
             showProxyManagerModal();
@@ -576,7 +582,8 @@ async function showProfileModal() {
 
         let allUsers = [];
         let chatHistory = [];
-        if (state.isSupabaseReady && currentUserProfile.role === 'admin') {
+        const isAdmin = ['admin', 'owner'].includes(currentUserProfile.role);
+        if (state.isSupabaseReady && isAdmin) {
             allUsers = await supabaseService.getAllUserProfiles();
             chatHistory = await supabaseService.getChatHistoryForAdmin();
         }
@@ -706,6 +713,31 @@ function showDbSetupWizard() {
         }
      });
      wizardContainer.appendChild(wizard);
+}
+
+function showDbExecutionModal() {
+    modalContainer.innerHTML = ''; // Clear other modals
+    const modal = createDbExecutionModal({
+        sqlScript: FULL_MIGRATION_SQL,
+        onExecute: async () => {
+            if (!state.settings.managementWorkerUrl || !state.settings.adminSecretToken) {
+                throw new Error("Управляющий воркер не настроен. Запустите мастер настройки БД в Настройках.");
+            }
+            if (!supabaseService) {
+                 await initializeSupabase();
+            }
+            return await supabaseService.executeSqlViaFunction(
+                state.settings.managementWorkerUrl,
+                state.settings.adminSecretToken,
+                FULL_MIGRATION_SQL
+            );
+        },
+        onClose: () => {
+            modalContainer.innerHTML = '';
+            // It might be good to reload or re-sync after a successful migration
+        }
+    });
+    modalContainer.appendChild(modal);
 }
 
 function showProxySetupWizard() {

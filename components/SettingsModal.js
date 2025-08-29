@@ -1,7 +1,7 @@
 import { getSettings, saveSettings } from '../utils/storage.js';
 import * as Icons from './icons/Icons.js';
 
-export function createSettingsModal({ settings, supabaseService, onClose, onSave, onLaunchDbWizard, onLaunchProxyManager }) {
+export function createSettingsModal({ settings, supabaseService, onClose, onSave, onLaunchDbWizard, onLaunchProxyManager, onLaunchDbExecutionModal }) {
     const modalElement = document.createElement('div');
     modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
     
@@ -55,15 +55,18 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                         <div id="tab-database" class="settings-tab-content hidden space-y-6">
                              <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
                                 <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Управление Базой Данных</h3>
-                                <p class="text-sm text-slate-600 dark:text-slate-400 my-4">Для автоматического обновления схемы базы данных и добавления новых функций используется Управляющий воркер. Если вы столкнулись с ошибками синхронизации, запустите мастер для его настройки или проверки.</p>
-                                <div class="text-sm p-3 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 text-blue-800 dark:text-blue-200">
-                                    <p class="font-bold mb-2">Зачем это нужно?</p>
-                                     <p>Воркер — это безопасный способ для приложения вносить изменения в структуру базы данных, не требуя от вас ручного выполнения SQL-скриптов.</p>
-                                </div>
-                                <div class="mt-4">
-                                    <button data-action="launch-db-wizard" class="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2">
-                                        ${Icons.DatabaseIcon}
-                                        <span>Запустить мастер настройки БД</span>
+                                <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Для автоматического обновления схемы базы данных используется **Управляющий воркер**. Если вы столкнулись с ошибками синхронизации, запустите мастер для его настройки или проверки.</p>
+                                <button data-action="launch-db-wizard" class="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2">
+                                    ${Icons.DatabaseIcon}
+                                    <span>Запустить мастер настройки воркера</span>
+                                </button>
+
+                                <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                                    <h4 class="font-semibold text-slate-800 dark:text-slate-200">Быстрая миграция</h4>
+                                    <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Если воркер уже настроен, вы можете принудительно выполнить полную миграцию для обновления схемы до последней версии. <strong>Внимание:</strong> это удалит и перезагрузит все кэшированные данные (контакты, файлы и т.д.).</p>
+                                    <button data-action="launch-db-execution" class="w-full px-4 py-2 bg-slate-500 hover:bg-slate-600 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2 ${!settings.managementWorkerUrl || !settings.adminSecretToken ? 'opacity-50 cursor-not-allowed' : ''}" ${!settings.managementWorkerUrl || !settings.adminSecretToken ? 'disabled' : ''}>
+                                        ${Icons.CodeIcon}
+                                        <span>Выполнить полную миграцию</span>
                                     </button>
                                 </div>
                             </div>
@@ -136,6 +139,9 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 break;
             case 'launch-db-wizard':
                 onLaunchDbWizard();
+                break;
+            case 'launch-db-execution':
+                onLaunchDbExecutionModal();
                 break;
         }
     };

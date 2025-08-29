@@ -16,11 +16,11 @@ DROP TABLE IF EXISTS public.profiles CASCADE;
 
 
 -- Создаем типы ENUM для ролей и отправителей
+DROP TYPE IF EXISTS public.user_role;
+CREATE TYPE public.user_role AS ENUM ('owner', 'admin', 'manager', 'user');
+
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
-        CREATE TYPE public.user_role AS ENUM ('user', 'admin');
-    END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'chat_sender') THEN
         CREATE TYPE public.chat_sender AS ENUM ('user', 'assistant', 'system');
     END IF;
@@ -209,13 +209,24 @@ DROP POLICY IF EXISTS "Enable read access for all users" ON public.sessions;
 DROP POLICY IF EXISTS "Enable read access for all users" ON public.chat_history;
 
 
--- Функция для проверки, является ли пользователь администратором
+-- Функция для проверки, является ли пользователь администратором (или владельцем)
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN AS $$
 BEGIN
   RETURN EXISTS (
     SELECT 1 FROM public.profiles
-    WHERE id = auth.uid() AND role = 'admin'::public.user_role
+    WHERE id = auth.uid() AND (role = 'admin'::public.user_role OR role = 'owner'::public.user_role)
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Функция для проверки, является ли пользователь владельцем
+CREATE OR REPLACE FUNCTION public.is_owner()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role = 'owner'::public.user_role
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -249,8 +260,8 @@ CREATE POLICY "Enable all access for authenticated users" ON public.proxies FOR 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, full_name, avatar_url)
-  VALUES (new.id, new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url');
+  INSERT INTO public.profiles (id, full_name, avatar_url, role)
+  VALUES (new.id, new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url', 'user');
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -261,14 +272,29 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- RPC функция для обновления роли пользователя (только для администраторов)
+-- RPC функция для обновления роли пользователя (только для владельцев)
 CREATE OR REPLACE FUNCTION public.update_user_role(target_user_id UUID, new_role public.user_role)
 RETURNS void AS $$
+DECLARE
+  target_user_role public.user_role;
 BEGIN
-  IF NOT public.is_admin() THEN
-    RAISE EXCEPTION 'Only admins can change user roles';
+  -- 1. Только владельцы могут выполнять эту функцию.
+  IF NOT public.is_owner() THEN
+    RAISE EXCEPTION 'Only owners can change user roles.';
+  END IF;
+
+  -- 2. Владельцы не могут изменять свою собственную роль через эту функцию.
+  IF auth.uid() = target_user_id THEN
+    RAISE EXCEPTION 'Owners cannot change their own role.';
+  END IF;
+
+  -- 3. Владельцы не могут изменять роли других владельцев.
+  SELECT role INTO target_user_role FROM public.profiles WHERE id = target_user_id;
+  IF target_user_role = 'owner' THEN
+    RAISE EXCEPTION 'Owners cannot change the role of other owners.';
   END IF;
   
+  -- 4. Выполняем обновление.
   UPDATE public.profiles
   SET role = new_role
   WHERE id = target_user_id;
