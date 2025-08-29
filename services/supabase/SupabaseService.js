@@ -61,9 +61,14 @@ export class SupabaseService {
         return this.client.auth.onAuthStateChange(callback);
     }
     
-    // --- Data Sync (New logic with Hard Deletes) ---
+    // --- Data Sync ---
 
-    async #genericSync(tableName, googleItems, formatterFn, idExtractorFn = item => item.id) {
+    /**
+     * Performs a full sync. Fetches all items from Google, compares with Supabase,
+     * deletes what's missing, and upserts the rest. Ideal for datasets that can be
+     * fully fetched each time (e.g., contacts).
+     */
+    async #fullSync(tableName, googleItems, formatterFn, idExtractorFn = item => item.id) {
         const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
 
@@ -71,7 +76,6 @@ export class SupabaseService {
         const googleSourceIds = new Set(googleItems.map(idExtractorFn));
 
         // 2. Fetch ALL corresponding source IDs from Supabase for the current user.
-        // This query is now guaranteed not to reference 'is_deleted'.
         const { data: existingDbItems, error: fetchError } = await this.client
             .from(tableName)
             .select('source_id')
@@ -114,8 +118,30 @@ export class SupabaseService {
         }
     }
     
+    /**
+     * Performs an incremental sync. Fetches recent items from Google and upserts them.
+     * Does NOT delete old records, allowing the local cache to grow over time.
+     * Ideal for large datasets like emails or calendar events.
+     */
+    async #incrementalSync(tableName, googleItems, formatterFn) {
+        const { data: { user } } = await this.client.auth.getUser();
+        if (!user) throw new Error("User not authenticated.");
+        if (googleItems.length === 0) return; // Nothing to do
+
+        const formattedItems = googleItems.map(item => formatterFn(item, user.id));
+        const { error: upsertError } = await this.client
+            .from(tableName)
+            .upsert(formattedItems, { onConflict: 'user_id,source_id' });
+
+        if (upsertError) {
+            console.error(`Error upserting items to ${tableName}:`, upsertError);
+            throw upsertError;
+        }
+    }
+
     async syncContacts(googleContacts) {
-        return this.#genericSync(
+        // Contacts can be fully fetched, so use full sync.
+        return this.#fullSync(
             'contacts',
             googleContacts.filter(c => c.names?.[0]?.displayName), // Only sync contacts with names
             (c, userId) => ({
@@ -134,7 +160,8 @@ export class SupabaseService {
     }
     
     async syncFiles(googleFiles) {
-        return this.#genericSync(
+        // Files can be fully fetched, so use full sync.
+        return this.#fullSync(
             'files',
             googleFiles,
             (f, userId) => ({
@@ -156,7 +183,8 @@ export class SupabaseService {
     }
 
     async syncCalendarEvents(googleEvents) {
-         return this.#genericSync(
+        // Calendar can have many past events, use incremental sync to avoid deleting them.
+         return this.#incrementalSync(
             'calendar_events',
             googleEvents,
             (e, userId) => ({
@@ -177,7 +205,8 @@ export class SupabaseService {
     }
 
     async syncTasks(googleTasks) {
-         return this.#genericSync(
+        // Tasks can be completed and old, use incremental sync.
+         return this.#incrementalSync(
             'tasks',
             googleTasks,
             (t, userId) => ({
@@ -194,7 +223,8 @@ export class SupabaseService {
     }
 
     async syncEmails(googleEmails) {
-        return this.#genericSync(
+        // Emails are a perfect use case for incremental sync to build a local archive.
+        return this.#incrementalSync(
             'emails',
             googleEmails,
             (e, userId) => ({
