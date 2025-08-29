@@ -10,9 +10,6 @@ const WIZARD_STEPS = [
 ];
 
 const MANAGEMENT_WORKER_CODE = `
-// Import the postgres.js library directly from a CDN. This works in Cloudflare Workers.
-import postgres from 'https://unpkg.com/postgres@3.4.4/esm/index.js';
-
 addEventListener('fetch', event => {
     event.respondWith(handleRequest(event.request));
 });
@@ -46,6 +43,9 @@ async function handleRequest(request) {
     }
 
     try {
+        // **FIX**: Dynamically import postgres.js inside the async handler.
+        const { default: postgres } = await import('https://unpkg.com/postgres@3.4.4/esm/index.js');
+        
         // DATABASE_URL is an Environment Variable in Cloudflare containing the full Postgres connection string.
         if (typeof DATABASE_URL === 'undefined') {
             throw new Error('DATABASE_URL secret is not defined in worker settings.');
