@@ -1,6 +1,7 @@
 
 
 
+
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
@@ -552,10 +553,15 @@ async function main() {
     statsButton.addEventListener('click', showStatsModal);
     
     const savedWizardState = sessionStorage.getItem('wizardState');
-    sessionStorage.removeItem('wizardState');
     
     const settings = getSettings();
     if (!settings.geminiApiKey) {
+         // Clear potentially conflicting old data before starting the wizard fresh.
+         // This is crucial for fixing authentication loops on mobile devices.
+         localStorage.removeItem('secretary-plus-settings-v4');
+         localStorage.removeItem('secretary-plus-sync-status-v1');
+         sessionStorage.removeItem('wizardState');
+        
          wizardContainer.innerHTML = '';
          const wizard = createSetupWizard({
             onComplete: async (newSettings) => {
