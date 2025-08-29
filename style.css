@@ -409,3 +409,30 @@ input:checked + .toggle-slider:before {
     border-color: var(--accent-blue);
     box-shadow: 0 0 0 2px var(--accent-blue);
 }
+
+/* --- PROXY MANAGER STYLES --- */
+.proxy-list-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background-color: var(--background-light);
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+}
+
+.status-indicator {
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 9999px;
+    flex-shrink: 0;
+}
+
+.status-ok { background-color: #22c55e; }
+.status-error { background-color: #ef4444; }
+.status-untested { background-color: #6b7280; }
+.status-testing { background-color: #eab308; animation: loading-blink 1.4s infinite both; }
+
+#proxy-test-modal-content {
+    min-height: 12rem; /* 192px */
+}

@@ -298,11 +298,11 @@ function createDirectActionCard(card) {
 function createContactChoiceCard(card) {
     const iconSVG = Icons[card.icon] || '';
     const optionsHtml = card.options.map(person => {
-        const name = person.display_name || 'Имя не указано';
-        const email = person.email || null;
-        const phone = person.phone || null;
+        const name = person?.display_name || 'Имя не указано';
+        const email = person?.email || null;
+        const phone = person?.phone || null;
         
-        const payload = JSON.stringify(person);
+        const payload = JSON.stringify(person || {});
 
         return `
             <button class="choice-item" data-action="analyze_contact" data-payload='${payload}'>

@@ -795,26 +795,22 @@ export const testProxyConnection = async ({ proxyUrl, apiKey }) => {
     if (!proxyUrl || !apiKey) {
         return { status: 'error', message: 'Для теста необходимы URL прокси и API ключ.' };
     }
-    // Используем легковесный эндпоинт для проверки работоспособности
-    const testEndpoint = `${proxyUrl}/v1beta/models?key=${apiKey}`;
-    try {
-        const response = await fetch(testEndpoint, { method: 'GET' });
 
-        if (response.ok) {
-            const data = await response.json();
-            if (data.models && Array.isArray(data.models)) {
-                 return { status: 'ok', message: 'Соединение успешно.' };
-            } else {
-                 return { status: 'error', message: 'Прокси ответил, но формат данных некорректен.' };
-            }
-        } else {
-             return { status: 'error', message: `Прокси ответил со статусом: ${response.status} ${response.statusText}` };
-        }
+    try {
+        const ai = new GoogleGenAI({
+            apiKey,
+            apiEndpoint: proxyUrl.replace(/^https?:\/\//, ''),
+        });
+        // A lightweight call to test connectivity and authentication
+        await ai.models.generateContent({ model: GEMINI_MODEL, contents: 'test' });
+        return { status: 'ok', message: 'Соединение успешно.' };
     } catch (error) {
         console.error('Ошибка при тесте прокси:', error);
-        let message = 'Сетевая ошибка. Возможные причины: проблема с CORS, неверный URL или прокси-сервер недоступен.';
-        if (error instanceof TypeError) {
-             message = `Сетевой запрос не удался. Проверьте правильность URL и доступность сервера. Политика CORS может блокировать запрос.`;
+        let message = `Сетевая ошибка: ${error.message}. Проверьте CORS, URL и доступность сервера.`;
+        if (error.message.includes('API key not valid')) {
+            message = 'Неверный API ключ.';
+        } else if (error.message.includes('fetch')) {
+            message = `Ошибка сети. Проверьте URL прокси и CORS.`;
         }
         return { status: 'error', message: message };
     }
@@ -905,7 +901,7 @@ ${errorMessage}
     }
 };
 
-export const extractProxiesWithGemini = async ({ text, apiKey, proxyUrl }) => {
+export const findProxiesWithGemini = async ({ apiKey, proxyUrl }) => {
     if (!apiKey) throw new Error("Ключ Gemini API не предоставлен.");
 
     const clientOptions = { apiKey };
@@ -914,8 +910,8 @@ export const extractProxiesWithGemini = async ({ text, apiKey, proxyUrl }) => {
     }
     const ai = new GoogleGenAI(clientOptions);
 
-    const systemInstruction = `Ты — эксперт по сетевым протоколам. Твоя задача — извлечь все валидные URL-адреса прокси-серверов из предоставленного текста. Прокси могут быть в форматах http, https, socks4, socks5. Верни результат в виде JSON-массива строк. Если прокси не найдены, верни пустой массив.`;
-    const prompt = `Извлеки все URL прокси из этого текста:\n\n${text}`;
+    const systemInstruction = `Ты — эксперт по сетевым протоколам. Твоя задача — сгенерировать список из 10 публичных, бесплатных прокси-серверов (HTTP или HTTPS). Верни результат в виде JSON-массива строк, где каждая строка — это полный URL прокси. Пример: ["http://1.2.3.4:8080", "https://proxy.example.com:443"]. Если не можешь сгенерировать, верни пустой массив.`;
+    const prompt = `Предоставь, пожалуйста, 10 URL-адресов публичных прокси-серверов.`;
 
     try {
         const response = await ai.models.generateContent({
@@ -928,7 +924,7 @@ export const extractProxiesWithGemini = async ({ text, apiKey, proxyUrl }) => {
                     type: Type.ARRAY,
                     items: {
                         type: Type.STRING,
-                        description: 'A valid proxy URL, e.g., http://user:pass@host:port',
+                        description: 'A valid proxy URL, e.g., http://host:port',
                     },
                 },
             },
@@ -938,7 +934,7 @@ export const extractProxiesWithGemini = async ({ text, apiKey, proxyUrl }) => {
         return JSON.parse(jsonStr);
 
     } catch (error) {
-        console.error("Error calling Gemini for proxy extraction:", error);
-        throw new Error("Не удалось проанализировать список прокси. Проверьте ваш API ключ и формат списка.");
+        console.error("Error calling Gemini for proxy generation:", error);
+        throw new Error("Не удалось сгенерировать список прокси. Проверьте ваш API ключ.");
     }
 };

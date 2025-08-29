@@ -9,7 +9,7 @@ export function createWelcomeScreen({ isGoogleConnected, isSupabaseEnabled }) {
             <div class="max-w-md">
                 <h2 class="text-3xl font-bold mb-2">Начните работу</h2>
                 <p class="text-gray-400 mb-6">Для использования ассистента необходимо войти в аккаунт Google и предоставить необходимые разрешения.</p>
-                <button id="open-settings-from-welcome" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors">
+                <button id="open-wizard-from-welcome" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors">
                     Перейти к настройкам и войти
                 </button>
             </div>
