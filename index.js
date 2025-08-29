@@ -113,7 +113,7 @@ function renderAuth() {
     authContainer.innerHTML = '';
     if (state.isGoogleConnected && state.userProfile) {
         const profileButton = document.createElement('button');
-        profileButton.className = 'flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500 rounded-full';
+        profileButton.className = 'flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-blue-500 rounded-full';
         profileButton.setAttribute('aria-label', 'Открыть профиль пользователя');
         profileButton.innerHTML = `<img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full">`;
         profileButton.addEventListener('click', showProfileModal);

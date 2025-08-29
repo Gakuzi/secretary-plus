@@ -429,4 +429,297 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                     proxyState.found = [];
                     renderManager();
                     try {
-                        const proxies = await findProxiesWithGemini({ apiKey
+                        const currentSettings = getSettings();
+                        const proxies = await findProxiesWithGemini({ apiKey: currentSettings.geminiApiKey, proxyUrl: null });
+                        proxyState.found = proxies.map(p => ({ ...p, testStatus: 'untested' }));
+                    } catch(err) { alert(`Ошибка: ${err.message}`); }
+                    finally {
+                        proxyState.isLoading = false;
+                        renderManager();
+                    }
+                    break;
+                case 'add-proxy-manual': {
+                    const newUrl = prompt('Введите URL прокси:');
+                    if (newUrl) {
+                        try {
+                            new URL(newUrl);
+                            await supabaseService.addProxy({ url: newUrl.trim(), is_active: true, priority: proxyState.saved.length });
+                            await loadSavedProxies();
+                        } catch(err) { alert(`Ошибка: ${err.message}`); }
+                    }
+                    break;
+                }
+                 case 'add-proxy-from-found':
+                    try {
+                        await supabaseService.addProxy({ url: url, is_active: true, geolocation: target.dataset.location, priority: proxyState.saved.length });
+                        proxyState.found = proxyState.found.filter(p => p.url !== url);
+                        await loadSavedProxies();
+                    } catch(err) { alert(`Ошибка: ${err.message}`); }
+                    break;
+                case 'retest-proxy': {
+                    const proxyToTest = proxyState.saved.find(p => p.id === id);
+                    if(proxyToTest) {
+                        proxyToTest.isTesting = true;
+                        renderManager();
+                        const currentSettings = getSettings();
+                        const result = await testProxyConnection({ proxyUrl: url, apiKey: currentSettings.geminiApiKey });
+                        await supabaseService.updateProxy(id, { last_status: result.status, last_speed_ms: result.speed });
+                        await loadSavedProxies(); // Will clear the isTesting flag
+                    }
+                    break;
+                }
+                case 'test-found-proxy': {
+                     const proxyToTest = proxyState.found.find(p => p.url === url);
+                     if(proxyToTest) {
+                        proxyToTest.testStatus = 'testing';
+                        renderManager();
+                        const currentSettings = getSettings();
+                        const result = await testProxyConnection({ proxyUrl: url, apiKey: currentSettings.geminiApiKey });
+                        proxyToTest.testStatus = result.status;
+                        proxyToTest.testSpeed = result.speed;
+                        proxyToTest.testMessage = result.message;
+                        renderManager();
+                     }
+                    break;
+                }
+            }
+        };
+        
+        const handleDragAndDrop = (container) => {
+            container.addEventListener('dragstart', e => {
+                proxyState.draggedItemId = e.target.dataset.id;
+                e.target.style.opacity = '0.5';
+            });
+            container.addEventListener('dragend', e => {
+                 e.target.style.opacity = '1';
+                 proxyState.draggedItemId = null;
+            });
+            container.addEventListener('dragover', e => {
+                e.preventDefault();
+                const afterElement = getDragAfterElement(container, e.clientY);
+                const draggable = document.querySelector('[data-id="' + proxyState.draggedItemId + '"]');
+                if (afterElement == null) {
+                    container.appendChild(draggable);
+                } else {
+                    container.insertBefore(draggable, afterElement);
+                }
+            });
+            container.addEventListener('drop', async e => {
+                e.preventDefault();
+                const orderedIds = [...container.querySelectorAll('[data-id]')].map(el => el.dataset.id);
+                const updates = orderedIds.map((id, index) => ({ id: id, priority: index }));
+                try {
+                     await supabaseService.client.from('proxies').upsert(updates);
+                     await loadSavedProxies();
+                } catch(err) {
+                    alert('Не удалось сохранить новый порядок.');
+                    await loadSavedProxies();
+                }
+            });
+        };
+
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('[draggable="true"]:not([style*="opacity: 0.5"])')];
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        managerContainer.addEventListener('click', handleManagerAction);
+        managerContainer.addEventListener('change', (e) => {
+            if(e.target.closest('[data-action="toggle-proxy"]')) handleManagerAction(e);
+        });
+        
+        renderManager();
+        wizardElement.appendChild(managerContainer);
+        handleDragAndDrop(managerContainer.querySelector('#saved-proxy-list-dnd'));
+        loadSavedProxies();
+    };
+
+    const render = () => {
+        const sqlSectionDisplay = state.isShowingSql ? 'block' : 'none';
+        
+        modalElement.innerHTML = `
+            <div id="settings-content" class="bg-white dark:bg-slate-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-lg shadow-xl">
+                <header class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+                    <h2 class="text-xl sm:text-2xl font-bold flex items-center gap-2">${Icons.SettingsIcon} Настройки</h2>
+                    <button data-action="close" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Закрыть настройки">&times;</button>
+                </header>
+
+                <main class="flex-1 flex flex-col sm:flex-row overflow-hidden bg-slate-50 dark:bg-slate-900/70">
+                    <aside class="hidden sm:flex w-52 border-r border-slate-200 dark:border-slate-700 p-4 flex-shrink-0 bg-white dark:bg-slate-800">
+                         <nav class="flex flex-col space-y-2 w-full">
+                            <a href="#connections" class="settings-tab-button text-left active" data-tab="connections">Подключения</a>
+                            <a href="#database" class="settings-tab-button text-left" data-tab="database">База данных</a>
+                            <a href="#about" class="settings-tab-button text-left" data-tab="about">О приложении</a>
+                        </nav>
+                    </aside>
+
+                    <div class="flex-1 p-4 sm:p-6 overflow-y-auto" id="settings-tabs-content">
+                        <!-- Connections Tab -->
+                        <div id="tab-connections" class="settings-tab-content space-y-6">
+                            <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-3">API Ключи</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label for="geminiApiKey" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Gemini API Key</label>
+                                        <input type="password" id="geminiApiKey" class="mt-1 block w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${settings.geminiApiKey || ''}">
+                                        <p class="mt-1 text-xs text-slate-500">Ключ для доступа к моделям Gemini. <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">Получить ключ</a>.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-3">Прокси</h3>
+                                <div class="flex items-center justify-between py-2">
+                                    <label for="use-proxy-toggle" class="font-medium text-slate-700 dark:text-slate-300">Использовать прокси-серверы</label>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="use-proxy-toggle" ${settings.useProxy ? 'checked' : ''} ${!settings.isSupabaseEnabled ? 'disabled' : ''}>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-1">Необходимо для обхода региональных ограничений. Требует включенного режима Supabase.</p>
+                                <button data-action="manage-proxies" class="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md font-semibold text-sm transition-colors ${!settings.isSupabaseEnabled ? 'opacity-50 cursor-not-allowed' : ''}" ${!settings.isSupabaseEnabled ? 'disabled' : ''}>
+                                    ${Icons.SettingsIcon} <span>Управление прокси</span>
+                                </button>
+                                <p class="text-xs text-slate-500 mt-2 text-center">Нет прокси? <a href="#" id="open-help-from-settings" class="text-blue-500 dark:text-blue-400 hover:underline">Следуйте инструкции по настройке</a>.</p>
+                            </div>
+                        </div>
+
+                        <!-- Database Tab -->
+                        <div id="tab-database" class="settings-tab-content hidden space-y-6">
+                             <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-3">Управление схемой</h3>
+                                <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Для добавления новых функций приложению может потребоваться обновление структуры базы данных. Запустите мастер, чтобы настроить безопасное автоматическое обновление.</p>
+                                <button data-action="launch-db-wizard" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold transition-colors">
+                                    ${Icons.DatabaseIcon} <span>Запустить мастер настройки БД</span>
+                                </button>
+                             </div>
+                             <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                                <div class="flex justify-between items-center">
+                                    <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">SQL-скрипт схемы</h3>
+                                    <button data-action="toggle-sql" class="text-sm text-blue-500 dark:text-blue-400 hover:underline">${state.isShowingSql ? 'Скрыть' : 'Показать'}</button>
+                                </div>
+                                <div id="sql-script-container" class="mt-4" style="display: ${sqlSectionDisplay};">
+                                    <p class="text-xs text-slate-500 mb-2">Этот скрипт можно выполнить в SQL-редакторе Supabase для ручного создания или обновления таблиц.</p>
+                                    <div class="rounded-md border border-slate-200 dark:border-slate-700">
+                                        <div class="flex justify-between items-center bg-slate-100 dark:bg-slate-900 px-4 py-2 text-xs text-slate-500 dark:text-slate-400 rounded-t-md">
+                                            <span>POSTGRESQL (SUPABASE)</span>
+                                            <button class="text-xs font-semibold bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 px-2 py-1 rounded-md transition-colors" data-action="copy-sql">Копировать</button>
+                                        </div>
+                                        <pre class="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-b-md max-h-60 overflow-y-auto"><code class="text-xs whitespace-pre font-mono">${SUPABASE_SCHEMA_SQL}</code></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- About Tab -->
+                        <div id="tab-about" class="settings-tab-content hidden prose prose-invert max-w-none text-slate-700 dark:text-slate-300">
+                            <!-- App info will be injected here -->
+                        </div>
+                    </div>
+                </main>
+
+                <footer class="p-4 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex justify-end items-center flex-shrink-0">
+                    <button data-action="save" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold">Сохранить и закрыть</button>
+                </footer>
+            </div>
+        `;
+    };
+
+    const loadAppInfo = async () => {
+        try {
+            const response = await fetch('./app-info.json');
+            const info = await response.json();
+            const aboutTab = modalElement.querySelector('#tab-about');
+            if (aboutTab) {
+                const changelogHtml = info.changelog.map(entry => `
+                    <div class="mt-4">
+                        <h4 class="font-semibold text-slate-900 dark:text-slate-100">Версия ${entry.version} <span class="text-sm font-normal text-slate-500 dark:text-slate-400">- ${entry.date}</span></h4>
+                        <ul class="list-disc list-inside mt-1 text-sm">
+                            ${entry.changes.map(change => `<li>${change}</li>`).join('')}
+                        </ul>
+                    </div>
+                `).join('');
+
+                aboutTab.innerHTML = `
+                    <h3 class="text-2xl font-bold text-slate-900 dark:text-white">Секретарь+</h3>
+                    <p><strong>Версия:</strong> ${info.version}</p>
+                    <p><strong>Автор:</strong> ${info.author}</p>
+                    <p><strong>Контакт:</strong> <a href="${info.contact}" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">Telegram</a></p>
+                    <h3 class="text-xl font-bold mt-6 text-slate-900 dark:text-white">История изменений</h3>
+                    ${changelogHtml}
+                `;
+            }
+        } catch (error) {
+            console.error('Failed to load app info:', error);
+             const aboutTab = modalElement.querySelector('#tab-about');
+             if(aboutTab) aboutTab.innerHTML = '<p>Не удалось загрузить информацию о приложении.</p>';
+        }
+    };
+    
+    const handleAction = async (e) => {
+        const target = e.target.closest('[data-action]');
+        if (!target) return;
+        const action = target.dataset.action;
+        
+        switch (action) {
+            case 'close':
+                onClose();
+                break;
+            case 'save': {
+                const newSettings = { ...settings };
+                newSettings.geminiApiKey = modalElement.querySelector('#geminiApiKey').value.trim();
+                newSettings.useProxy = modalElement.querySelector('#use-proxy-toggle').checked;
+                onSave(newSettings);
+                break;
+            }
+            case 'manage-proxies':
+                showProxyManagerModal();
+                break;
+            case 'toggle-sql':
+                state.isShowingSql = !state.isShowingSql;
+                modalElement.querySelector('#sql-script-container').style.display = state.isShowingSql ? 'block' : 'none';
+                target.textContent = state.isShowingSql ? 'Скрыть' : 'Показать';
+                break;
+            case 'copy-sql':
+                navigator.clipboard.writeText(SUPABASE_SCHEMA_SQL).then(() => {
+                    target.textContent = 'Скопировано!';
+                    setTimeout(() => { target.textContent = 'Копировать'; }, 2000);
+                });
+                break;
+            case 'launch-db-wizard':
+                onLaunchDbWizard();
+                break;
+        }
+    };
+
+    modalElement.addEventListener('click', (e) => {
+        if (e.target.closest('#settings-content')) {
+             handleAction(e);
+             const tabButton = e.target.closest('.settings-tab-button');
+             if (tabButton) {
+                 e.preventDefault();
+                 const tabId = tabButton.dataset.tab;
+
+                 modalElement.querySelectorAll('.settings-tab-button').forEach(btn => btn.classList.remove('active'));
+                 modalElement.querySelectorAll(`.settings-tab-button[data-tab="${tabId}"]`).forEach(btn => btn.classList.add('active'));
+
+                 modalElement.querySelectorAll('.settings-tab-content').forEach(content => {
+                     content.classList.toggle('hidden', content.id !== `tab-${tabId}`);
+                 });
+             }
+        } else {
+            onClose();
+        }
+    });
+
+    render();
+    loadAppInfo();
+    return modalElement;
+}
