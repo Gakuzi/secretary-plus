@@ -105,7 +105,14 @@ if (!window.isSecretaryPlusAppInitialized) {
                     <img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full ring-2 ring-gray-600 ring-offset-2 ring-offset-gray-800">
                 </div>
             `;
-            profileElement.addEventListener('click', () => showSettings('profile'));
+            profileElement.addEventListener('click', () => {
+                // If setup is incomplete (e.g., Gemini key is missing), force the user back to the wizard.
+                if (!state.settings.geminiApiKey) {
+                    window.location.href = './setup-guide.html';
+                } else {
+                    showSettings('profile');
+                }
+            });
             authContainer.appendChild(profileElement);
         } else {
              // Header is empty when logged out. Login is initiated from Welcome or Settings.

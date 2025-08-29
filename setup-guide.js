@@ -28,6 +28,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const buttons = {
         connectLogin: document.getElementById('connect-login-button'),
+        authContinue: document.getElementById('auth-continue-button'),
+        wizardLogout: document.getElementById('wizard-logout-button'),
         saveKeys: document.getElementById('save-keys-button'),
         findProxies: document.getElementById('find-proxies-ai'),
         saveProxies: document.getElementById('save-proxies-button'),
@@ -37,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const containers = {
         authStatus: document.getElementById('auth-status-container'),
         userProfile: document.getElementById('user-profile-display'),
+        authActions: document.getElementById('auth-actions'),
         keysStatus: document.getElementById('keys-status-container'),
         proxyFinderStatus: document.getElementById('proxy-finder-status'),
         proxyStatus: document.getElementById('proxy-status-container'),
@@ -118,38 +121,65 @@ document.addEventListener('DOMContentLoaded', () => {
         setStatus(containers.authStatus, 'success', `Вы вошли как ${state.user.email}`);
         buttons.connectLogin.style.display = 'none';
         
-        containers.userProfile.innerHTML = `
-            <div class="flex items-center gap-3">
-                <img src="${state.user.user_metadata.avatar_url}" alt="Avatar" class="w-10 h-10 rounded-full">
-                <div>
-                    <p class="font-semibold">${state.user.user_metadata.full_name}</p>
-                    <p class="text-xs text-gray-400">${state.user.email}</p>
-                </div>
+        // Use a document fragment to prevent multiple reflows
+        const profileFragment = document.createDocumentFragment();
+        const profileInfo = document.createElement('div');
+        profileInfo.className = "flex items-center gap-3";
+        profileInfo.innerHTML = `
+            <img src="${state.user.user_metadata.avatar_url}" alt="Avatar" class="w-10 h-10 rounded-full">
+            <div>
+                <p class="font-semibold">${state.user.user_metadata.full_name}</p>
+                <p class="text-xs text-gray-400">${state.user.email}</p>
             </div>
         `;
+        profileFragment.appendChild(profileInfo);
+        containers.userProfile.prepend(profileFragment); // Prepend to keep it above the action buttons
         containers.userProfile.style.display = 'block';
+        containers.authActions.style.display = 'flex'; // Show Continue/Logout buttons
         steps.auth.dataset.status = 'completed';
-
-        // Load settings from DB
-        const { data, error } = await state.supabaseClient.from('user_settings').select('settings').single();
-        if (error && error.code !== 'PGRST116') throw error;
         
-        state.settings = data ? data.settings : {};
-        inputs.geminiApiKey.value = state.settings.geminiApiKey || '';
-        inputs.googleClientId.value = state.settings.googleClientId || '';
-        
-        const { data: proxiesData, error: proxiesError } = await state.supabaseClient.from('proxies').select('*').order('priority');
-        if (proxiesError) throw proxiesError;
-        state.selectedProxies = proxiesData || [];
-        renderSelectedProxies();
+        setStatus(containers.authStatus, 'loading', 'Загружаем ваши настройки...');
 
-        // Auto-navigate to next step
-        setStatus(containers.authStatus, 'loading', 'Загружаем ваши настройки и переходим к следующему шагу...');
-        setTimeout(() => {
-            showStep('keys');
-        }, 1500);
+        try {
+            const { data, error } = await state.supabaseClient.from('user_settings').select('settings').single();
+            if (error && error.code !== 'PGRST116') throw error;
+            
+            state.settings = data ? data.settings : {};
+            inputs.geminiApiKey.value = state.settings.geminiApiKey || '';
+            inputs.googleClientId.value = state.settings.googleClientId || '';
+            
+            const { data: proxiesData, error: proxiesError } = await state.supabaseClient.from('proxies').select('*').order('priority');
+            if (proxiesError) throw proxiesError;
+            state.selectedProxies = proxiesData || [];
+            renderSelectedProxies();
+            
+            // Auto-navigate to next step after a short delay for better UX
+            setStatus(containers.authStatus, 'success', 'Настройки загружены. Переходим к следующему шагу...');
+            setTimeout(() => {
+                if(state.currentStep === 'auth') showStep('keys');
+            }, 1000);
+
+        } catch (error) {
+            console.error("Error loading user settings/proxies:", error);
+            setStatus(containers.authStatus, 'error', `Не удалось загрузить настройки: ${error.message}. Вы можете продолжить вручную.`);
+        }
     };
     
+    const resetAuthState = () => {
+        state.user = null;
+        steps.auth.dataset.status = '';
+        buttons.connectLogin.style.display = 'block';
+        buttons.connectLogin.disabled = false;
+        buttons.connectLogin.textContent = 'Войти через Google';
+        containers.userProfile.style.display = 'none';
+        // Clear profile info but keep action buttons in the DOM
+        const profileInfo = containers.userProfile.querySelector('.flex.items-center.gap-3');
+        if (profileInfo) profileInfo.remove();
+        containers.authActions.style.display = 'none';
+        containers.authStatus.style.display = 'none';
+        showStep('auth');
+    }
+
     // --- EVENT HANDLERS ---
     
     buttons.connectLogin.addEventListener('click', async () => {
@@ -165,6 +195,19 @@ document.addEventListener('DOMContentLoaded', () => {
              buttons.connectLogin.disabled = false;
              buttons.connectLogin.textContent = 'Войти через Google';
         }
+    });
+
+    buttons.wizardLogout.addEventListener('click', async () => {
+        const { error } = await state.supabaseClient.auth.signOut();
+        if(error) {
+            setStatus(containers.authStatus, 'error', `Ошибка выхода: ${error.message}`);
+        } else {
+            resetAuthState();
+        }
+    });
+    
+    buttons.authContinue.addEventListener('click', () => {
+        showStep('keys');
     });
 
     buttons.saveKeys.addEventListener('click', async () => {
@@ -447,16 +490,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         state.supabaseClient.auth.onAuthStateChange(async (event, session) => {
             if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session) {
-                if (!state.user) {
+                if (!state.user) { // Prevent re-rendering if user is already set
                     state.user = session.user;
                     await renderAuthenticatedState();
                 }
             } else if (event === 'SIGNED_OUT') {
-                state.user = null;
-                showStep('auth');
-                buttons.connectLogin.style.display = 'block';
-                containers.userProfile.style.display = 'none';
-                containers.authStatus.style.display = 'none';
+                resetAuthState();
             }
 
             // Clean up URL after OAuth redirect
