@@ -476,6 +476,12 @@ export class GoogleServiceProvider {
         
         const emails = [];
         Object.values(batchResponse.result).forEach(res => {
+            // Check if the individual batch item resulted in an error
+            if (res.error) {
+                console.warn('Skipping an email in batch due to Google API error:', res.error);
+                return; // Skip this failed item and continue with the next.
+            }
+
             try {
                 const payload = res.result;
                 if (!payload || !payload.id || !payload.payload || !payload.payload.headers) {
