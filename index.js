@@ -272,7 +272,7 @@ async function getActiveProxy() {
 
 async function processBotResponse(userMessage, isSilent) {
     state.isLoading = true;
-    showLoadingIndicator();
+    if (!isSilent) showLoadingIndicator();
     let proxyUrl = null;
 
     // Centralized logic for managing the proxy status indicator
@@ -281,7 +281,7 @@ async function processBotResponse(userMessage, isSilent) {
         proxyUrl = await getActiveProxy();
         if (!proxyUrl) {
             updateProxyStatusIndicator('error');
-            showSystemError("Режим прокси включен, но не найдено ни одного активного прокси-сервера. Проверьте настройки.");
+            if (!isSilent) showSystemError("Режим прокси включен, но не найдено ни одного активного прокси-сервера. Проверьте настройки.");
         }
     } else {
         updateProxyStatusIndicator('off');
@@ -325,17 +325,21 @@ async function processBotResponse(userMessage, isSilent) {
             await supabaseService.incrementActionStat(response.functionCallName);
         }
 
+        if (!isSilent) hideLoadingIndicator();
         state.messages.push(response);
         addMessageToChat(response);
         renderContextualActions(response.contextualActions);
     } catch (error) {
-        showSystemError(`Произошла ошибка: ${error.message}`);
+        if (!isSilent) {
+            hideLoadingIndicator();
+            showSystemError(`Произошла ошибка: ${error.message}`);
+        }
         if (proxyUrl) { // If we were attempting to use a proxy, mark it as an error
             updateProxyStatusIndicator('error');
         }
     } finally {
         state.isLoading = false;
-        hideLoadingIndicator();
+        if (!isSilent) hideLoadingIndicator();
     }
 }
 

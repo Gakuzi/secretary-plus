@@ -20,7 +20,7 @@
 ```sql
 -- =================================================================
 --  Скрипт настройки базы данных "Секретарь+"
---  Версия: 2.3.0
+--  Версия: 2.4.0
 --  Этот скрипт является идемпотентным. Его можно безопасно 
 --  запускать несколько раз для создания или обновления схемы.
 -- =================================================================
@@ -196,7 +196,6 @@ END $$;
 CREATE TABLE IF NOT EXISTS public.user_settings (
   user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   settings JSONB NOT NULL,
-  management_worker_url TEXT,
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 

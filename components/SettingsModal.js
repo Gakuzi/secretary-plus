@@ -107,6 +107,7 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 case 'toggle-proxy':
                     const is_active = e.target.checked;
                     await supabaseService.updateProxy(id, { is_active });
+                    await loadSavedProxies();
                     break;
                 case 'delete-proxy':
                     if (confirm('Удалить этот прокси?')) {
@@ -175,30 +176,40 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
             });
             container.addEventListener('dragover', e => {
                 e.preventDefault();
+                const afterElement = getDragAfterElement(container, e.clientY);
+                const draggable = document.querySelector('[data-id="' + proxyState.draggedItemId + '"]');
+                if (afterElement == null) {
+                    container.appendChild(draggable);
+                } else {
+                    container.insertBefore(draggable, afterElement);
+                }
             });
             container.addEventListener('drop', async e => {
                 e.preventDefault();
-                const droppedOn = e.target.closest('[data-id]');
-                if (!droppedOn || !proxyState.draggedItemId) return;
-                
-                const fromIndex = proxyState.saved.findIndex(p => p.id === proxyState.draggedItemId);
-                const toIndex = proxyState.saved.findIndex(p => p.id === droppedOn.dataset.id);
-                
-                const [movedItem] = proxyState.saved.splice(fromIndex, 1);
-                proxyState.saved.splice(toIndex, 0, movedItem);
-
-                const updates = proxyState.saved.map((p, index) => ({ id: p.id, priority: index }));
-                
-                renderManager(); // Re-render immediately for responsiveness
-                
+                const orderedIds = [...container.querySelectorAll('[data-id]')].map(el => el.dataset.id);
+                const updates = orderedIds.map((id, index) => ({ id: id, priority: index }));
                 try {
                      await supabaseService.client.from('proxies').upsert(updates);
+                     await loadSavedProxies();
                 } catch(err) {
                     alert('Не удалось сохранить новый порядок.');
-                    await loadSavedProxies(); // Revert on failure
+                    await loadSavedProxies();
                 }
             });
         };
+
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('[draggable="true"]:not([style*="opacity: 0.5"])')];
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
 
         managerContainer.addEventListener('click', handleManagerAction);
         managerContainer.addEventListener('change', (e) => {
@@ -387,11 +398,6 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
     };
     
     modalElement.addEventListener('click', handleAction);
-    modalElement.addEventListener('change', (e) => {
-        if(e.target.closest('[data-action="toggle-proxy"]')) {
-             handleAction(e);
-        }
-    });
     
     render();
     return modalElement;

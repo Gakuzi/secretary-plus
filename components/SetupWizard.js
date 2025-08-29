@@ -135,6 +135,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 case 'toggle-proxy':
                     const is_active = e.target.checked;
                     await supabaseService.updateProxy(id, { is_active });
+                    await loadSavedProxies();
                     break;
                 case 'delete-proxy':
                     if (confirm('Удалить этот прокси?')) {
@@ -204,29 +205,42 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                  e.target.style.opacity = '1';
                  proxyState.draggedItemId = null;
             });
-             container.addEventListener('drop', async e => {
+            container.addEventListener('dragover', e => {
                 e.preventDefault();
-                const droppedOn = e.target.closest('[data-id]');
-                if (!droppedOn || !proxyState.draggedItemId) return;
-                
-                const fromIndex = proxyState.saved.findIndex(p => p.id === proxyState.draggedItemId);
-                const toIndex = proxyState.saved.findIndex(p => p.id === droppedOn.dataset.id);
-                
-                const [movedItem] = proxyState.saved.splice(fromIndex, 1);
-                proxyState.saved.splice(toIndex, 0, movedItem);
-
-                const updates = proxyState.saved.map((p, index) => ({ id: p.id, priority: index }));
-                
-                renderManager();
-                
+                const afterElement = getDragAfterElement(container, e.clientY);
+                const draggable = document.querySelector('[data-id="' + proxyState.draggedItemId + '"]');
+                if (afterElement == null) {
+                    container.appendChild(draggable);
+                } else {
+                    container.insertBefore(draggable, afterElement);
+                }
+            });
+            container.addEventListener('drop', async e => {
+                e.preventDefault();
+                const orderedIds = [...container.querySelectorAll('[data-id]')].map(el => el.dataset.id);
+                const updates = orderedIds.map((id, index) => ({ id: id, priority: index }));
                 try {
                      await supabaseService.client.from('proxies').upsert(updates);
+                     await loadSavedProxies();
                 } catch(err) {
                     alert('Не удалось сохранить новый порядок.');
                     await loadSavedProxies();
                 }
             });
         };
+
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('[draggable="true"]:not([style*="opacity: 0.5"])')];
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
 
         managerContainer.addEventListener('click', handleManagerAction);
         managerContainer.addEventListener('change', (e) => {
@@ -321,7 +335,14 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                  contentEl.innerHTML = `
                     <h2 class="text-2xl font-bold mb-4">Настройка Прокси (Опционально)</h2>
                     <p class="mb-6 text-gray-400">Если API Gemini недоступен в вашем регионе, вы можете настроить прокси-серверы для обхода ограничений.</p>
-                    <div class="p-6 bg-gray-900/50 rounded-lg border border-gray-700 flex items-center justify-center">
+                    <div class="p-6 bg-gray-900/50 rounded-lg border border-gray-700 flex flex-col items-center justify-center gap-4">
+                        <div class="flex items-center gap-4">
+                            <label for="use-proxy-toggle-wizard" class="font-medium">Использовать прокси</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="use-proxy-toggle-wizard" ${state.config.useProxy ? 'checked' : ''}>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
                         <button data-action="manage-proxies" class="w-full max-w-sm flex items-center justify-center gap-2 px-4 py-3 bg-gray-600 hover:bg-gray-500 rounded-md font-semibold transition-colors">
                             ${Icons.SettingsIcon}
                             <span>Открыть менеджер прокси</span>
@@ -369,7 +390,9 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
     const collectInputs = () => {
         const newConfig = { ...state.config };
         const geminiInput = wizardElement.querySelector('#geminiApiKey');
+        const useProxyToggle = wizardElement.querySelector('#use-proxy-toggle-wizard');
         if (geminiInput) newConfig.geminiApiKey = geminiInput.value.trim();
+        if (useProxyToggle) newConfig.useProxy = useProxyToggle.checked;
         state.config = newConfig;
     };
     
@@ -378,9 +401,11 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         
         let nextStepIndex = state.currentStep + 1;
         
+        // Skip Gemini step if key already exists from previous session/cloud
         if (nextStepIndex < STEPS.length && STEPS[nextStepIndex].id === 'gemini' && state.config.geminiApiKey) {
             nextStepIndex++;
         }
+        // Skip Proxies step if not using Supabase
         if (nextStepIndex < STEPS.length && STEPS[nextStepIndex].id === 'proxies' && state.authChoice !== 'supabase') {
             nextStepIndex++;
         }
@@ -488,6 +513,13 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
     };
     
     wizardElement.addEventListener('click', handleAction);
+    wizardElement.addEventListener('change', (e) => {
+        const useProxyToggle = e.target.closest('#use-proxy-toggle-wizard');
+        if (useProxyToggle) {
+            state.config.useProxy = useProxyToggle.checked;
+        }
+    });
+
 
     if (resumeState) {
         checkAuthStatus();
