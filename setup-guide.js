@@ -1,15 +1,16 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./constants.js";
+import { SupabaseService } from './services/supabase/SupabaseService.js';
+
 
 document.addEventListener('DOMContentLoaded', () => {
-    const { createClient } = window.supabase;
 
     // --- STATE ---
     let state = {
-        supabaseClient: null,
+        supabaseService: null,
         user: null,
         settings: {},
-        selectedProxies: [],
+        allProxies: [], // All proxies from DB for this user
         currentStep: 'auth',
     };
     
@@ -32,7 +33,8 @@ document.addEventListener('DOMContentLoaded', () => {
         wizardLogout: document.getElementById('wizard-logout-button'),
         saveKeys: document.getElementById('save-keys-button'),
         findProxies: document.getElementById('find-proxies-ai'),
-        saveProxies: document.getElementById('save-proxies-button'),
+        addProxyManual: document.getElementById('add-proxy-manual'),
+        finishSetup: document.getElementById('finish-setup-button'),
         goToApp: document.getElementById('go-to-app-button'),
     };
     
@@ -42,9 +44,9 @@ document.addEventListener('DOMContentLoaded', () => {
         authActions: document.getElementById('auth-actions'),
         keysStatus: document.getElementById('keys-status-container'),
         proxyFinderStatus: document.getElementById('proxy-finder-status'),
-        proxyStatus: document.getElementById('proxy-status-container'),
-        foundProxies: document.getElementById('found-proxies-container'),
-        selectedProxies: document.getElementById('selected-proxies-container'),
+        proxyEditor: document.getElementById('proxy-editor-container'),
+        allProxies: document.getElementById('all-proxies-container'),
+        activeProxies: document.getElementById('active-proxies-container'),
         proxyTestModal: document.getElementById('proxy-test-modal-container'),
     };
 
@@ -55,10 +57,13 @@ document.addEventListener('DOMContentLoaded', () => {
         container.style.display = 'block';
     };
     
-    async function findProxiesWithGemini(apiKey) {
+    async function findProxiesWithGemini(apiKey, existingUrls) {
         if (!apiKey) throw new Error("Ключ Gemini API не предоставлен.");
         const ai = new GoogleGenAI({ apiKey });
-        const prompt = `Найди 10 общедоступных (бесплатных) прокси-серверов, которые могут работать с Google API из разных стран. Предоставь ответ в формате JSON. Каждый объект должен содержать поля "url", "country" и "city". Пример: [{"url": "https://example.com/proxy", "country": "USA", "city": "California"}]`;
+        const prompt = `Найди 10 общедоступных (бесплатных) прокси-серверов, которые могут работать с Google API из разных стран.
+        Предоставь ответ в формате JSON. Каждый объект должен содержать поля "url", "country" и "city".
+        ВАЖНО: НЕ включай в ответ следующие URL: ${JSON.stringify(existingUrls)}.
+        Пример: [{"url": "https://example.com/proxy", "country": "USA", "city": "California"}]`;
         try {
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
@@ -88,11 +93,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function testProxyConnection(proxyUrl, apiKey) {
         if (!proxyUrl || !apiKey) return { status: 'error', speed: null, message: 'Missing URL or API Key' };
-        // Use a lightweight endpoint for checking functionality
-        const testEndpoint = `${proxyUrl}/v1beta/models?key=${apiKey}`;
+        const testEndpoint = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+        const proxiedEndpoint = `${proxyUrl}/${testEndpoint.substring(8)}`;
         const startTime = performance.now();
         try {
-            const response = await fetch(testEndpoint, { method: 'GET' });
+            const response = await fetch(proxiedEndpoint, { method: 'GET' });
             if (response.ok) {
                 const data = await response.json();
                 if (data.models && Array.isArray(data.models)) {
@@ -121,7 +126,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setStatus(containers.authStatus, 'success', `Вы вошли как ${state.user.email}`);
         buttons.connectLogin.style.display = 'none';
         
-        // Use a document fragment to prevent multiple reflows
         const profileFragment = document.createDocumentFragment();
         const profileInfo = document.createElement('div');
         profileInfo.className = "flex items-center gap-3";
@@ -133,27 +137,23 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
         profileFragment.appendChild(profileInfo);
-        containers.userProfile.prepend(profileFragment); // Prepend to keep it above the action buttons
+        containers.userProfile.prepend(profileFragment);
         containers.userProfile.style.display = 'block';
-        containers.authActions.style.display = 'flex'; // Show Continue/Logout buttons
+        containers.authActions.style.display = 'flex';
         steps.auth.dataset.status = 'completed';
         
         setStatus(containers.authStatus, 'loading', 'Загружаем ваши настройки...');
 
         try {
-            const { data, error } = await state.supabaseClient.from('user_settings').select('settings').single();
-            if (error && error.code !== 'PGRST116') throw error;
-            
-            state.settings = data ? data.settings : {};
+            const dbSettings = await state.supabaseService.getUserSettings();
+            state.settings = dbSettings || {};
             inputs.geminiApiKey.value = state.settings.geminiApiKey || '';
             inputs.googleClientId.value = state.settings.googleClientId || '';
             
-            const { data: proxiesData, error: proxiesError } = await state.supabaseClient.from('proxies').select('*').order('priority');
-            if (proxiesError) throw proxiesError;
-            state.selectedProxies = proxiesData || [];
-            renderSelectedProxies();
+            state.allProxies = await state.supabaseService.getProxies();
+            renderAllProxies();
+            renderActiveProxies();
             
-            // Auto-navigate to next step after a short delay for better UX
             setStatus(containers.authStatus, 'success', 'Настройки загружены. Переходим к следующему шагу...');
             setTimeout(() => {
                 if(state.currentStep === 'auth') showStep('keys');
@@ -172,7 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons.connectLogin.disabled = false;
         buttons.connectLogin.textContent = 'Войти через Google';
         containers.userProfile.style.display = 'none';
-        // Clear profile info but keep action buttons in the DOM
         const profileInfo = containers.userProfile.querySelector('.flex.items-center.gap-3');
         if (profileInfo) profileInfo.remove();
         containers.authActions.style.display = 'none';
@@ -186,29 +185,15 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons.connectLogin.disabled = true;
         buttons.connectLogin.textContent = 'Подключение...';
         setStatus(containers.authStatus, 'loading', 'Перенаправляем на страницу входа Google...');
-        const { error } = await state.supabaseClient.auth.signInWithOAuth({
-            provider: 'google',
-            options: { redirectTo: window.location.href }
-        });
-        if (error) {
-             setStatus(containers.authStatus, 'error', `Ошибка: ${error.message}`);
-             buttons.connectLogin.disabled = false;
-             buttons.connectLogin.textContent = 'Войти через Google';
-        }
+        await state.supabaseService.signInWithGoogle();
     });
 
     buttons.wizardLogout.addEventListener('click', async () => {
-        const { error } = await state.supabaseClient.auth.signOut();
-        if(error) {
-            setStatus(containers.authStatus, 'error', `Ошибка выхода: ${error.message}`);
-        } else {
-            resetAuthState();
-        }
+        await state.supabaseService.signOut();
+        resetAuthState();
     });
     
-    buttons.authContinue.addEventListener('click', () => {
-        showStep('keys');
-    });
+    buttons.authContinue.addEventListener('click', () => showStep('keys'));
 
     buttons.saveKeys.addEventListener('click', async () => {
         const settingsUpdate = {
@@ -226,98 +211,56 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons.saveKeys.disabled = true;
         buttons.saveKeys.textContent = 'Сохранение...'
 
-        const { error } = await state.supabaseClient.rpc('upsert_user_settings', { new_settings: settingsUpdate });
-
-        if (error) {
+        try {
+            await state.supabaseService.saveUserSettings(settingsUpdate);
+            state.settings = settingsUpdate;
+            setStatus(containers.keysStatus, 'success', 'Ключи успешно сохранены.');
+            steps.keys.dataset.status = 'completed';
+            setTimeout(() => showStep('proxy'), 1000);
+        } catch (error) {
             setStatus(containers.keysStatus, 'error', `Ошибка сохранения: ${error.message}`);
+        } finally {
             buttons.saveKeys.disabled = false;
             buttons.saveKeys.textContent = 'Сохранить и продолжить';
-        } else {
-            state.settings = settingsUpdate;
-            setStatus(containers.keysStatus, 'success', 'Ключи успешно сохранены в вашем аккаунте.');
-            steps.keys.dataset.status = 'completed';
-            // Auto-navigate to next step
-            setTimeout(() => {
-                 showStep('proxy');
-            }, 1000);
         }
     });
 
     buttons.findProxies.addEventListener('click', async () => {
         if (!state.settings.geminiApiKey) {
-            setStatus(containers.proxyFinderStatus, 'error', 'Сначала сохраните Gemini API ключ на предыдущем шаге.');
+            setStatus(containers.proxyFinderStatus, 'error', 'Сначала сохраните Gemini API ключ.');
             return;
         }
         setStatus(containers.proxyFinderStatus, 'loading', 'Ищем прокси с помощью ИИ... Это может занять до минуты.');
         buttons.findProxies.disabled = true;
-        buttons.findProxies.textContent = 'Поиск...';
 
         try {
-            const foundProxies = await findProxiesWithGemini(state.settings.geminiApiKey);
-            const existingUrls = new Set(state.selectedProxies.map(p => p.url));
-            const newProxies = foundProxies.filter(p => p.url && !existingUrls.has(p.url));
-
-            containers.foundProxies.innerHTML = '';
-            if (newProxies.length === 0) {
-                 containers.foundProxies.innerHTML = `<p class="text-gray-400 text-center py-4">Новых прокси не найдено.</p>`;
-            } else {
-                newProxies.forEach(p => {
-                    const proxyData = { ...p, geolocation: `${p.country}, ${p.city || ''}`.replace(/, $/, '') };
-                    containers.foundProxies.appendChild(renderProxyItem(proxyData, 'found'));
-                });
+            const existingUrls = state.allProxies.map(p => p.url);
+            const foundProxies = await findProxiesWithGemini(state.settings.geminiApiKey, existingUrls);
+            
+            if (foundProxies.length > 0) {
+                const newProxiesToSave = foundProxies.map(p => ({
+                    url: p.url,
+                    geolocation: `${p.country}, ${p.city || ''}`.replace(/, $/, ''),
+                    user_id: state.user.id,
+                }));
+                await state.supabaseService.upsertProxies(newProxiesToSave);
+                state.allProxies = await state.supabaseService.getProxies();
+                renderAllProxies();
             }
-            setStatus(containers.proxyFinderStatus, 'success', `Найдено ${newProxies.length} новых прокси. Протестируйте и добавьте лучшие.`);
+            setStatus(containers.proxyFinderStatus, 'success', `Найдено и добавлено ${foundProxies.length} новых прокси. Теперь протестируйте их.`);
         } catch (error) {
             setStatus(containers.proxyFinderStatus, 'error', error.message);
         } finally {
             buttons.findProxies.disabled = false;
-            buttons.findProxies.textContent = 'Найти прокси с помощью ИИ';
         }
     });
     
-    buttons.saveProxies.addEventListener('click', async () => {
-        setStatus(containers.proxyStatus, 'loading', 'Сохраняем список прокси...');
-        buttons.saveProxies.disabled = true;
-        try {
-            // Delete proxies that were removed by the user
-            const currentProxyUrls = new Set(state.selectedProxies.map(p => p.url));
-            const { data: existingProxies, error: fetchError } = await state.supabaseClient.from('proxies').select('id, url');
-            if(fetchError) throw fetchError;
-
-            const proxiesToDelete = existingProxies.filter(p => !currentProxyUrls.has(p.url));
-            if (proxiesToDelete.length > 0) {
-                const { error: deleteError } = await state.supabaseClient.from('proxies').delete().in('id', proxiesToDelete.map(p => p.id));
-                if (deleteError) throw deleteError;
-            }
-
-            // Upsert the current list
-            if (state.selectedProxies.length > 0) {
-                const proxiesToUpsert = state.selectedProxies.map((p, index) => ({
-                    user_id: state.user.id,
-                    url: p.url,
-                    alias: p.alias || p.geolocation,
-                    geolocation: p.geolocation,
-                    is_active: true,
-                    priority: index,
-                    last_status: p.last_status,
-                    last_speed_ms: p.last_speed_ms
-                }));
-                const { error: upsertError } = await state.supabaseClient.from('proxies').upsert(proxiesToUpsert, { onConflict: 'user_id, url' });
-                if (upsertError) throw upsertError;
-            }
-            
-            setStatus(containers.proxyStatus, 'success', 'Список прокси сохранен.');
-            steps.proxy.dataset.status = 'completed';
-            showStep('final');
-        } catch (error) {
-            setStatus(containers.proxyStatus, 'error', `Ошибка сохранения: ${error.message}`);
-        } finally {
-            buttons.saveProxies.disabled = false;
-        }
+    buttons.finishSetup.addEventListener('click', () => {
+        steps.proxy.dataset.status = 'completed';
+        showStep('final');
     });
 
     buttons.goToApp.addEventListener('click', () => {
-        // Redirect the main window to the app, forcing a reload with the new session.
         if (window.opener) {
             window.opener.postMessage('setup_completed', window.location.origin);
             window.close();
@@ -328,89 +271,112 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.body.addEventListener('click', e => {
         const navButton = e.target.closest('[data-nav-target]');
-        if (navButton) {
-            showStep(navButton.dataset.navTarget);
-        }
+        if (navButton) showStep(navButton.dataset.navTarget);
     });
 
-    // --- PROXY LISTS LOGIC ---
+    // --- PROXY LOGIC ---
     
-    function showProxyTestModal(proxyData) {
+    function showProxyEditor() {
+        containers.proxyEditor.innerHTML = `
+            <div class="input-group">
+                <label for="proxy-url-input">URL Прокси</label>
+                <input type="text" id="proxy-url-input" placeholder="https://proxy.example.com">
+                <div id="proxy-url-error" class="note-text text-red-500 h-4"></div>
+            </div>
+            <div class="flex gap-2">
+                <button id="save-manual-proxy" class="wizard-nav-button next-button">Сохранить</button>
+                <button id="cancel-manual-proxy" class="wizard-nav-button prev-button">Отмена</button>
+            </div>
+        `;
+        containers.proxyEditor.querySelector('#save-manual-proxy').onclick = async () => {
+            const urlInput = containers.proxyEditor.querySelector('#proxy-url-input');
+            const url = urlInput.value.trim();
+            const errorDiv = containers.proxyEditor.querySelector('#proxy-url-error');
+            if (!url) { errorDiv.textContent = 'URL не может быть пустым.'; return; }
+            try { new URL(url); } catch { errorDiv.textContent = 'Неверный формат URL.'; return; }
+
+            try {
+                await state.supabaseService.addProxy({ url });
+                state.allProxies = await state.supabaseService.getProxies();
+                renderAllProxies();
+                containers.proxyEditor.innerHTML = '';
+            } catch (error) {
+                errorDiv.textContent = error.message.includes('duplicate key') ? 'Этот прокси уже существует.' : error.message;
+            }
+        };
+        containers.proxyEditor.querySelector('#cancel-manual-proxy').onclick = () => {
+            containers.proxyEditor.innerHTML = '';
+        };
+    }
+    buttons.addProxyManual.addEventListener('click', showProxyEditor);
+
+    function showProxyTestModal(proxy) {
         containers.proxyTestModal.innerHTML = `
             <div class="proxy-test-modal-overlay">
                 <div class="proxy-test-modal-content">
-                    <div class="modal-header">
-                        <h3 class="step-subtitle">Тестирование прокси</h3>
-                    </div>
+                    <div class="modal-header"><h3 class="step-subtitle">Тестирование прокси</h3></div>
                     <div class="modal-body"></div>
                     <div class="modal-footer"></div>
                 </div>
             </div>
         `;
-        
         const modal = containers.proxyTestModal.querySelector('.proxy-test-modal-overlay');
         const body = modal.querySelector('.modal-body');
         const footer = modal.querySelector('.modal-footer');
-        
         const close = () => containers.proxyTestModal.innerHTML = '';
         modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
 
         const runTest = async () => {
             body.innerHTML = `<p class="status-loading">Тестирование...</p>`;
             footer.innerHTML = '';
-
-            const result = await testProxyConnection(proxyData.url, state.settings.geminiApiKey);
+            const result = await testProxyConnection(proxy.url, state.settings.geminiApiKey);
             
-            updateProxyUI(proxyData.url, result);
+            // Update DB immediately
+            const updateData = { last_status: result.status, last_checked_at: new Date().toISOString(), last_speed_ms: result.speed };
+            const updatedProxy = await state.supabaseService.updateProxy(proxy.id, updateData);
+            Object.assign(proxy, updatedProxy);
+            
+            // Update UI
+            updateProxyItemUI(proxy);
+            renderActiveProxies();
             
             const isOk = result.status === 'ok';
             body.innerHTML = `
-                <p class="proxy-item-url">${proxyData.url}</p>
-                <p class="proxy-item-details">${proxyData.geolocation}</p>
-                <div class="mt-4">
-                    <p class="status-message ${isOk ? 'status-success' : 'status-error'}">
-                        Статус: ${isOk ? 'Работает' : 'Ошибка'}
-                        ${isOk && result.speed ? ` (Скорость: ${result.speed} мс)` : ''}
-                        ${!isOk ? `<br><span class="text-xs">${result.message}</span>` : ''}
-                    </p>
-                </div>
+                <p class="proxy-item-url">${proxy.url}</p>
+                <p class="proxy-item-details">${proxy.geolocation || 'N/A'}</p>
+                <div class="mt-4"><p class="status-message ${isOk ? 'status-success' : 'status-error'}">
+                    Статус: ${isOk ? `Работает (Скорость: ${result.speed} мс)` : `Ошибка (${result.message})`}
+                </p></div>
             `;
-
             footer.innerHTML = `
                 <button class="wizard-nav-button prev-button retry-button">Повторить</button>
-                <button class="wizard-nav-button prev-button close-button">Закрыть</button>
+                <button class="wizard-nav-button prev-button reject-button">Отклонить</button>
                 ${isOk ? '<button class="wizard-nav-button next-button accept-button">Принять</button>' : ''}
             `;
-
             footer.querySelector('.retry-button').onclick = runTest;
-            footer.querySelector('.close-button').onclick = close;
+            footer.querySelector('.reject-button').onclick = async () => {
+                await state.supabaseService.updateProxy(proxy.id, { is_active: false });
+                proxy.is_active = false;
+                renderActiveProxies();
+                close();
+            };
             const acceptButton = footer.querySelector('.accept-button');
             if (acceptButton) {
-                acceptButton.onclick = () => {
-                    if (!state.selectedProxies.some(p => p.url === proxyData.url)) {
-                        state.selectedProxies.push({ 
-                            url: proxyData.url, 
-                            geolocation: proxyData.geolocation, 
-                            alias: proxyData.geolocation,
-                            last_status: result.status,
-                            last_speed_ms: result.speed
-                        });
-                        renderSelectedProxies();
-                    }
+                acceptButton.onclick = async () => {
+                    await state.supabaseService.updateProxy(proxy.id, { is_active: true });
+                    proxy.is_active = true;
+                    renderActiveProxies();
                     close();
                 };
             }
         };
-
         runTest();
     }
 
-    const renderProxyItem = (proxy, containerType) => {
-        const isSelected = containerType === 'selected';
+    const renderProxyItem = (proxy) => {
         const item = document.createElement('div');
         item.className = 'proxy-item';
-        item.dataset.url = proxy.url;
-        item.dataset.geo = proxy.geolocation;
+        item.dataset.proxyId = proxy.id;
         item.innerHTML = `
             <div class="proxy-status-dot" data-status="${proxy.last_status || 'untested'}"></div>
             <div class="proxy-item-info">
@@ -422,75 +388,70 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="proxy-item-actions">
                  <button class="test-btn">Тест</button>
-                 ${isSelected ? `<button class="remove-btn">Удалить</button>` : ''}
+                 <button class="remove-btn text-red-500">Удалить</button>
             </div>
         `;
         return item;
     };
 
-    const updateProxyUI = (url, { status, speed }) => {
-        document.querySelectorAll(`.proxy-item[data-url="${url}"]`).forEach(item => {
-             const dot = item.querySelector('.proxy-status-dot');
-            dot.dataset.status = status;
-            item.dataset.lastStatus = status;
+    const updateProxyItemUI = (proxy) => {
+        document.querySelectorAll(`.proxy-item[data-proxy-id="${proxy.id}"]`).forEach(item => {
+            item.querySelector('.proxy-status-dot').dataset.status = proxy.last_status;
             const speedEl = item.querySelector('.speed-info');
-            if (speed) {
-                speedEl.textContent = ` · ${speed} мс`;
+            if (proxy.last_speed_ms) {
+                speedEl.textContent = ` · ${proxy.last_speed_ms} мс`;
                 speedEl.style.display = 'inline';
-                item.dataset.lastSpeed = speed;
             } else {
                 speedEl.style.display = 'none';
             }
         });
     };
     
-    const renderSelectedProxies = () => {
-        containers.selectedProxies.innerHTML = '';
-        if (state.selectedProxies.length === 0) {
-            containers.selectedProxies.innerHTML = `<p class="text-gray-400 text-center py-4">Выбранные прокси появятся здесь.</p>`;
+    const renderAllProxies = () => {
+        containers.allProxies.innerHTML = '';
+        if (state.allProxies.length === 0) {
+            containers.allProxies.innerHTML = `<p class="text-gray-400 text-center py-4">Список пуст.</p>`;
         } else {
-            state.selectedProxies.forEach(p => containers.selectedProxies.appendChild(renderProxyItem(p, 'selected')));
+            state.allProxies.forEach(p => containers.allProxies.appendChild(renderProxyItem(p)));
         }
     };
 
-    containers.foundProxies.addEventListener('click', async (e) => {
-        const target = e.target;
-        const item = target.closest('.proxy-item');
-        if (!item) return;
-
-        const proxyData = {
-            url: item.dataset.url,
-            geolocation: item.dataset.geo,
-        };
-        
-        if (target.matches('.test-btn')) {
-            showProxyTestModal(proxyData);
+    const renderActiveProxies = () => {
+        containers.activeProxies.innerHTML = '';
+        const active = state.allProxies.filter(p => p.is_active);
+        if (active.length === 0) {
+            containers.activeProxies.innerHTML = `<p class="text-gray-400 text-center py-4">Нет активных прокси.</p>`;
+        } else {
+            active.forEach(p => containers.activeProxies.appendChild(renderProxyItem(p)));
         }
-    });
-
-    containers.selectedProxies.addEventListener('click', (e) => {
+    };
+    
+    containers.allProxies.addEventListener('click', async (e) => {
         const item = e.target.closest('.proxy-item');
         if (!item) return;
-        const proxyUrl = item.dataset.url;
-        
+        const proxyId = item.dataset.proxyId;
+        const proxy = state.allProxies.find(p => p.id == proxyId);
+
+        if (e.target.matches('.test-btn')) showProxyTestModal(proxy);
         if (e.target.matches('.remove-btn')) {
-            state.selectedProxies = state.selectedProxies.filter(p => p.url !== proxyUrl);
-            renderSelectedProxies();
-        }
-        if (e.target.matches('.test-btn')) {
-             showProxyTestModal({ url: proxyUrl, geolocation: item.dataset.geo });
+            if (confirm(`Удалить прокси ${proxy.url}?`)) {
+                await state.supabaseService.deleteProxy(proxy.id);
+                state.allProxies = state.allProxies.filter(p => p.id != proxyId);
+                renderAllProxies();
+                renderActiveProxies();
+            }
         }
     });
-    
+
     // --- INITIALIZATION ---
     
     const initialize = async () => {
         showStep('auth');
-        state.supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        state.supabaseService = new SupabaseService(SUPABASE_URL, SUPABASE_ANON_KEY);
         
-        state.supabaseClient.auth.onAuthStateChange(async (event, session) => {
+        state.supabaseService.onAuthStateChange(async (event, session) => {
             if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session) {
-                if (!state.user) { // Prevent re-rendering if user is already set
+                if (!state.user) {
                     state.user = session.user;
                     await renderAuthenticatedState();
                 }
@@ -498,7 +459,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 resetAuthState();
             }
 
-            // Clean up URL after OAuth redirect
             if (window.location.hash.includes('access_token')) {
                 history.replaceState(null, document.title, window.location.pathname + window.location.search);
             }

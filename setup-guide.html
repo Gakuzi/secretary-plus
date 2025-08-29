@@ -78,28 +78,32 @@
                     <h2 class="step-title">Настройка Прокси (опционально)</h2>
                 </div>
                  <div class="step-content">
-                    <p class="mb-4">Если доступ к Gemini API ограничен в вашем регионе, найдите и протестируйте рабочие прокси-серверы.</p>
-                    <button id="find-proxies-ai" class="wizard-nav-button find-button mb-4">Найти прокси с помощью ИИ</button>
-                    <div id="proxy-finder-status" class="mt-2 text-sm"></div>
+                    <p class="mb-4">Если доступ к Gemini API ограничен, найдите, добавьте и протестируйте рабочие прокси-серверы. Рабочие прокси будут добавлены в список активных.</p>
+                    <div class="flex flex-wrap gap-2 mb-4">
+                        <button id="find-proxies-ai" class="wizard-nav-button find-button">Найти прокси с помощью ИИ</button>
+                        <button id="add-proxy-manual" class="wizard-nav-button prev-button">Добавить вручную</button>
+                    </div>
+                    <div id="proxy-finder-status" class="mt-2 text-sm mb-4"></div>
+                    <div id="proxy-editor-container" class="mb-4"></div>
                     
                     <div class="grid md:grid-cols-2 gap-6 mt-6">
                         <div>
-                            <h3 class="step-subtitle">Результаты поиска</h3>
-                            <div id="found-proxies-container" class="proxy-list-container">
-                                <p class="text-gray-400 text-center py-4">Здесь появятся найденные прокси...</p>
+                            <h3 class="step-subtitle">Все известные прокси</h3>
+                            <div id="all-proxies-container" class="proxy-list-container">
+                                <p class="text-gray-400 text-center py-4">Здесь появятся все ваши прокси...</p>
                             </div>
                         </div>
                         <div>
-                            <h3 class="step-subtitle">Выбранные прокси</h3>
-                             <div id="selected-proxies-container" class="proxy-list-container">
-                                <p class="text-gray-400 text-center py-4">Добавьте прокси из списка слева.</p>
+                            <h3 class="step-subtitle">Активные прокси</h3>
+                             <div id="active-proxies-container" class="proxy-list-container">
+                                <p class="text-gray-400 text-center py-4">Принятые рабочие прокси появятся здесь.</p>
                             </div>
                         </div>
                     </div>
                     <div id="proxy-status-container" class="mt-4 text-sm" style="display: none;"></div>
                     <div class="step-navigation">
                          <button class="wizard-nav-button prev-button" data-nav-target="keys">Назад</button>
-                         <button id="save-proxies-button" class="wizard-nav-button next-button">Завершить настройку</button>
+                         <button id="finish-setup-button" class="wizard-nav-button next-button">Завершить настройку</button>
                     </div>
                  </div>
             </section>
