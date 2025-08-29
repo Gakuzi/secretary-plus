@@ -28,27 +28,27 @@
     }
     </script>
 </head>
-<body class="bg-gray-900 text-gray-100 font-sans">
+<body class="bg-gray-50 text-gray-800 dark:bg-gray-900 dark:text-gray-100 font-sans">
     <!-- This container is for the main application UI -->
     <div id="app" class="flex flex-col h-screen">
       <!-- App Header -->
-      <header class="grid grid-cols-3 items-center p-4 bg-gray-800 border-b border-gray-700 shadow-md">
+      <header class="grid grid-cols-3 items-center p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-md">
         <div class="flex justify-start">
              <div id="auth-container">
                 <!-- Auth button / user profile will be rendered here -->
              </div>
         </div>
         <div class="flex justify-center">
-            <a href="/" class="text-xl font-bold text-center">Секретарь+</a>
+            <a href="" class="text-xl font-bold text-gray-900 dark:text-gray-100 text-center">Секретарь+</a>
         </div>
         <div id="header-actions" class="flex justify-end items-center space-x-2">
-            <button id="stats-button" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Открыть статистику">
+            <button id="stats-button" class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" aria-label="Открыть статистику">
               <!-- Stats Icon SVG will be injected here -->
             </button>
-            <button id="help-button" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Открыть помощь">
+            <button id="help-button" class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" aria-label="Открыть помощь">
               <!-- Help Icon SVG will be injected here -->
             </button>
-            <button id="settings-button" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Открыть настройки">
+            <button id="settings-button" class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" aria-label="Открыть настройки">
               <!-- Settings Icon SVG will be injected here -->
             </button>
         </div>

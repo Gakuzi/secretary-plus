@@ -1,5 +1,6 @@
 import { MessageSender } from '../types.js';
 import { createResultCardElement } from './ResultCard.js';
+import * as Icons from './icons/Icons.js';
 
 // A simple markdown to HTML converter
 function markdownToHTML(text) {
@@ -7,34 +8,56 @@ function markdownToHTML(text) {
     return text
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
         .replace(/\*(.*?)\*/g, '<em>$1</em>')     // Italic
-        .replace(/`([^`]+)`/g, '<code class="bg-gray-700 text-sm rounded px-1 py-0.5">$1</code>') // Inline code
-        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">$1</a>') // Link
+        .replace(/`([^`]+)`/g, '<code class="bg-gray-200 dark:bg-gray-700 text-sm rounded px-1 py-0.5">$1</code>') // Inline code
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-500 dark:text-blue-400 hover:underline">$1</a>') // Link
         .replace(/\n/g, '<br>'); // Newlines
 }
 
 export function createMessageElement(message) {
     const isUser = message.sender === MessageSender.USER;
+    const isSystem = message.sender === MessageSender.SYSTEM;
     const wrapper = document.createElement('div');
     wrapper.className = `flex items-start space-x-3 message-item ${isUser ? 'justify-end' : ''}`;
     wrapper.dataset.messageId = message.id;
 
+    let avatarClass = 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-200';
+    let avatarText = 'S+';
+    let authorNameText = 'Секретарь+';
+    let bubbleClass = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100';
+
+    if (isUser) {
+        avatarClass = 'bg-blue-500 text-white';
+        avatarText = 'ВЫ';
+        authorNameText = 'Вы';
+        bubbleClass = 'bg-blue-500 text-white';
+    } else if (isSystem) {
+        avatarClass = 'bg-yellow-400 text-yellow-900';
+        avatarText = '!';
+        authorNameText = 'Система';
+        bubbleClass = 'bg-yellow-50 border border-yellow-200 text-yellow-900 dark:bg-yellow-900/20 dark:border-yellow-800/50 dark:text-yellow-200';
+    }
+
     const avatar = document.createElement('div');
-    avatar.className = `w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0 ${isUser ? 'bg-blue-600' : 'bg-gray-700'}`;
-    avatar.textContent = isUser ? 'ВЫ' : 'S+';
+    avatar.className = `w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0 ${avatarClass}`;
+    avatar.textContent = avatarText;
     
     const contentContainer = document.createElement('div');
     contentContainer.className = `max-w-xl ${isUser ? 'order-first' : ''}`;
 
     const authorName = document.createElement('div');
     authorName.className = 'font-bold';
-    authorName.textContent = isUser ? 'Вы' : 'Секретарь+';
+    authorName.textContent = authorNameText;
 
     const messageBubble = document.createElement('div');
-    messageBubble.className = `p-3 rounded-lg mt-1 ${isUser ? 'bg-blue-700' : 'bg-gray-800'}`;
+    messageBubble.className = `p-3 rounded-lg mt-1 ${bubbleClass}`;
     
     if (message.text) {
         const textElement = document.createElement('div');
-        textElement.innerHTML = markdownToHTML(message.text);
+        if (isSystem) {
+            textElement.innerHTML = `<div class="flex items-start gap-2"><span class="w-5 h-5 mt-0.5 flex-shrink-0">${Icons.AlertTriangleIcon}</span><div>${markdownToHTML(message.text)}</div></div>`;
+        } else {
+            textElement.innerHTML = markdownToHTML(message.text);
+        }
         messageBubble.appendChild(textElement);
     }
 
@@ -47,6 +70,11 @@ export function createMessageElement(message) {
     
     if (message.card) {
         const cardElement = createResultCardElement(message.card);
+        // For system cards, we might want a different background or styling
+        if (isSystem) {
+            cardElement.classList.remove('dark:bg-gray-700/50', 'dark:border-gray-600');
+            cardElement.classList.add('bg-transparent', 'border-none', 'dark:bg-transparent', 'dark:border-none', 'p-0', 'mt-3');
+        }
         messageBubble.appendChild(cardElement);
     }
 
@@ -59,7 +87,7 @@ export function createMessageElement(message) {
         
         message.suggestedReplies.forEach(replyText => {
             const button = document.createElement('button');
-            button.className = 'quick-reply-button';
+            button.className = 'quick-reply-button bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 px-3 py-1.5 rounded-full text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-all';
             button.textContent = replyText;
             button.dataset.replyText = replyText;
             repliesContainer.appendChild(button);

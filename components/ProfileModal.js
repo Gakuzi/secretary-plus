@@ -23,7 +23,7 @@ function markdownToHTML(text) {
     if (!text) return '';
     return text
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/`([^`]+)`/g, '<code class="bg-gray-700 text-sm rounded px-1 py-0.5">$1</code>')
+        .replace(/`([^`]+)`/g, '<code class="bg-gray-200 dark:bg-gray-700 text-sm rounded px-1 py-0.5">$1</code>')
         .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-4 mb-2">$1</h3>')
         .replace(/^## (.*$)/gim, '<h2 class="text-xl font-bold mt-4 mb-2">$1</h2>')
         .replace(/^- (.*$)/gim, '<li class="ml-4 list-disc">$1</li>')
@@ -46,18 +46,18 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
 
     modalOverlay.innerHTML = `
-        <div id="profile-modal-content" class="bg-gray-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-lg shadow-xl">
-            <header class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
+        <div id="profile-modal-content" class="bg-white dark:bg-gray-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-lg shadow-xl">
+            <header class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                 <h2 class="text-xl font-bold">Профиль пользователя</h2>
-                <button data-action="close" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Закрыть профиль">&times;</button>
+                <button data-action="close" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" aria-label="Закрыть профиль">&times;</button>
             </header>
-            <main class="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
+            <main class="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 bg-gray-50 dark:bg-gray-900/70">
                 <!-- User Info -->
-                <div class="flex items-center gap-4 p-4 bg-gray-900/50 rounded-lg">
+                <div class="flex items-center gap-4 p-4 bg-white dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
                     <img src="${userProfile.imageUrl}" alt="${userProfile.name}" class="w-16 h-16 rounded-full">
                     <div>
                         <p class="text-xl font-bold">${userProfile.name}</p>
-                        <p class="text-sm text-gray-400">${userProfile.email}</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">${userProfile.email}</p>
                     </div>
                 </div>
 
@@ -65,45 +65,45 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
                 <div id="sync-section-container"></div>
 
                 <!-- Cloud Settings -->
-                <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                <div class="p-4 bg-white dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
                     <h3 class="text-lg font-semibold mb-3">Настройки в облаке</h3>
                      <div class="space-y-2">
-                         <div class="flex items-center justify-between py-2 border-b border-gray-700/50">
-                            <label for="profile-email-polling-toggle" class="font-medium text-gray-300">Проактивные уведомления по почте</label>
+                         <div class="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700/50">
+                            <label for="profile-email-polling-toggle" class="font-medium text-gray-700 dark:text-gray-300">Проактивные уведомления по почте</label>
                             <label class="toggle-switch"><input type="checkbox" id="profile-email-polling-toggle" ${settings.enableEmailPolling ? 'checked' : ''}><span class="toggle-slider"></span></label>
                         </div>
-                        <div class="flex items-center justify-between py-2 border-b border-gray-700/50">
-                            <label for="profile-auto-sync-toggle" class="font-medium text-gray-300">Автоматическая фоновая синхронизация</label>
+                        <div class="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700/50">
+                            <label for="profile-auto-sync-toggle" class="font-medium text-gray-700 dark:text-gray-300">Автоматическая фоновая синхронизация</label>
                             <label class="toggle-switch"><input type="checkbox" id="profile-auto-sync-toggle" ${settings.enableAutoSync ? 'checked' : ''}><span class="toggle-slider"></span></label>
                         </div>
                     </div>
-                     <div class="space-y-2 border-t border-gray-700 pt-4 mt-4">
+                     <div class="space-y-2 border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
                         ${Object.entries(SERVICE_DEFINITIONS).map(([key, def]) => `
-                             <div class="flex items-center justify-between py-2 border-b border-gray-700/50 last:border-b-0">
-                                <label for="profile-${key}-provider-select" class="font-medium text-gray-300">${def.label}</label>
-                                <select id="profile-${key}-provider-select" class="bg-gray-700 border border-gray-600 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-sm">
+                             <div class="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700/50 last:border-b-0">
+                                <label for="profile-${key}-provider-select" class="font-medium text-gray-700 dark:text-gray-300">${def.label}</label>
+                                <select id="profile-${key}-provider-select" class="bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-sm">
                                     ${def.providers.map(p => `<option value="${p.id}" ${settings.serviceMap[key] === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}
                                 </select>
                             </div>`).join('')}
                      </div>
                 </div>
             </main>
-            <footer class="p-4 bg-gray-800 border-t border-gray-700 flex flex-col-reverse sm:flex-row sm:justify-between items-center gap-3 flex-shrink-0">
+            <footer class="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex flex-col-reverse sm:flex-row sm:justify-between items-center gap-3 flex-shrink-0">
                  <div class="w-full sm:w-auto">
-                     <button data-action="logout" class="w-full sm:w-auto px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold">Выйти</button>
+                     <button data-action="logout" class="w-full sm:w-auto px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md text-sm font-semibold">Выйти</button>
                 </div>
                 <div class="flex flex-col-reverse sm:flex-row w-full sm:w-auto gap-3">
-                     <button data-action="delete" class="w-full sm:w-auto px-4 py-2 bg-red-800 hover:bg-red-700 rounded-md text-sm font-semibold">Удалить из облака</button>
-                     <button data-action="save" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm font-semibold">Сохранить</button>
+                     <button data-action="delete" class="w-full sm:w-auto px-4 py-2 bg-red-700 hover:bg-red-800 dark:bg-red-800 dark:hover:bg-red-700 text-white rounded-md text-sm font-semibold">Удалить из облака</button>
+                     <button data-action="save" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-semibold">Сохранить</button>
                 </div>
             </footer>
             
             <!-- Sub-Modal for Data/Error -->
             <div id="profile-sub-modal" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-4 z-10">
-                <div class="bg-gray-900 border border-gray-700 rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[80vh]">
-                    <header class="flex justify-between items-center p-4 border-b border-gray-700">
+                <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[80vh]">
+                    <header class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
                         <h3 id="sub-modal-title" class="text-lg font-bold"></h3>
-                        <button data-action="close-sub-modal" class="p-2 rounded-full hover:bg-gray-700">&times;</button>
+                        <button data-action="close-sub-modal" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">&times;</button>
                     </header>
                     <main id="sub-modal-content" class="p-4 overflow-y-auto"></main>
                 </div>
@@ -120,13 +120,13 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
         let buttonHtml;
         if (hasErrors) {
             buttonHtml = `
-                <button data-action="force-sync" class="w-full sm:w-auto px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-md text-sm font-semibold flex items-center justify-center gap-2">
+                <button data-action="force-sync" class="w-full sm:w-auto px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-md text-sm font-semibold flex items-center justify-center gap-2">
                     ${Icons.AlertTriangleIcon}
                     <span>Повторить синхронизацию</span>
                 </button>`;
         } else {
              buttonHtml = `
-                <button data-action="force-sync" class="w-full sm:w-auto px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold flex items-center justify-center gap-2">
+                <button data-action="force-sync" class="w-full sm:w-auto px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md text-sm font-semibold flex items-center justify-center gap-2">
                     ${Icons.RefreshCwIcon}
                     <span>Синхронизировать сейчас</span>
                 </button>`;
@@ -138,44 +138,44 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
             const iconSVG = Icons[task.icon] || '';
             const lastSyncData = currentStatus[task.name];
             let statusText = 'Никогда не синхронизировалось';
-            let statusColor = 'text-gray-500';
+            let statusColor = 'text-gray-400 dark:text-gray-500';
             let errorDetails = null;
 
             if (lastSyncData) {
                 if (lastSyncData.error) {
                     statusText = 'Ошибка: ' + lastSyncData.error;
-                    statusColor = 'text-red-400';
+                    statusColor = 'text-red-600 dark:text-red-400';
                     errorDetails = lastSyncData.error;
                 } else if (lastSyncData.lastSync) {
                     statusText = `Синхронизировано: ${new Date(lastSyncData.lastSync).toLocaleString('ru-RU')}`;
-                    statusColor = 'text-green-400';
+                    statusColor = 'text-green-600 dark:text-green-400';
                 }
             }
             
             const tableLink = projectRef ? `https://supabase.com/dashboard/project/${projectRef}/editor/${task.tableName}` : '#';
 
             return `
-                <div class="flex items-center justify-between text-sm py-2 border-b border-gray-700/50 last:border-b-0">
+                <div class="flex items-center justify-between text-sm py-2 border-b border-gray-200 dark:border-gray-700/50 last:border-b-0">
                     <div class="flex items-center gap-3">
-                        <span class="w-5 h-5 text-gray-400">${iconSVG}</span>
+                        <span class="w-5 h-5 text-gray-500 dark:text-gray-400">${iconSVG}</span>
                         <div class="flex flex-col">
-                            <span class="font-medium text-gray-200">${task.label}</span>
+                            <span class="font-medium text-gray-800 dark:text-gray-200">${task.label}</span>
                             ${errorDetails ? 
                                 `<button data-action="analyze-error" data-task-name="${task.label}" data-error-message="${encodeURIComponent(errorDetails)}" class="text-left text-xs ${statusColor} hover:underline truncate" title="${statusText}">${statusText}</button>` :
                                 `<span class="text-xs ${statusColor}" title="${statusText}">${statusText}</span>`
                             }
                         </div>
                     </div>
-                    <div class="flex items-center gap-2 text-gray-400">
-                        <button data-action="view-data" data-table-name="${task.tableName}" data-label="${task.label}" title="Посмотреть данные" class="p-1.5 hover:bg-gray-700 rounded-full">${Icons.DatabaseIcon}</button>
-                        <a href="${tableLink}" target="_blank" title="Открыть в Supabase" class="p-1.5 hover:bg-gray-700 rounded-full ${!projectRef ? 'hidden' : ''}">${Icons.ExternalLinkIcon}</a>
+                    <div class="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                        <button data-action="view-data" data-table-name="${task.tableName}" data-label="${task.label}" title="Посмотреть данные" class="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full">${Icons.DatabaseIcon}</button>
+                        <a href="${tableLink}" target="_blank" title="Открыть в Supabase" class="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full ${!projectRef ? 'hidden' : ''}">${Icons.ExternalLinkIcon}</a>
                     </div>
                 </div>
             `;
         }).join('');
 
         syncContainer.innerHTML = `
-             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+             <div class="p-4 bg-white dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
                     <h3 class="text-lg font-semibold">Синхронизация данных</h3>
                     <div id="force-sync-button-wrapper">${buttonHtml}</div>
@@ -224,9 +224,9 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
                 try {
                     const analysis = await onAnalyzeError({ context: `Ошибка при синхронизации ${taskName}`, error: errorMessage });
                     const resultHtml = `
-                        <p class="text-sm text-gray-400 mb-2">Исходная ошибка:</p>
-                        <code class="block text-xs bg-gray-800 p-2 rounded-md mb-4 whitespace-pre-wrap">${errorMessage}</code>
-                        <div class="prose prose-invert max-w-none text-gray-300">${markdownToHTML(analysis)}</div>`;
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">Исходная ошибка:</p>
+                        <code class="block text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded-md mb-4 whitespace-pre-wrap">${errorMessage}</code>
+                        <div class="prose prose-invert max-w-none text-gray-700 dark:text-gray-300">${markdownToHTML(analysis)}</div>`;
                     renderSubModal(`Анализ ошибки: ${taskName}`, resultHtml, true);
                 } catch(e) {
                      renderSubModal(`Анализ ошибки: ${taskName}`, `Не удалось выполнить анализ: ${e.message}`, false);
@@ -248,12 +248,12 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
                     const tableHtml = `
                         <div class="overflow-x-auto">
                             <table class="w-full text-left text-xs">
-                                <thead class="border-b border-gray-600">
+                                <thead class="border-b border-gray-200 dark:border-gray-600">
                                     <tr>${headers.map(h => `<th class="p-2">${h}</th>`).join('')}</tr>
                                 </thead>
                                 <tbody>
                                     ${result.data.map(row => `
-                                        <tr class="border-b border-gray-700/50">
+                                        <tr class="border-b border-gray-100 dark:border-gray-700/50">
                                             ${headers.map(h => `<td class="p-2 align-top max-w-[200px] truncate" title="${row[h]}">${row[h] === null ? 'null' : String(row[h])}</td>`).join('')}
                                         </tr>
                                     `).join('')}

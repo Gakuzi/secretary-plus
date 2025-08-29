@@ -10,8 +10,8 @@ function createShareActions(card) {
     const telegramUrl = `https://t.me/share/url?url=${encodedLink}&text=${encodedText}`;
 
     return `
-        <div class="border-t border-gray-600 pt-2 mt-3 flex items-center gap-3">
-             <span class="text-sm text-gray-400">Поделиться:</span>
+        <div class="border-t border-gray-200 dark:border-gray-600 pt-2 mt-3 flex items-center gap-3">
+             <span class="text-sm text-gray-500 dark:text-gray-400">Поделиться:</span>
              <a href="${whatsappUrl}" target="_blank" rel="noopener noreferrer" class="share-button whatsapp" aria-label="Поделиться в WhatsApp">
                 ${Icons.WhatsAppIcon}
              </a>
@@ -28,8 +28,8 @@ function createStandardCard(card) {
     if (card.details) {
         detailsHtml = Object.entries(card.details).map(([key, value]) => `
             <div class="flex justify-between text-sm">
-                <span class="text-gray-400">${key}:</span>
-                <span class="font-medium text-right">${value}</span>
+                <span class="text-gray-500 dark:text-gray-400">${key}:</span>
+                <span class="font-medium text-gray-700 dark:text-gray-200 text-right">${value}</span>
             </div>
         `).join('');
     }
@@ -37,15 +37,15 @@ function createStandardCard(card) {
     let actionsHtml = '';
     if (card.actions) {
         actionsHtml = card.actions.map(action => {
-            let buttonClass = "px-3 py-1 rounded-md text-sm transition-colors ";
+            let buttonClass = "px-3 py-1.5 rounded-md text-sm font-semibold text-white transition-colors ";
             if (action.style === 'danger') {
-                buttonClass += 'bg-red-600 hover:bg-red-500';
+                buttonClass += 'bg-red-600 hover:bg-red-700';
             } else {
-                buttonClass += 'bg-blue-600 hover:bg-blue-500';
+                buttonClass += 'bg-blue-500 hover:bg-blue-600';
             }
 
             if (action.url) {
-                buttonClass = 'px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded-md text-sm transition-colors';
+                buttonClass = 'px-3 py-1.5 bg-gray-500 dark:bg-gray-600 hover:bg-gray-600 dark:hover:bg-gray-500 text-white rounded-md text-sm font-semibold transition-colors';
                 return `<a href="${action.url}" target="_blank" rel="noopener noreferrer" class="${buttonClass}">${action.label}</a>`;
             }
             if (action.clientAction) {
@@ -64,10 +64,10 @@ function createStandardCard(card) {
 
     return `
         <div class="flex items-center mb-2">
-            <div class="w-6 h-6 mr-2 text-gray-300">${iconSVG}</div>
-            <h4 class="font-bold">${card.title}</h4>
+            <div class="w-6 h-6 mr-2 text-gray-500 dark:text-gray-300">${iconSVG}</div>
+            <h4 class="font-bold text-gray-800 dark:text-gray-100">${card.title}</h4>
         </div>
-        ${card.text ? `<p class="text-sm text-gray-300 mb-3">${card.text}</p>` : ''}
+        ${card.text ? `<p class="text-sm text-gray-600 dark:text-gray-300 mb-3">${card.text}</p>` : ''}
         <div class="space-y-1 mb-3">
             ${detailsHtml}
         </div>
@@ -106,12 +106,12 @@ export function createCalendarViewCard(events) {
         };
 
         return `
-            <button data-action="analyze_event" data-payload='${JSON.stringify(payload)}' class="w-full flex items-start gap-3 p-2 rounded-md hover:bg-gray-900/50 transition-colors text-left">
-                <div class="w-20 text-right font-mono text-sm text-gray-300 flex-shrink-0">${timeString}</div>
-                <div class="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0"></div>
+            <button data-action="analyze_event" data-payload='${JSON.stringify(payload)}' class="w-full flex items-start gap-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors text-left">
+                <div class="w-20 text-right font-mono text-sm text-gray-500 dark:text-gray-300 flex-shrink-0">${timeString}</div>
+                <div class="w-1.5 h-1.5 rounded-full bg-blue-500 dark:bg-blue-400 mt-2 flex-shrink-0"></div>
                 <div class="flex-1 min-w-0">
-                    <p class="font-semibold text-gray-100 truncate">${event.summary}</p>
-                    ${event.description ? `<p class="text-xs text-gray-400 truncate">${event.description}</p>` : ''}
+                    <p class="font-semibold text-gray-800 dark:text-gray-100 truncate">${event.summary}</p>
+                    ${event.description ? `<p class="text-xs text-gray-500 dark:text-gray-400 truncate">${event.description}</p>` : ''}
                 </div>
             </button>
         `;
@@ -136,11 +136,11 @@ export function createTasksViewCard(tasks) {
             due: task.due,
         };
         return `
-        <button data-action="analyze_task" data-payload='${JSON.stringify(payload)}' class="w-full flex items-start gap-3 p-2 rounded-md hover:bg-gray-900/50 transition-colors text-left">
-            <div class="w-5 h-5 border-2 border-gray-500 rounded mt-0.5 flex-shrink-0"></div>
+        <button data-action="analyze_task" data-payload='${JSON.stringify(payload)}' class="w-full flex items-start gap-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors text-left">
+            <div class="w-5 h-5 border-2 border-gray-400 dark:border-gray-500 rounded mt-0.5 flex-shrink-0"></div>
             <div class="flex-1 min-w-0">
-                <p class="font-medium text-gray-100">${task.title}</p>
-                 ${task.notes ? `<p class="text-xs text-gray-400 truncate">${task.notes.replace(/\n/g, ' ')}</p>` : ''}
+                <p class="font-medium text-gray-800 dark:text-gray-100">${task.title}</p>
+                 ${task.notes ? `<p class="text-xs text-gray-500 dark:text-gray-400 truncate">${task.notes.replace(/\n/g, ' ')}</p>` : ''}
             </div>
         </button>
     `}).join('');
@@ -159,10 +159,10 @@ export function createEmailsViewCard(emails) {
         const payload = { ...email, from }; // Pass the full email object to the payload
 
         return `
-            <button data-action="analyze_email" data-payload='${JSON.stringify(payload)}' class="w-full border-b border-gray-700/50 last:border-b-0 py-2 text-left hover:bg-gray-900/50 px-2 rounded-md transition-colors">
-                <p class="font-semibold text-sm text-gray-200 truncate">${from}</p>
-                <p class="font-medium text-gray-100">${email.subject || '(Без темы)'}</p>
-                <p class="text-xs text-gray-400 truncate">${email.snippet}</p>
+            <button data-action="analyze_email" data-payload='${JSON.stringify(payload)}' class="w-full border-b border-gray-200 dark:border-gray-700/50 last:border-b-0 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-900/50 px-2 rounded-md transition-colors">
+                <p class="font-semibold text-sm text-gray-600 dark:text-gray-200 truncate">${from}</p>
+                <p class="font-medium text-gray-800 dark:text-gray-100">${email.subject || '(Без темы)'}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 truncate">${email.snippet}</p>
             </button>
         `;
     }).join('');
@@ -204,18 +204,18 @@ function createDocumentProposalCard(card) {
          const payload = JSON.stringify(action.payload || {});
          const isPrimary = action.label.includes('с содержанием');
          const buttonClass = isPrimary 
-            ? 'bg-blue-600 hover:bg-blue-500' 
-            : 'bg-gray-600 hover:bg-gray-500';
-         return `<button data-action="${action.action}" data-payload='${payload}' class="px-4 py-2 ${buttonClass} rounded-md text-sm font-semibold transition-colors">${action.label}</button>`;
+            ? 'bg-blue-500 hover:bg-blue-600' 
+            : 'bg-gray-500 hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500';
+         return `<button data-action="${action.action}" data-payload='${payload}' class="px-4 py-2 text-white ${buttonClass} rounded-md text-sm font-semibold transition-colors">${action.label}</button>`;
     }).join('');
 
     return `
         <div class="flex items-center mb-3">
-            <div class="w-6 h-6 mr-2 text-gray-300">${iconSVG}</div>
-            <h4 class="font-bold">${card.title}</h4>
+            <div class="w-6 h-6 mr-2 text-gray-500 dark:text-gray-300">${iconSVG}</div>
+            <h4 class="font-bold text-gray-800 dark:text-gray-100">${card.title}</h4>
         </div>
-        <p class="text-sm text-gray-300 mb-2">Предлагаемое содержание:</p>
-        <div class="text-sm bg-gray-900/50 p-3 rounded-md border border-gray-600 max-h-40 overflow-y-auto mb-4">
+        <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">Предлагаемое содержание:</p>
+        <div class="text-sm bg-gray-100 dark:bg-gray-900/50 p-3 rounded-md border border-gray-200 dark:border-gray-600 max-h-40 overflow-y-auto mb-4">
             ${summaryHtml}
         </div>
         <div class="flex flex-wrap gap-2 justify-end">
@@ -233,22 +233,24 @@ function createContactCard(card) {
     const payload = JSON.stringify({ name, email });
 
     let actionsHtml = '';
+    const buttonClass = "flex items-center gap-2 px-3 py-1.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-100 rounded-md font-semibold text-sm hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors";
+    
     if (phone) {
-        actionsHtml += `<a href="tel:${phone}" class="card-action-button">${Icons.PhoneIcon} Позвонить</a>`;
+        actionsHtml += `<a href="tel:${phone}" class="${buttonClass}">${Icons.PhoneIcon} Позвонить</a>`;
     }
     if (email) {
-        actionsHtml += `<a href="mailto:${email}" class="card-action-button">${Icons.EmailIcon} Написать</a>`;
-        actionsHtml += `<button data-action="create_meet_with" data-payload='${payload}' class="card-action-button">${Icons.VideoIcon} Видеовстреча</button>`;
+        actionsHtml += `<a href="mailto:${email}" class="${buttonClass}">${Icons.EmailIcon} Написать</a>`;
+        actionsHtml += `<button data-action="create_meet_with" data-payload='${payload}' class="${buttonClass}">${Icons.VideoIcon} Видеовстреча</button>`;
     }
 
      return `
         <div class="flex items-center mb-3">
-            <div class="w-6 h-6 mr-2 text-gray-300">${Icons.UsersIcon}</div>
-            <h4 class="font-bold">${name}</h4>
+            <div class="w-6 h-6 mr-2 text-gray-500 dark:text-gray-300">${Icons.UsersIcon}</div>
+            <h4 class="font-bold text-gray-800 dark:text-gray-100">${name}</h4>
         </div>
         <div class="space-y-2 mb-4">
-             ${email ? `<p class="text-sm text-blue-400 flex items-center gap-2">${Icons.EmailIcon} ${email}</p>` : ''}
-             ${phone ? `<p class="text-sm text-gray-300 flex items-center gap-2">${Icons.PhoneIcon} ${phone}</p>` : ''}
+             ${email ? `<p class="text-sm text-blue-600 dark:text-blue-400 flex items-center gap-2">${Icons.EmailIcon} ${email}</p>` : ''}
+             ${phone ? `<p class="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">${Icons.PhoneIcon} ${phone}</p>` : ''}
         </div>
         <div class="flex flex-wrap gap-2">
             ${actionsHtml}
@@ -265,31 +267,32 @@ function createDirectActionCard(card) {
     
     let actionButtonHtml = '';
     let errorMessage = '';
+    const buttonClass = "inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md font-semibold transition-colors";
 
     if (action === 'call') {
         if (phone) {
-            actionButtonHtml = `<a href="tel:${phone}" class="card-primary-action-button">${Icons.PhoneIcon} Позвонить ${name}</a>`;
+            actionButtonHtml = `<a href="tel:${phone}" class="${buttonClass}">${Icons.PhoneIcon} Позвонить ${name}</a>`;
         } else {
-            errorMessage = `<p class="text-sm text-red-400">У этого контакта не указан номер телефона.</p>`;
+            errorMessage = `<p class="text-sm text-red-500 dark:text-red-400">У этого контакта не указан номер телефона.</p>`;
         }
     } else if (action === 'email') {
         if (email) {
-            actionButtonHtml = `<a href="mailto:${email}" class="card-primary-action-button">${Icons.EmailIcon} Написать ${name}</a>`;
+            actionButtonHtml = `<a href="mailto:${email}" class="${buttonClass}">${Icons.EmailIcon} Написать ${name}</a>`;
         } else {
-            errorMessage = `<p class="text-sm text-red-400">У этого контакта не указан email.</p>`;
+            errorMessage = `<p class="text-sm text-red-500 dark:text-red-400">У этого контакта не указан email.</p>`;
         }
     }
 
     return `
         <div class="flex items-center mb-3">
-            <div class="w-6 h-6 mr-2 text-gray-300">${iconSVG}</div>
-            <h4 class="font-bold">${card.title}</h4>
+            <div class="w-6 h-6 mr-2 text-gray-500 dark:text-gray-300">${iconSVG}</div>
+            <h4 class="font-bold text-gray-800 dark:text-gray-100">${card.title}</h4>
         </div>
         <div class="mt-4 text-center">
             ${actionButtonHtml}
             ${errorMessage}
         </div>
-        <div class="text-center mt-3 text-xs text-gray-400">
+        <div class="text-center mt-3 text-xs text-gray-500 dark:text-gray-400">
             ${phone ? `<span>${phone}</span>` : ''}
             ${phone && email ? `<span class="mx-2">&middot;</span>` : ''}
             ${email ? `<span>${email}</span>` : ''}
@@ -308,18 +311,18 @@ function createContactChoiceCard(card) {
         const payload = JSON.stringify(person || {});
 
         return `
-            <button class="choice-item" data-action="analyze_contact" data-payload='${payload}'>
-                <p class="font-semibold text-white">${name}</p>
-                ${email ? `<p class="text-xs text-blue-400"><a href="mailto:${email}" class="hover:underline" onclick="event.stopPropagation()">${email}</a></p>` : ''}
-                ${phone ? `<p class="text-xs text-gray-400"><a href="tel:${phone}" class="hover:underline" onclick="event.stopPropagation()">${phone}</a></p>` : ''}
+            <button class="choice-item w-full p-3 rounded-md bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors text-left" data-action="analyze_contact" data-payload='${payload}'>
+                <p class="font-semibold text-gray-800 dark:text-white">${name}</p>
+                ${email ? `<p class="text-xs text-blue-600 dark:text-blue-400"><a href="mailto:${email}" class="hover:underline" onclick="event.stopPropagation()">${email}</a></p>` : ''}
+                ${phone ? `<p class="text-xs text-gray-500 dark:text-gray-400"><a href="tel:${phone}" class="hover:underline" onclick="event.stopPropagation()">${phone}</a></p>` : ''}
             </button>
         `;
     }).join('');
 
     return `
         <div class="flex items-center mb-2">
-            <div class="w-6 h-6 mr-2 text-gray-300">${iconSVG}</div>
-            <h4 class="font-bold">${card.title}</h4>
+            <div class="w-6 h-6 mr-2 text-gray-500 dark:text-gray-300">${iconSVG}</div>
+            <h4 class="font-bold text-gray-800 dark:text-gray-100">${card.title}</h4>
         </div>
         <div class="space-y-2 mt-2">
             ${optionsHtml}
@@ -334,13 +337,13 @@ function createDocumentChoiceCard(card) {
         const modifiedDate = doc.modified_time ? new Date(doc.modified_time).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
         
         return `
-            <button class="choice-item" data-action="analyze_document" data-payload='${payload}'>
+            <button class="choice-item w-full p-2.5 rounded-md bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors text-left" data-action="analyze_document" data-payload='${payload}'>
                 <div class="flex items-center justify-between w-full">
                     <div class="flex items-center min-w-0">
                         <img src="${doc.icon_link}" class="w-4 h-4 mr-2 flex-shrink-0" alt="doc-icon"/>
-                        <p class="font-semibold text-white truncate">${doc.name}</p>
+                        <p class="font-semibold text-gray-800 dark:text-white truncate">${doc.name}</p>
                     </div>
-                    ${modifiedDate ? `<span class="text-xs text-gray-400 flex-shrink-0 ml-2">${modifiedDate}</span>` : ''}
+                    ${modifiedDate ? `<span class="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0 ml-2">${modifiedDate}</span>` : ''}
                 </div>
             </button>
         `;
@@ -348,8 +351,8 @@ function createDocumentChoiceCard(card) {
     
      return `
         <div class="flex items-center mb-2">
-            <div class="w-6 h-6 mr-2 text-gray-300">${iconSVG}</div>
-            <h4 class="font-bold">${card.title}</h4>
+            <div class="w-6 h-6 mr-2 text-gray-500 dark:text-gray-300">${iconSVG}</div>
+            <h4 class="font-bold text-gray-800 dark:text-gray-100">${card.title}</h4>
         </div>
         <div class="space-y-2 mt-2">
             ${optionsHtml}
@@ -359,14 +362,14 @@ function createDocumentChoiceCard(card) {
 
 export function createResultCardElement(card) {
     const cardElement = document.createElement('div');
-    cardElement.className = 'mt-2 border border-gray-600 rounded-lg p-3 bg-gray-700/50';
+    cardElement.className = 'mt-2 border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white/50 dark:bg-gray-700/50';
 
     if (card.htmlContent) {
         const iconSVG = Icons[card.icon] || '';
         cardElement.innerHTML = `
             <div class="flex items-center mb-2">
-                <div class="w-6 h-6 mr-2 text-gray-300">${iconSVG}</div>
-                <h4 class="font-bold">${card.title}</h4>
+                <div class="w-6 h-6 mr-2 text-gray-500 dark:text-gray-300">${iconSVG}</div>
+                <h4 class="font-bold text-gray-800 dark:text-gray-100">${card.title}</h4>
             </div>
             ${card.htmlContent}
         `;

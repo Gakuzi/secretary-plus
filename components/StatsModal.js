@@ -47,13 +47,13 @@ export function createStatsModal(statsData, onClose) {
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
 
     modalOverlay.innerHTML = `
-        <div class="bg-gray-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-lg shadow-xl" id="stats-content">
-            <header class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
+        <div class="bg-white dark:bg-gray-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-lg shadow-xl" id="stats-content">
+            <header class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                 <h2 class="text-xl sm:text-2xl font-bold flex items-center gap-2">${ChartBarIcon} Статистика</h2>
-                <button id="close-stats" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Закрыть статистику">&times;</button>
+                <button id="close-stats" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" aria-label="Закрыть статистику">&times;</button>
             </header>
             
-            <main class="p-4 sm:p-6 flex-1 flex items-center justify-center">
+            <main class="p-4 sm:p-6 flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900/50">
                 <!-- Chart or empty state will be rendered here -->
             </main>
         </div>
@@ -64,7 +64,7 @@ export function createStatsModal(statsData, onClose) {
 
     if (dataEntries.length === 0) {
         mainContent.innerHTML = `
-            <div class="text-center text-gray-400">
+            <div class="text-center text-gray-500 dark:text-gray-400">
                 <p class="font-semibold text-lg">Данных пока нет</p>
                 <p>Начните использовать ассистента, и здесь появится статистика выполненных действий.</p>
             </div>
@@ -79,6 +79,14 @@ export function createStatsModal(statsData, onClose) {
 
         const labels = dataEntries.map(([key]) => ACTION_NAMES[key] || key);
         const data = dataEntries.map(([, value]) => value);
+        
+        const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const legendColor = isDarkMode ? '#d1d5db' : '#374151';
+        const tooltipBgColor = isDarkMode ? '#111827' : '#ffffff';
+        const tooltipTitleColor = isDarkMode ? '#f9fafb' : '#111827';
+        const tooltipBodyColor = isDarkMode ? '#d1d5db' : '#4b5563';
+        const tooltipBorderColor = isDarkMode ? '#4b5563' : '#e5e7eb';
+
 
         // Use a timeout to ensure the canvas is in the DOM and has dimensions before Chart.js tries to render to it.
         setTimeout(() => {
@@ -91,7 +99,7 @@ export function createStatsModal(statsData, onClose) {
                         label: 'Количество вызовов',
                         data: data,
                         backgroundColor: CHART_COLORS,
-                        borderColor: '#1f2937', // bg-gray-800
+                        borderColor: isDarkMode ? '#1f2937' : '#f9fafb', // dark:bg-gray-800 vs light:bg-gray-50
                         borderWidth: 2,
                         hoverOffset: 8
                     }]
@@ -103,7 +111,7 @@ export function createStatsModal(statsData, onClose) {
                         legend: {
                             position: 'top',
                             labels: {
-                                color: '#d1d5db', // text-gray-300
+                                color: legendColor,
                                 font: {
                                     size: 14,
                                     family: "'Inter', sans-serif"
@@ -119,10 +127,10 @@ export function createStatsModal(statsData, onClose) {
                                 size: 14,
                                 family: "'Inter', sans-serif"
                             },
-                            backgroundColor: '#111827', // bg-gray-900
-                            titleColor: '#f9fafb', // text-gray-50
-                            bodyColor: '#d1d5db', // text-gray-300
-                            borderColor: '#4b5563', // border-gray-600
+                            backgroundColor: tooltipBgColor,
+                            titleColor: tooltipTitleColor,
+                            bodyColor: tooltipBodyColor,
+                            borderColor: tooltipBorderColor,
                             borderWidth: 1,
                         }
                     }

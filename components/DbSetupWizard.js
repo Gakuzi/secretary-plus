@@ -110,10 +110,10 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                 contentHtml = markdownToHTML(`
                     <p class="mb-4">Этот мастер поможет вам настроить **Управляющий воркер** — безопасный сервис для автоматического обновления схемы вашей базы данных Supabase.</p>
                     <p class="mb-4">Это необходимо для добавления новых функций в приложение без риска потери данных.</p>
-                    <div class="p-3 bg-gray-900 border border-gray-700 rounded-md text-sm space-y-2">
+                    <div class="p-3 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md text-sm space-y-2">
                         <p><strong>Что вам понадобится:</strong></p>
-                        <ul class="list-disc list-inside text-gray-400">
-                            <li>Аккаунт <a href="https://cloudflare.com" target="_blank" class="text-blue-400 hover:underline">Cloudflare</a> (бесплатного тарифа достаточно).</li>
+                        <ul class="list-disc list-inside text-gray-600 dark:text-gray-400">
+                            <li>Аккаунт <a href="https://cloudflare.com" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">Cloudflare</a> (бесплатного тарифа достаточно).</li>
                             <li>Токен доступа к вашему аккаунту Supabase.</li>
                         </ul>
                     </div>
@@ -123,11 +123,11 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
             case 'get-token':
                 contentHtml = `
                     <p class="mb-4">Сначала необходимо сгенерировать токен доступа (Access Token) для вашего аккаунта Supabase.</p>
-                    <ol class="list-decimal list-inside space-y-2 text-gray-300 mb-4">
-                        <li>Откройте <a href="https://supabase.com/dashboard/account/tokens" target="_blank" class="text-blue-400 hover:underline">страницу токенов Supabase</a> в новой вкладке.</li>
+                    <ol class="list-decimal list-inside space-y-2 text-gray-700 dark:text-gray-300 mb-4">
+                        <li>Откройте <a href="https://supabase.com/dashboard/account/tokens" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">страницу токенов Supabase</a> в новой вкладке.</li>
                         <li>Нажмите <strong>Generate New Token</strong>.</li>
                         <li>Дайте ему имя (например, \`secretary-plus-manager\`) и нажмите <strong>Generate token</strong>.</li>
-                        <li class="font-semibold text-yellow-300">Сразу скопируйте токен. Он больше не будет показан.</li>
+                        <li class="font-semibold text-yellow-500 dark:text-yellow-300">Сразу скопируйте токен. Он больше не будет показан.</li>
                     </ol>
                     <p>Этот токен понадобится на следующем шаге. Не закрывайте его и ни с кем не делитесь.</p>
                 `;
@@ -136,13 +136,13 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
             case 'create-worker':
                 contentHtml = `
                     <p class="mb-4">Теперь создайте новый Cloudflare Worker и безопасно сохраните в него ваш токен.</p>
-                    <ol class="list-decimal list-inside space-y-2 text-gray-300">
-                        <li>В <a href="https://dash.cloudflare.com/" target="_blank" class="text-blue-400 hover:underline">панели Cloudflare</a>, перейдите в <strong>Workers & Pages</strong> и создайте новый воркер.</li>
+                    <ol class="list-decimal list-inside space-y-2 text-gray-700 dark:text-gray-300">
+                        <li>В <a href="https://dash.cloudflare.com/" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">панели Cloudflare</a>, перейдите в <strong>Workers & Pages</strong> и создайте новый воркер.</li>
                         <li>Перейдите в настройки созданного воркера: <strong>Settings &rarr; Variables</strong>.</li>
                         <li>В разделе **Environment Variables**, нажмите **Add variable**.</li>
                         <li>Заполните поля:
-                            <ul class="list-disc list-inside ml-6 my-2 p-3 bg-gray-900 rounded-md border border-gray-600 font-mono text-sm">
-                                <li>Variable name: <code class="text-green-400">SUPABASE_MANAGEMENT_TOKEN</code></li>
+                            <ul class="list-disc list-inside ml-6 my-2 p-3 bg-gray-100 dark:bg-gray-900 rounded-md border border-gray-200 dark:border-gray-600 font-mono text-sm">
+                                <li>Variable name: <code class="text-green-600 dark:text-green-400">SUPABASE_MANAGEMENT_TOKEN</code></li>
                                 <li>Value: <em>(вставьте ваш токен из Supabase)</em></li>
                             </ul>
                         </li>
@@ -157,15 +157,15 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                     <p class="mb-4">Вернитесь в редактор кода вашего воркера, удалите всё содержимое и вставьте код ниже.</p>
                      <div class="mb-4">
                         <label for="project-ref-input" class="font-semibold text-sm">Ваш Supabase Project ID:</label>
-                        <input type="text" id="project-ref-input" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 font-mono text-sm" value="${state.projectRef}" placeholder="abcdefghijklmnopqrst">
+                        <input type="text" id="project-ref-input" class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md p-2 mt-1 font-mono text-sm" value="${state.projectRef}" placeholder="abcdefghijklmnopqrst">
                         <p class="text-xs text-gray-500 mt-1">ID был автоматически определен из ваших настроек. При необходимости исправьте его.</p>
                     </div>
-                    <div class="rounded-md border border-gray-700">
-                        <div class="flex justify-between items-center bg-gray-900 px-4 py-2 text-xs text-gray-400 rounded-t-md">
+                    <div class="rounded-md border border-gray-200 dark:border-gray-700">
+                        <div class="flex justify-between items-center bg-gray-100 dark:bg-gray-900 px-4 py-2 text-xs text-gray-500 dark:text-gray-400 rounded-t-md">
                             <span>JAVASCRIPT (CLOUDFLARE WORKER)</span>
-                            <button class="text-xs font-semibold bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded-md transition-colors" data-action="copy-code">Копировать</button>
+                            <button class="text-xs font-semibold bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 px-2 py-1 rounded-md transition-colors" data-action="copy-code">Копировать</button>
                         </div>
-                        <pre class="p-4 bg-gray-900/50 rounded-b-md overflow-x-auto"><code id="worker-code-block" class="text-sm whitespace-pre font-mono">${codeWithRef}</code></pre>
+                        <pre class="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-b-md overflow-x-auto"><code id="worker-code-block" class="text-sm whitespace-pre font-mono">${codeWithRef}</code></pre>
                     </div>
                      <p class="mt-4">После вставки кода нажмите <strong>Save and Deploy</strong> в интерфейсе Cloudflare.</p>
                 `;
@@ -175,11 +175,11 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
             case 'test-save':
                 let statusHtml = '';
                 if(state.testStatus === 'testing') {
-                    statusHtml = `<div class="flex items-center gap-2 text-yellow-400"><div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div><span>Тестирование...</span></div>`;
+                    statusHtml = `<div class="flex items-center gap-2 text-yellow-600 dark:text-yellow-400"><div class="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div><span>Тестирование...</span></div>`;
                 } else if (state.testStatus === 'ok') {
-                    statusHtml = `<div class="flex items-center gap-2 text-green-400 font-semibold">✓ ${state.testMessage}</div>`;
+                    statusHtml = `<div class="flex items-center gap-2 text-green-600 dark:text-green-400 font-semibold">✓ ${state.testMessage}</div>`;
                 } else if (state.testStatus === 'error') {
-                    statusHtml = `<div class="flex flex-col text-red-400"><span class="font-semibold">✗ Ошибка</span><span class="text-xs">${state.testMessage}</span></div>`;
+                    statusHtml = `<div class="flex flex-col text-red-600 dark:text-red-400"><span class="font-semibold">✗ Ошибка</span><span class="text-xs">${state.testMessage}</span></div>`;
                 }
 
                 contentHtml = `
@@ -187,11 +187,11 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                     <div class="mb-4">
                         <label for="worker-url-input" class="font-semibold text-sm">URL Управляющего Воркера:</label>
                         <div class="flex items-stretch gap-2 mt-1">
-                            <input type="url" id="worker-url-input" class="flex-1 bg-gray-700 border border-gray-600 rounded-md p-2 font-mono text-sm" placeholder="https://my-manager.example.workers.dev" value="${state.workerUrl}">
-                            <button data-action="test-worker" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md font-semibold text-sm" ${state.testStatus === 'testing' ? 'disabled' : ''}>Тест</button>
+                            <input type="url" id="worker-url-input" class="flex-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md p-2 font-mono text-sm" placeholder="https://my-manager.example.workers.dev" value="${state.workerUrl}">
+                            <button data-action="test-worker" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md font-semibold text-sm" ${state.testStatus === 'testing' ? 'disabled' : ''}>Тест</button>
                         </div>
                     </div>
-                    <div id="test-status-container" class="min-h-[40px] p-3 bg-gray-900/50 rounded-md flex items-center justify-center text-sm">
+                    <div id="test-status-container" class="min-h-[40px] p-3 bg-gray-100 dark:bg-gray-900/50 rounded-md flex items-center justify-center text-sm">
                         ${statusHtml || '<span class="text-gray-500">Ожидание теста...</span>'}
                     </div>
                 `;
@@ -200,25 +200,25 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
 
         const footerHtml = `
             <div class="flex-1">
-                ${state.currentStep > 0 ? `<button data-action="back" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold">Назад</button>` : ''}
+                ${state.currentStep > 0 ? `<button data-action="back" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md text-sm font-semibold">Назад</button>` : ''}
             </div>
             ${state.currentStep < WIZARD_STEPS.length - 1 ? 
-                `<button data-action="next" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed" ${isNextDisabled ? 'disabled' : ''}>Далее</button>` : 
-                `<button data-action="finish" class="px-6 py-2 bg-green-600 hover:bg-green-700 rounded-md font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed" ${state.testStatus !== 'ok' ? 'disabled' : ''}>Сохранить и закрыть</button>`
+                `<button data-action="next" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold disabled:bg-gray-400 dark:disabled:bg-gray-500 disabled:cursor-not-allowed" ${isNextDisabled ? 'disabled' : ''}>Далее</button>` : 
+                `<button data-action="finish" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold disabled:bg-gray-400 dark:disabled:bg-gray-500 disabled:cursor-not-allowed" ${state.testStatus !== 'ok' ? 'disabled' : ''}>Сохранить и закрыть</button>`
             }
         `;
 
         wizardElement.innerHTML = `
-            <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col relative animate-fadeIn">
-                <header class="p-4 border-b border-gray-700 flex justify-between items-center">
+            <div class="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 rounded-lg shadow-2xl w-full max-w-2xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col relative animate-fadeIn">
+                <header class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                     <div>
                         <h2 class="text-xl font-bold">Мастер настройки базы данных</h2>
-                        <p class="text-sm text-gray-400">Шаг ${state.currentStep + 1} / ${WIZARD_STEPS.length}: ${stepConfig.title}</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Шаг ${state.currentStep + 1} / ${WIZARD_STEPS.length}: ${stepConfig.title}</p>
                     </div>
-                    <button data-action="close" class="p-2 rounded-full hover:bg-gray-700">&times;</button>
+                    <button data-action="close" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">&times;</button>
                 </header>
-                <main class="flex-1 p-6 overflow-y-auto">${contentHtml}</main>
-                <footer class="p-4 border-t border-gray-700 flex justify-between items-center">${footerHtml}</footer>
+                <main class="flex-1 p-6 overflow-y-auto bg-gray-50 dark:bg-gray-900/50">${contentHtml}</main>
+                <footer class="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">${footerHtml}</footer>
             </div>
         `;
     };
