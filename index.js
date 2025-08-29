@@ -1,3 +1,4 @@
+
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
@@ -16,6 +17,8 @@ import { createCameraView } from './components/CameraView.js';
 import { SettingsIcon, ChartBarIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 import { SUPABASE_CONFIG, GOOGLE_CLIENT_ID } from './config.js';
+import { createMigrationModal } from './components/MigrationModal.js';
+import { MIGRATIONS, LATEST_SCHEMA_VERSION } from './services/supabase/migrations.js';
 
 // --- UTILITY ---
 const APP_STRUCTURE_CONTEXT = `
@@ -25,6 +28,7 @@ const APP_STRUCTURE_CONTEXT = `
 - services/geminiService.js: Все вызовы к Gemini API.
 - services/google/GoogleServiceProvider.js: Все взаимодействия с Google API.
 - services/supabase/SupabaseService.js: Все взаимодействия с Supabase.
+- services/supabase/migrations.js: SQL-скрипты для автоматического обновления схемы БД.
 - components/SetupWizard.js: Мастер первоначальной настройки.
 - components/SettingsModal.js: Окно для управления настройками после входа.
 - components/ProfileModal.js: Окно профиля, где отображается статус синхронизации.
@@ -528,6 +532,71 @@ function setupEmailPolling() {
     emailCheckInterval = setInterval(checkEmails, 60000);
 }
 
+// --- SCHEMA MIGRATION ---
+async function runSchemaMigrations() {
+    if (!state.settings.isSupabaseEnabled || !state.settings.managementWorkerUrl) {
+        return;
+    }
+
+    const { element: modal, updateState } = createMigrationModal();
+    modalContainer.appendChild(modal);
+
+    const performMigration = async () => {
+        try {
+            updateState('checking');
+            let currentVersion = 0;
+
+            try {
+                const versionResult = await supabaseService.executeSql(state.settings.managementWorkerUrl, 'SELECT version FROM public.schema_migrations WHERE id = 1;');
+                if (versionResult && versionResult.length > 0) {
+                    currentVersion = versionResult[0].version;
+                }
+            } catch (e) {
+                if (e.message.includes('relation "public.schema_migrations" does not exist')) {
+                    currentVersion = 0;
+                } else {
+                    throw e;
+                }
+            }
+
+            if (currentVersion >= LATEST_SCHEMA_VERSION) {
+                updateState('success', 'Ваша база данных в актуальном состоянии.');
+                return new Promise(resolve => setTimeout(() => { modal.remove(); resolve(); }, 1500));
+            }
+
+            const migrationsToRun = MIGRATIONS.filter(m => m.version > currentVersion).sort((a, b) => a.version - b.version);
+
+            for (const migration of migrationsToRun) {
+                updateState('migrating', `Шаг ${migration.version}/${LATEST_SCHEMA_VERSION}: ${migration.description}`);
+                await supabaseService.executeSql(state.settings.managementWorkerUrl, migration.sql);
+                const updateVersionSql = `UPDATE public.schema_migrations SET version = ${migration.version}, last_updated = now() WHERE id = 1;`;
+                await supabaseService.executeSql(state.settings.managementWorkerUrl, updateVersionSql);
+            }
+
+            updateState('success');
+            return new Promise(resolve => setTimeout(() => { modal.remove(); resolve(); }, 1500));
+
+        } catch (error) {
+            console.error("Migration failed:", error);
+            updateState('error', null, error.message);
+            // This promise will not resolve, halting app execution until fixed.
+            return new Promise((_, reject) => {
+                 modal.addEventListener('click', e => {
+                    const action = e.target.dataset.action;
+                    if (action === 'retry') {
+                        performMigration().then(() => reject()); // Resolve outer promise on success
+                    } else if (action === 'open-wizard') {
+                        modal.remove();
+                        showDbSetupWizard();
+                    }
+                });
+            });
+        }
+    };
+
+    return performMigration();
+}
+
 // --- MAIN APP INITIALIZATION ---
 async function main() {
     settingsButton.innerHTML = SettingsIcon;
@@ -544,11 +613,13 @@ async function main() {
     if (!settings.geminiApiKey) {
          wizardContainer.innerHTML = '';
          const wizard = createSetupWizard({
-            onComplete: (newSettings) => {
+            onComplete: async (newSettings) => {
                 state.settings = newSettings;
                 saveSettings(newSettings);
                 wizardContainer.innerHTML = '';
-                initializeAppServices().then(renderMainContent);
+                await initializeAppServices();
+                await runSchemaMigrations();
+                renderMainContent();
             },
             onExit: () => {
                 wizardContainer.innerHTML = '';
@@ -562,6 +633,7 @@ async function main() {
          wizardContainer.appendChild(wizard);
     } else {
         await initializeAppServices();
+        await runSchemaMigrations();
         renderMainContent();
     }
 }
