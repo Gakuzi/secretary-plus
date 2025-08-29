@@ -881,8 +881,8 @@ export const findProxiesWithGemini = async ({ apiKey, proxyUrl }) => {
     }
     const ai = new GoogleGenAI(clientOptions);
 
-    const systemInstruction = `Ты — эксперт по сетевым протоколам. Твоя задача — сгенерировать список из 10 публичных, бесплатных прокси-серверов (HTTP или HTTPS). Для каждого прокси укажи его предполагаемую геолокацию (страна). Верни результат в виде JSON-массива объектов. Пример: [{"url": "http://1.2.3.4:8080", "location": "Germany"}, ...]. Если не можешь сгенерировать, верни пустой массив.`;
-    const prompt = `Предоставь, пожалуйста, 10 URL-адресов публичных прокси-серверов с их предполагаемой геолокацией.`;
+    const systemInstruction = `Ты — эксперт по сетевым протоколам. Твоя задача — сгенерировать список из 10 публичных, бесплатных прокси-серверов (ТОЛЬКО HTTPS). Для каждого прокси укажи его предполагаемую геолокацию (страна). Верни результат в виде JSON-массива объектов. Пример: [{"url": "https://proxy.example.com:8080", "location": "Germany"}, ...]. Если не можешь сгенерировать, верни пустой массив.`;
+    const prompt = `Предоставь, пожалуйста, 10 URL-адресов публичных HTTPS прокси-серверов с их предполагаемой геолокацией.`;
 
     try {
         const response = await ai.models.generateContent({
@@ -896,7 +896,7 @@ export const findProxiesWithGemini = async ({ apiKey, proxyUrl }) => {
                     items: {
                         type: Type.OBJECT,
                         properties: {
-                           url: { type: Type.STRING, description: 'A valid proxy URL, e.g., http://host:port' },
+                           url: { type: Type.STRING, description: 'A valid proxy URL, e.g., https://host:port' },
                            location: { type: Type.STRING, description: 'The estimated country of the proxy' }
                         }
                     },
