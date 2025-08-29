@@ -99,16 +99,16 @@ if (!window.isSecretaryPlusAppInitialized) {
         authContainer.innerHTML = '';
         if (state.isGoogleConnected && state.userProfile) {
             const profileElement = document.createElement('div');
-            profileElement.className = 'flex items-center space-x-2';
+            profileElement.className = 'flex items-center space-x-2 cursor-pointer';
             profileElement.innerHTML = `
                 <div class="relative">
                     <img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full ring-2 ring-gray-600 ring-offset-2 ring-offset-gray-800">
                 </div>
             `;
+            profileElement.addEventListener('click', () => showSettings('profile'));
             authContainer.appendChild(profileElement);
         } else {
-             // In the new flow, the auth button is primarily in the Welcome screen / Settings modal.
-             // This can be kept empty or show a generic state.
+             // Header is empty when logged out. Login is initiated from Welcome or Settings.
         }
     }
 
@@ -295,11 +295,8 @@ if (!window.isSecretaryPlusAppInitialized) {
     // --- EVENT HANDLERS & LOGIC ---
 
     async function handleLogin() {
-        if (!state.isSupabaseReady) {
-            showSystemError('Подключение к облаку не удалось. Пожалуйста, проверьте консоль на наличие ошибок.');
-            return;
-        }
-        await supabaseService.signInWithGoogle();
+        // This function is now deprecated in favor of the setup guide link
+        window.location.href = './setup-guide.html';
     }
 
     async function handleLogout() {
@@ -519,7 +516,7 @@ if (!window.isSecretaryPlusAppInitialized) {
     }
 
     // --- MODAL & VIEW MANAGEMENT ---
-    function showSettings(initialTab = 'connections') {
+    function showSettings(initialTab = 'profile') {
         settingsModalContainer.innerHTML = '';
         const modal = createSettingsModal(state.settings, {
             isGoogleConnected: state.isGoogleConnected,
@@ -534,12 +531,14 @@ if (!window.isSecretaryPlusAppInitialized) {
             isSyncing: state.isSyncing,
             onForceSync: () => runAllSyncs(true),
             syncStatus: state.syncStatus,
+            onProxyAdd: handleProxyAdd,
             onProxyUpdate: handleProxyUpdate,
             onProxyDelete: handleProxyDelete,
             onProxyTest: handleProxyTest,
             onFindAndUpdateProxies: handleFindAndUpdateProxies,
             onCleanupProxies: handleCleanupProxies,
             onProxyReorder: handleProxyReorder,
+            onProxyRefresh: handleProxyRefresh,
         });
         settingsModalContainer.appendChild(modal);
         settingsModalContainer.classList.remove('hidden');
@@ -584,6 +583,18 @@ if (!window.isSecretaryPlusAppInitialized) {
     function hideCameraView() { cameraViewContainer.classList.add('hidden'); }
     
     // --- Proxy Handlers for Settings Modal ---
+    async function handleProxyAdd(proxyData) {
+        try {
+            const newProxy = await supabaseService.addProxy(proxyData);
+            state.proxies.push(newProxy);
+            // sort by priority again
+            state.proxies.sort((a,b) => a.priority - b.priority);
+            showSettings('proxies');
+        } catch (error) {
+            console.error("Error adding proxy:", error);
+            showSystemError(`Не удалось добавить прокси: ${error.message}`);
+        }
+    }
 
     async function handleProxyUpdate(id, updateData) {
         try {
@@ -626,6 +637,10 @@ if (!window.isSecretaryPlusAppInitialized) {
     }
     
     async function handleFindAndUpdateProxies(event) {
+        if (!state.supabaseUser) {
+            showSystemError("Необходимо войти в аккаунт для поиска прокси.");
+            return;
+        }
         const button = event.target;
         button.disabled = true;
         button.textContent = 'Поиск...';
@@ -699,6 +714,16 @@ if (!window.isSecretaryPlusAppInitialized) {
         }
     }
 
+    async function handleProxyRefresh() {
+        try {
+           state.proxies = await supabaseService.getProxies();
+           showSettings('proxies');
+        } catch (error) {
+           console.error("Failed to refresh proxies:", error);
+           showSystemError("Не удалось обновить список прокси.");
+        }
+    }
+
 
     // --- GLOBAL EVENT LISTENERS ---
     
@@ -735,9 +760,8 @@ if (!window.isSecretaryPlusAppInitialized) {
     });
     
     // Listen for completion of the setup guide in another window/tab
-    window.addEventListener('storage', (e) => {
-        if (e.key === 'setup_completed' && e.newValue === 'true') {
-            localStorage.removeItem('setup_completed');
+    window.addEventListener('message', (event) => {
+        if (event.data === 'setup_completed') {
             window.location.reload();
         }
     });

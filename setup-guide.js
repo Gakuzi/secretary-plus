@@ -274,9 +274,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     buttons.goToApp.addEventListener('click', () => {
-        localStorage.setItem('setup_completed', 'true');
-        // This will trigger the listener in the main app to reload
-        window.close(); // Close the setup tab
+        // Redirect the main window to the app, forcing a reload with the new session.
+        if (window.opener) {
+            window.opener.postMessage('setup_completed', window.location.origin);
+            window.close();
+        } else {
+            window.location.href = './index.html';
+        }
     });
 
     document.body.addEventListener('click', e => {

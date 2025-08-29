@@ -92,7 +92,7 @@ function timeAgo(dateString) {
 
 
 export function createSettingsModal(currentSettings, authState, handlers) {
-    const { onSave, onClose, onLogin, onLogout, isSyncing, onForceSync, syncStatus, onProxyAdd, onProxyUpdate, onProxyDelete, onProxyTest, onFindAndUpdateProxies, onCleanupProxies, onProxyReorder } = handlers;
+    const { onSave, onClose, onLogin, onLogout, isSyncing, onForceSync, syncStatus, onProxyAdd, onProxyUpdate, onProxyDelete, onProxyTest, onFindAndUpdateProxies, onCleanupProxies, onProxyReorder, onProxyRefresh } = handlers;
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
     
@@ -106,7 +106,7 @@ export function createSettingsModal(currentSettings, authState, handlers) {
             <main class="flex-1 flex flex-col md:flex-row overflow-hidden">
                 <aside class="w-52 border-r border-gray-700 p-4 hidden md:block">
                     <nav class="flex flex-col space-y-2" id="desktop-settings-nav">
-                        <a href="#connections" class="settings-tab-button active text-left" data-tab="connections">Аккаунт</a>
+                        <a href="#profile" class="settings-tab-button active text-left" data-tab="profile">Профиль</a>
                         <a href="#proxies" class="settings-tab-button" data-tab="proxies">Прокси</a>
                         <a href="#general" class="settings-tab-button" data-tab="general">Общие</a>
                         <a href="#service-map" class="settings-tab-button" data-tab="service-map">Назначение сервисов</a>
@@ -123,38 +123,34 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                     </div>
 
                     <div id="settings-tabs-content">
-                        <!-- Connections/Account Tab -->
-                        <div id="tab-connections" class="settings-tab-content space-y-6">
+                        <!-- Profile Tab -->
+                        <div id="tab-profile" class="settings-tab-content space-y-6">
+                            ${authState.isGoogleConnected && authState.userProfile ? `
                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                                 <h3 class="text-lg font-semibold text-gray-200">Подключение аккаунта Google</h3>
-                                 <p class="text-sm text-gray-400 mt-1 mb-4">
-                                    Для работы ассистента необходимо войти в аккаунт Google. Все ваши настройки будут безопасно сохранены в облаке.
-                                 </p>
+                                 <h3 class="text-lg font-semibold text-gray-200 mb-4">Ваш профиль</h3>
                                  <div class="flex items-center justify-between">
-                                    <div class="flex items-center gap-3">
-                                        ${authState.isGoogleConnected && authState.userProfile ? `
-                                            <img src="${authState.userProfile.imageUrl}" alt="${authState.userProfile.name}" class="w-10 h-10 rounded-full">
-                                            <div>
-                                                <p class="font-semibold">${authState.userProfile.name}</p>
-                                                <p class="text-xs text-gray-400">${authState.userProfile.email}</p>
-                                            </div>
-                                        ` : `
-                                            <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">?</div>
-                                            <div>
-                                                <p class="font-semibold">Требуется вход</p>
-                                                <p class="text-xs text-gray-400">Войдите, чтобы начать</p>
-                                            </div>
-                                        `}
+                                    <div class="flex items-center gap-4">
+                                        <img src="${authState.userProfile.imageUrl}" alt="${authState.userProfile.name}" class="w-16 h-16 rounded-full">
+                                        <div>
+                                            <p class="font-bold text-xl">${authState.userProfile.name}</p>
+                                            <p class="text-sm text-gray-400">${authState.userProfile.email}</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                    ${authState.isGoogleConnected 
-                                        ? `<button id="modal-logout-button" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md transition-colors text-sm font-semibold">Выйти</button>`
-                                        : `<button id="modal-login-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors text-sm font-semibold">Войти через Google</button>`
-                                    }
-                                    </div>
+                                    <button id="modal-logout-button" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md transition-colors text-sm font-semibold">Выйти</button>
                                 </div>
                             </div>
-                            <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                            ` : `
+                            <div class="p-6 bg-gray-900/50 rounded-lg border border-gray-700 text-center">
+                                 <h3 class="text-lg font-semibold text-gray-200">Требуется вход</h3>
+                                 <p class="text-sm text-gray-400 mt-2 mb-6">
+                                    Для работы ассистента и сохранения настроек необходимо войти в аккаунт Google.
+                                 </p>
+                                 <a href="./setup-guide.html" class="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors text-white no-underline">
+                                     Запустить мастер настройки
+                                 </a>
+                            </div>
+                            `}
+                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
                                 <h3 class="text-lg font-semibold text-gray-200 mb-2">Статус подключения к облаку</h3>
                                 <div class="flex items-center gap-3">
                                     <div class="w-6 h-6 ${authState.isSupabaseReady ? 'text-green-400' : 'text-red-400'}">${SupabaseIcon}</div>
@@ -163,7 +159,6 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                                         <p class="text-xs text-gray-400">${authState.isSupabaseReady ? 'Синхронизация и быстрый поиск активны.' : 'Функции ограничены. Проверьте консоль.'}</p>
                                     </div>
                                 </div>
-                                <p class="text-xs text-gray-400 mt-4">Управление подключением теперь происходит через <a href="./setup-guide.html" class="text-blue-400 hover:underline">Мастер настройки</a>.</p>
                             </div>
                         </div>
 
@@ -182,19 +177,20 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                                 </div>
                             </div>
                              <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                                <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
                                     <div>
                                         <h3 class="text-lg font-semibold text-gray-200">Список прокси-серверов</h3>
                                         <p class="text-sm text-gray-400">Перетаскивайте для изменения приоритета.</p>
                                     </div>
                                     <div class="flex gap-2">
-                                        <button id="find-proxies-ai-button" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm font-semibold whitespace-nowrap disabled:bg-indigo-800 disabled:cursor-not-allowed">Найти ИИ</button>
-                                        <button id="add-proxy-button" class="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-sm font-semibold whitespace-nowrap">Добавить</button>
+                                        <button id="proxy-refresh-button" class="px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold whitespace-nowrap" ${!authState.isGoogleConnected ? 'disabled' : ''}>Обновить список</button>
+                                        <button id="find-proxies-ai-button" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm font-semibold whitespace-nowrap disabled:bg-indigo-800 disabled:cursor-not-allowed" ${!authState.isGoogleConnected ? 'disabled' : ''}>Найти ИИ</button>
+                                        <button id="add-proxy-manual-button" class="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-sm font-semibold whitespace-nowrap" ${!authState.isGoogleConnected ? 'disabled' : ''}>Добавить вручную</button>
                                     </div>
                                 </div>
                                 <div id="proxy-list-container" class="space-y-2"></div>
                                  <div class="mt-4 pt-4 border-t border-gray-700">
-                                    <button id="cleanup-proxies-button" class="w-full px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold disabled:bg-gray-700 disabled:cursor-not-allowed">Проверить все и удалить нерабочие</button>
+                                    <button id="cleanup-proxies-button" class="w-full px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold disabled:bg-gray-700 disabled:cursor-not-allowed" ${!authState.isGoogleConnected ? 'disabled' : ''}>Проверить все и удалить нерабочие</button>
                                 </div>
                             </div>
                              <div id="proxy-editor-container"></div>
@@ -397,9 +393,6 @@ export function createSettingsModal(currentSettings, authState, handlers) {
         timezoneSelect.disabled = true;
     }
     
-    const loginButton = modalOverlay.querySelector('#modal-login-button');
-    if (loginButton) loginButton.addEventListener('click', onLogin);
-    
     const logoutButton = modalOverlay.querySelector('#modal-logout-button');
     if (logoutButton) logoutButton.addEventListener('click', onLogout);
 
@@ -463,6 +456,60 @@ export function createSettingsModal(currentSettings, authState, handlers) {
         const proxyListContainer = proxyTab.querySelector('#proxy-list-container');
         const findProxiesAiButton = proxyTab.querySelector('#find-proxies-ai-button');
         const cleanupProxiesButton = proxyTab.querySelector('#cleanup-proxies-button');
+        const addProxyManualButton = proxyTab.querySelector('#add-proxy-manual-button');
+        const proxyRefreshButton = proxyTab.querySelector('#proxy-refresh-button');
+        const proxyEditorContainer = proxyTab.querySelector('#proxy-editor-container');
+        
+        function showProxyEditor() {
+            proxyEditorContainer.innerHTML = `
+                <div class="mt-4 p-4 bg-gray-900 rounded-lg border border-gray-700">
+                    <h4 class="text-md font-semibold mb-3">Добавить прокси вручную</h4>
+                    <div class="space-y-3">
+                        <div>
+                            <label for="proxy-url-input" class="block text-sm font-medium text-gray-400 mb-1">URL</label>
+                            <input type="text" id="proxy-url-input" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm" placeholder="https://proxy.example.com">
+                            <div id="proxy-url-error" class="text-red-400 text-xs mt-1 h-4"></div>
+                        </div>
+                        <div>
+                            <label for="proxy-alias-input" class="block text-sm font-medium text-gray-400 mb-1">Псевдоним (необязательно)</label>
+                            <input type="text" id="proxy-alias-input" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm" placeholder="Например, 'Мой личный прокси'">
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2 mt-4">
+                        <button id="cancel-proxy-edit" class="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 rounded-md text-sm">Отмена</button>
+                        <button id="save-proxy-edit" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-md text-sm">Сохранить</button>
+                    </div>
+                </div>
+            `;
+            
+            proxyEditorContainer.querySelector('#save-proxy-edit').onclick = () => {
+                const urlInput = proxyEditorContainer.querySelector('#proxy-url-input');
+                const url = urlInput.value.trim();
+                const errorDiv = proxyEditorContainer.querySelector('#proxy-url-error');
+
+                if (!url) {
+                    errorDiv.textContent = 'URL не может быть пустым.';
+                    return;
+                }
+                try {
+                    new URL(url); // Validate URL format
+                    errorDiv.textContent = '';
+                } catch (_) {
+                    errorDiv.textContent = 'Неверный формат URL.';
+                    return;
+                }
+
+                const proxyData = {
+                    url,
+                    alias: proxyEditorContainer.querySelector('#proxy-alias-input').value.trim()
+                };
+                onProxyAdd(proxyData); 
+                proxyEditorContainer.innerHTML = '';
+            };
+            proxyEditorContainer.querySelector('#cancel-proxy-edit').onclick = () => {
+                proxyEditorContainer.innerHTML = '';
+            };
+        }
 
         function showProxyTestModal(proxy) {
             const existingModal = document.getElementById('proxy-test-modal');
@@ -623,6 +670,8 @@ export function createSettingsModal(currentSettings, authState, handlers) {
             if (e.target.matches('.proxy-active-toggle')) onProxyUpdate(proxy.id, { is_active: e.target.checked });
         });
         
+        addProxyManualButton.addEventListener('click', showProxyEditor);
+        proxyRefreshButton.addEventListener('click', onProxyRefresh);
         findProxiesAiButton.addEventListener('click', onFindAndUpdateProxies);
         cleanupProxiesButton.addEventListener('click', onCleanupProxies);
 
