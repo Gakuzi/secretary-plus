@@ -4,6 +4,7 @@ import { SupabaseService } from './services/supabase/SupabaseService.js';
 import { callGemini, analyzeGenericErrorWithGemini, testProxyConnection } from './services/geminiService.js';
 import { getSettings, saveSettings, getSyncStatus, saveSyncStatus } from './utils/storage.js';
 import { createSettingsModal } from './components/SettingsModal.js';
+import { createProfileModal } from './components/ProfileModal.js';
 import { createStatsModal } from './components/StatsModal.js';
 import { createHelpModal } from './components/HelpModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
@@ -35,6 +36,7 @@ if (!window.isSecretaryPlusAppInitialized) {
     - components/Message.js: Рендерит отдельные сообщения в чате.
     - components/ResultCard.js: Рендерит интерактивные карточки в сообщениях чата.
     - components/SettingsModal.js: Рендерит UI настроек, где пользователь вводит все ключи.
+    - components/ProfileModal.js: Рендерит UI профиля пользователя для управления облачными данными.
     - components/HelpModal.js: Рендерит UI 'Центра помощи' с ИИ-анализом ошибок.
     - setup-guide.html: Содержит SQL-скрипт для настройки базы данных Supabase. Ошибка типа 'column does not exist' часто означает, что пользователю нужно повторно запустить скрипт из этого файла.
     `;
@@ -81,6 +83,8 @@ if (!window.isSecretaryPlusAppInitialized) {
     const helpModalContainer = document.getElementById('help-modal-container');
     const statsModalContainer = document.getElementById('stats-modal-container');
     const cameraViewContainer = document.getElementById('camera-view-container');
+    const profileModalContainer = document.getElementById('profile-modal-container');
+
 
     // --- ERROR HANDLING ---
     /**
@@ -97,7 +101,19 @@ if (!window.isSecretaryPlusAppInitialized) {
     // --- RENDER FUNCTIONS ---
     function renderAuth() {
         authContainer.innerHTML = '';
-        if (state.isGoogleConnected && state.userProfile) {
+        if (state.isGoogleConnected && state.userProfile && state.supabaseUser) {
+            const profileButton = document.createElement('button');
+            profileButton.className = 'flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500 rounded-full';
+            profileButton.setAttribute('aria-label', 'Открыть профиль пользователя');
+            profileButton.innerHTML = `
+                <div class="relative">
+                    <img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full ring-2 ring-gray-600 ring-offset-2 ring-offset-gray-800">
+                </div>
+            `;
+            profileButton.addEventListener('click', showProfileModal);
+            authContainer.appendChild(profileButton);
+        } else if (state.isGoogleConnected && state.userProfile) {
+            // Render non-clickable profile for direct Google connection
             const profileElement = document.createElement('div');
             profileElement.className = 'flex items-center space-x-2';
             profileElement.innerHTML = `
@@ -386,6 +402,8 @@ if (!window.isSecretaryPlusAppInitialized) {
     }
 
     async function handleLogout() {
+        // Hide profile modal if it is open
+        hideProfileModal();
         if (state.supabaseUser) { // Logged in via Supabase
             await supabaseService.signOut();
         } else { // Logged in directly
@@ -450,6 +468,43 @@ if (!window.isSecretaryPlusAppInitialized) {
         }
     }
     
+    async function handleSaveProfileSettings(newSettings) {
+        state.settings = newSettings;
+        saveSettings(newSettings); // Save locally first
+
+        if (state.supabaseUser && supabaseService) {
+            try {
+                await supabaseService.saveUserSettings(newSettings);
+                console.log("Profile settings saved to Supabase.");
+                hideProfileModal();
+                // Re-apply settings that affect background services
+                if (state.settings.enableAutoSync) startAutoSync(); else stopAutoSync();
+                setupEmailPolling();
+            } catch (error) {
+                console.error("Error saving profile settings:", error);
+                showSystemError(`Ошибка при сохранении настроек: ${error.message}`);
+            }
+        } else {
+            hideProfileModal();
+        }
+    }
+    
+    async function handleDeleteSettings() {
+        if (!supabaseService || !state.supabaseUser) return;
+        if (confirm('Вы уверены, что хотите удалить все ваши настройки из облака? Локальные настройки останутся, но не будут больше синхронизироваться.')) {
+            try {
+                await supabaseService.deleteUserSettings();
+                // After deleting, revert to a clean state from localStorage
+                state.settings = getSettings();
+                alert('Настройки из облака успешно удалены.');
+                hideProfileModal();
+            } catch (error) {
+                showSystemError(`Не удалось удалить настройки: ${error.message}`);
+            }
+        }
+    }
+
+
     function handleNewChat() {
         if (state.messages.length === 0) return;
         
@@ -814,6 +869,29 @@ ${payload.body}`;
     function hideSettings() {
         settingsModalContainer.classList.add('hidden');
         settingsModalContainer.innerHTML = '';
+    }
+
+    function showProfileModal() {
+        if (!state.isGoogleConnected || !state.userProfile || !state.supabaseUser) return;
+
+        const modal = createProfileModal(
+            state.userProfile,
+            state.settings,
+            {
+                onClose: hideProfileModal,
+                onSave: handleSaveProfileSettings,
+                onLogout: handleLogout,
+                onDelete: handleDeleteSettings
+            }
+        );
+        profileModalContainer.innerHTML = '';
+        profileModalContainer.appendChild(modal);
+        profileModalContainer.classList.remove('hidden');
+    }
+
+    function hideProfileModal() {
+        profileModalContainer.classList.add('hidden');
+        profileModalContainer.innerHTML = '';
     }
     
     // --- Proxy Management Handlers ---

@@ -412,6 +412,22 @@ export class SupabaseService {
             throw error;
         }
     }
+
+    async deleteUserSettings() {
+        const { data: { user } } = await this.client.auth.getUser();
+        if (!user) throw new Error("User not authenticated.");
+
+        const { error } = await this.client
+            .from('user_settings')
+            .delete()
+            .eq('user_id', user.id);
+
+        if (error) {
+            console.error('Error deleting user settings:', error);
+            throw error;
+        }
+        return { success: true };
+    }
     
     // --- Proxy Management ---
     async getProxies() {
