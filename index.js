@@ -482,7 +482,7 @@ function showStatsModal() {
     modalContainer.appendChild(modal);
 }
 
-function showHelpModal() {
+function showHelpModal(options = {}) {
     modalContainer.innerHTML = '';
     const onRelaunchWizard = () => {
         if (confirm('Это действие удалит ваши текущие настройки из браузера. Вы уверены?')) {
@@ -504,7 +504,8 @@ function showHelpModal() {
         onClose: () => modalContainer.innerHTML = '',
         settings: state.settings,
         analyzeErrorFn,
-        onRelaunchWizard
+        onRelaunchWizard,
+        initialTab: options.initialTab || 'error-analysis'
     });
     modalContainer.appendChild(modal);
 }
@@ -572,6 +573,15 @@ document.body.addEventListener('click', (e) => {
         showSetupWizard();
         return;
     }
+    
+    // New handler for opening help from settings
+    const openHelpLink = e.target.closest('#open-help-from-settings');
+    if (openHelpLink) {
+        e.preventDefault();
+        modalContainer.innerHTML = ''; // Close current modal
+        showHelpModal({ initialTab: 'instructions' });
+        return;
+    }
 });
 
 // --- APP INITIALIZATION ---
@@ -609,7 +619,7 @@ helpButton.innerHTML = QuestionMarkCircleIcon;
 
 settingsButton.addEventListener('click', showSettingsModal);
 statsButton.addEventListener('click', showStatsModal);
-helpButton.addEventListener('click', showHelpModal);
+helpButton.addEventListener('click', () => showHelpModal());
 
 // Start the app
 showInitialScreen();

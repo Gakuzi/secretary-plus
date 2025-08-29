@@ -34,24 +34,27 @@ function createGuideFromMarkdown(markdown) {
         part.trim().split('\n').forEach(line => {
             if (line.startsWith('```')) {
                 if (inCodeBlock) {
-                    const isManagementWorker = codeContent.includes('YOUR_PROJECT_REF');
+                    const isManagementWorker = codeContent.includes('const PROJECT_REF = \'YOUR_PROJECT_REF\'');
                     let interactiveSection = '';
                     if (isManagementWorker) {
                          interactiveSection = `
                             <div class="p-3 bg-gray-900 border-t border-gray-700 text-sm">
-                                <label for="project-ref-input" class="font-semibold">Ваш Project ID:</label>
-                                <input type="text" id="project-ref-input" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 font-mono text-sm" value="${projectRef}" placeholder="вставьте сюда ваш ID проекта">
+                                <label for="project-ref-input-${partIndex}" class="font-semibold">Ваш Project ID:</label>
+                                <input type="text" id="project-ref-input-${partIndex}" data-target-code-id="code-block-${partIndex}" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 font-mono text-sm" value="${projectRef}" placeholder="вставьте сюда ваш ID проекта">
                                 <p class="text-xs text-gray-500 mt-1">ID был автоматически определен из ваших настроек Supabase.</p>
                             </div>
                          `;
                     }
+                    // Replace placeholder in the initial render if value is available
+                    const initialCode = projectRef ? codeContent.replace('YOUR_PROJECT_REF', projectRef) : codeContent;
+
                     partHtml += `
                         <div class="guide-code-block" data-block-id="code-block-${partIndex}">
                             <div class="flex justify-between items-center bg-gray-900 px-4 py-2 border-b border-gray-700 text-xs text-gray-400">
                                 <span>${codeLang.toUpperCase()}</span>
                                 <button class="copy-code-button" data-target-id="code-block-${partIndex}">Копировать</button>
                             </div>
-                            <pre><code id="code-block-${partIndex}">${codeContent.trim()}</code></pre>
+                            <pre><code id="code-block-${partIndex}" data-original-code="${encodeURIComponent(codeContent.trim())}">${initialCode.trim()}</code></pre>
                              ${interactiveSection}
                         </div>`;
                     inCodeBlock = false;
@@ -82,7 +85,7 @@ function createGuideFromMarkdown(markdown) {
     return `<div class="prose prose-invert max-w-none">${finalHtml}</div>`;
 }
 
-export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchWizard }) {
+export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchWizard, initialTab = 'error-analysis' }) {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
     
@@ -183,6 +186,20 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
     };
 
     // --- Event Listeners ---
+    modalOverlay.addEventListener('input', (e) => {
+        const projectRefInput = e.target.closest('input[data-target-code-id]');
+        if (projectRefInput) {
+            const codeId = projectRefInput.dataset.targetCodeId;
+            const codeElement = modalOverlay.querySelector(`#${codeId}`);
+            if (codeElement) {
+                const projectRef = projectRefInput.value.trim();
+                const originalCode = decodeURIComponent(codeElement.dataset.originalCode);
+                const placeholder = projectRef || 'YOUR_PROJECT_REF';
+                codeElement.textContent = originalCode.replace('YOUR_PROJECT_REF', placeholder);
+            }
+        }
+    });
+
     modalOverlay.addEventListener('click', async (e) => {
         // Close modal
         if (e.target.closest('#close-help') || e.target === modalOverlay) {
@@ -214,18 +231,11 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
         if(copyButton) {
             const targetId = copyButton.dataset.targetId;
             const codeElement = modalOverlay.querySelector(`#${targetId}`);
-            let codeToCopy = codeElement.textContent;
-            
-            // Handle interactive block
-            const projectRefInput = modalOverlay.querySelector('#project-ref-input');
-            if (projectRefInput && codeToCopy.includes('YOUR_PROJECT_REF')) {
-                const projectRef = projectRefInput.value.trim();
-                if (projectRef) {
-                    codeToCopy = codeToCopy.replace('YOUR_PROJECT_REF', projectRef);
-                } else {
-                    alert('Пожалуйста, введите ваш Project ID.');
-                    return;
-                }
+            const codeToCopy = codeElement.textContent;
+
+            if (codeToCopy.includes('YOUR_PROJECT_REF')) {
+                alert('Пожалуйста, введите ваш Project ID в поле ниже, прежде чем копировать.');
+                return;
             }
 
             navigator.clipboard.writeText(codeToCopy).then(() => {
@@ -284,6 +294,16 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
             window.open('https://aistudio.google.com/app/apps/drive/1-YFIo56NWOtYuQYpZUWiPcMY323lJPuK?showAssistant=true&showPreview=true', '_blank');
         }
     });
+    
+    // Set initial tab after rendering
+    if (initialTab) {
+        const tabButton = modalOverlay.querySelector(`.settings-tab-button[data-tab="${initialTab}"]`);
+        if (tabButton) {
+            // Use timeout to ensure all elements are in the DOM before simulating click
+            setTimeout(() => tabButton.click(), 0);
+        }
+    }
+
 
     return modalOverlay;
 }
