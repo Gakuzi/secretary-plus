@@ -10,9 +10,9 @@ const WIZARD_STEPS = [
 ];
 
 const MANAGEMENT_WORKER_CODE = `
-// **FIX**: Reverted CDN to unpkg.com with a full, explicit module path for maximum compatibility in Cloudflare Workers.
-// This is an alternative to esm.sh which was causing module resolution errors.
-import postgres from 'https://unpkg.com/postgres@3.4.4/esm/index.js';
+// **FIX**: Replaced the incompatible 'postgres.js' library with '@neondatabase/serverless',
+// a modern driver that connects over WebSockets and is fully compatible with Cloudflare Workers.
+import { Pool } from 'https://esm.sh/@neondatabase/serverless@4.0.2';
 
 // Use the modern ES Modules format for Cloudflare Workers
 export default {
@@ -28,60 +28,49 @@ export default {
             });
         }
 
-        // Standard CORS headers for all actual responses
         const corsHeaders = {
             'Access-Control-Allow-Origin': '*',
             'Content-Type': 'application/json',
         };
 
-        // Handle simple GET requests for status checks (e.g., browser pings)
         if (request.method === 'GET') {
             return new Response(JSON.stringify({ status: 'ok' }), { headers: corsHeaders });
         }
-
-        // Only allow POST method for executing queries
         if (request.method !== 'POST') {
             return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: corsHeaders });
         }
 
+        let pool;
         try {
-            // In ES Modules format, secrets are on the 'env' object
             if (!env.DATABASE_URL) {
                 throw new Error('DATABASE_URL secret is not defined in worker settings.');
             }
+            
+            pool = new Pool({ connectionString: env.DATABASE_URL });
 
-            // Establish connection to the database
-            const sql = postgres(env.DATABASE_URL, {
-                ssl: 'require',      // Required for Supabase connections
-                max: 1,              // Use a single connection in a serverless environment
-                connect_timeout: 10, // 10-second timeout for the connection
-            });
-
-            // Get the SQL query from the request body
             const { query } = await request.json();
             if (!query) {
                 return new Response(JSON.stringify({ error: 'The "query" parameter is missing in the request body.' }), { status: 400, headers: corsHeaders });
             }
 
-            // Execute the provided query
-            const result = await sql.unsafe(query);
+            const result = await pool.query(query);
 
-            // IMPORTANT: Always close the connection in a serverless function
-            await sql.end();
-
-            // Return the successful result
-            return new Response(JSON.stringify(result), {
+            // Return the successful result (result.rows is the array of data)
+            return new Response(JSON.stringify(result.rows), {
                 status: 200,
                 headers: corsHeaders,
             });
 
         } catch (error) {
             console.error('Worker Error:', error.message);
-            // Return a detailed error message for easier debugging on the client-side
             return new Response(JSON.stringify({ error: \`Worker execution failed: \${error.message}\` }), {
                 status: 500,
                 headers: corsHeaders,
             });
+        } finally {
+            if (pool) {
+                await pool.end();
+            }
         }
     }
 };
