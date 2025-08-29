@@ -17,9 +17,19 @@ DROP TABLE IF EXISTS public.action_stats CASCADE;
 DROP TABLE IF EXISTS public.proxies CASCADE;
 
 
--- Создаем типы ENUM для ролей и отправителей
-DROP TYPE IF EXISTS public.user_role;
-CREATE TYPE public.user_role AS ENUM ('owner', 'admin', 'manager', 'user');
+-- Создаем или обновляем типы ENUM для ролей и отправителей
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+        CREATE TYPE public.user_role AS ENUM ('owner', 'admin', 'manager', 'user');
+    ELSE
+        -- Добавляем значения, если их нет. Это безопасно для повторного запуска.
+        ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'owner';
+        ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'admin';
+        ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'manager';
+        ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'user';
+    END IF;
+END$$;
 
 DO $$
 BEGIN
