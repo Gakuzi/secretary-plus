@@ -16,8 +16,6 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         foundProxies: [],
         savedProxies: [],
         isLoading: false,
-        testingProxies: new Map(), // Map<url, AbortController>
-        testResults: new Map(), // Map<url, resultObject>
     };
 
     let supabaseService = null;
@@ -43,40 +41,109 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         }
     };
     
+    const showProxyTestModal = ({ url }) => {
+        const testModalContainer = wizardElement.querySelector('#proxy-test-modal-container');
+        if (!testModalContainer) return;
+
+        let testState = {
+            status: 'idle', // 'idle', 'testing', 'result'
+            result: null,
+        };
+        
+        const renderTestModalContent = () => {
+            let content = '';
+            switch (testState.status) {
+                case 'testing':
+                    content = `<div class="text-center p-8"><div class="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div><p class="mt-4 text-gray-300">Выполняется тест...</p></div>`;
+                    break;
+                case 'result':
+                    const isSuccess = testState.result.status === 'ok';
+                    content = `
+                        <div class="p-6 text-center">
+                             <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${isSuccess ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">
+                                ${isSuccess ? Icons.CheckSquareIcon.replace(/width="24" height="24"/, 'width="40" height="40"') : Icons.AlertTriangleIcon.replace(/width="24" height="24"/, 'width="40" height="40"')}
+                            </div>
+                            <h4 class="text-xl font-bold">${isSuccess ? 'Тест пройден успешно' : 'Тест не пройден'}</h4>
+                             <div class="mt-4 space-y-2 text-sm text-left bg-gray-900 p-4 rounded-lg">
+                                <div class="test-result-item"><span class="test-result-label">Статус:</span> <span class="test-result-value ${isSuccess ? 'text-green-400' : 'text-red-400'}">${testState.result.status}</span></div>
+                                <div class="test-result-item"><span class="test-result-label">Скорость:</span> <span class="test-result-value">${testState.result.speed !== null ? `${testState.result.speed}ms` : 'N/A'}</span></div>
+                                <div class="test-result-item"><span class="test-result-label">Геолокация:</span> <span class="test-result-value">${testState.result.geolocation || 'N/A'}</span></div>
+                                ${!isSuccess ? `<div class="pt-2 border-t border-gray-700 mt-2"><p class="test-result-label">Сообщение:</p><p class="text-red-300 text-xs mt-1">${testState.result.message}</p></div>` : ''}
+                            </div>
+                        </div>
+                        <footer class="p-4 bg-gray-700/50 flex justify-end gap-3">
+                            ${isSuccess ? `<button data-action="add-tested-proxy" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold text-sm">Добавить в мой список</button>` : ''}
+                            <button data-action="close-test-modal" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md font-semibold text-sm">Закрыть</button>
+                        </footer>`;
+                    break;
+                default:
+                    content = `
+                        <div class="p-6 text-center"><h4 class="text-xl font-bold">Готовы к тесту?</h4><p class="font-mono text-sm bg-gray-900 p-2 rounded-md my-4 break-all">${url}</p></div>
+                        <footer class="p-4 bg-gray-700/50 flex justify-end gap-3"><button data-action="cancel-test-modal" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md font-semibold text-sm">Отмена</button><button data-action="start-test" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold text-sm">Начать тест</button></footer>`;
+                    break;
+            }
+            return content;
+        };
+
+        const runTest = async () => {
+            testState.status = 'testing';
+            renderTestModal();
+            const result = await testProxyConnection({ proxyUrl: url });
+            testState.result = result;
+            testState.status = 'result';
+            renderTestModal();
+        };
+
+        const renderTestModal = () => {
+            testModalContainer.innerHTML = `
+                <div class="absolute inset-0 bg-black/70 flex items-center justify-center p-4 z-20">
+                    <div class="bg-gray-800 border border-gray-700 rounded-lg shadow-xl w-full max-w-md flex flex-col overflow-hidden animate-fadeIn">
+                         <header class="p-4 border-b border-gray-700"><h3 class="text-lg font-bold">Тестирование прокси</h3></header>
+                         <main id="test-modal-main-content">${renderTestModalContent()}</main>
+                    </div>
+                </div>`;
+        };
+        
+        const closeTestModal = () => testModalContainer.innerHTML = '';
+
+        testModalContainer.onclick = async (e) => {
+            const target = e.target.closest('[data-action]');
+            if (!target) return;
+            switch(target.dataset.action) {
+                case 'start-test': await runTest(); break;
+                case 'close-test-modal':
+                case 'cancel-test-modal': closeTestModal(); break;
+                case 'add-tested-proxy':
+                     try {
+                        const newProxy = await supabaseService.addProxy({ 
+                            url: url, 
+                            last_status: 'ok',
+                            last_speed_ms: testState.result.speed,
+                            geolocation: testState.result.geolocation,
+                            is_active: true,
+                        });
+                        state.savedProxies.push(newProxy);
+                        state.foundProxies = state.foundProxies.filter(p => p.url !== url);
+                        render();
+                        closeTestModal();
+                    } catch (err) { alert(`Не удалось сохранить прокси: ${err.message}`); }
+                    break;
+            }
+        };
+        renderTestModal();
+    };
+
     const renderProxyManager = () => {
         const renderFound = () => {
             if (state.isLoading) return `<p class="text-sm text-gray-500 text-center py-4">Поиск...</p>`;
             if (state.foundProxies.length === 0) return `<p class="text-sm text-gray-500 text-center py-4">Нажмите "Найти", чтобы начать.</p>`;
             
-            return state.foundProxies.map(p => {
-                const isTesting = state.testingProxies.has(p.url);
-                const result = state.testResults.get(p.url);
-                let statusIndicatorClass = 'status-untested';
-                let actionButton;
-
-                if (isTesting) {
-                    statusIndicatorClass = 'status-testing';
-                    actionButton = `<button data-action="cancel-test" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-yellow-600 hover:bg-yellow-500 rounded">Отмена</button>`;
-                } else if (result) {
-                    if (result.status === 'ok') {
-                        statusIndicatorClass = 'status-ok';
-                        actionButton = `<button data-action="use-proxy" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-500 rounded">Добавить</button>`;
-                    } else {
-                        statusIndicatorClass = 'status-error';
-                        actionButton = `<button data-action="test-proxy" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 rounded">Тест</button>`;
-                    }
-                } else {
-                    actionButton = `<button data-action="test-proxy" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 rounded">Тест</button>`;
-                }
-
-                return `
+            return state.foundProxies.map(p => `
                  <div class="proxy-list-item">
-                    <div class="status-indicator ${statusIndicatorClass}"></div>
+                    <div class="status-indicator status-untested"></div>
                     <div class="flex-1 font-mono text-xs truncate" title="${p.url}">${p.location ? `${p.location}: ` : ''}${p.url}</div>
-                    ${result && result.status === 'ok' && result.speed ? `<span class="text-xs text-gray-400">${result.speed}ms</span>` : ''}
-                    ${actionButton}
-                </div>`;
-            }).join('');
+                    <button data-action="test-proxy" data-url="${p.url}" class="px-2 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 rounded">Тест</button>
+                </div>`).join('');
         };
         
         const renderSaved = () => {
@@ -187,7 +254,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 break;
             case 'proxies':
                 contentEl.innerHTML = renderProxyManager();
-                addNextButton();
+                addNextButton('Пропустить');
                 break;
             case 'finish':
                 contentEl.innerHTML = `
@@ -209,9 +276,9 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
     
     render = () => {
         const stepIndex = STEPS.findIndex(s => s.id === STEPS[state.currentStep].id);
-        const stepConfig = STEPS[state.currentStep];
+        const stepConfig = STEPS[stepIndex];
         wizardElement.innerHTML = `
-            <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col">
+            <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col relative">
                 <header class="p-4 border-b border-gray-700 flex justify-between items-center">
                     <div>
                         <h1 class="text-xl font-bold">Мастер Настройки Секретарь+</h1>
@@ -221,6 +288,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 </header>
                 <main class="flex-1 p-6 overflow-y-auto" id="wizard-content"></main>
                 <footer class="p-4 border-t border-gray-700 flex justify-between items-center" id="wizard-footer"></footer>
+                <div id="proxy-test-modal-container"></div>
             </div>`;
         renderStepContent();
     };
@@ -237,7 +305,6 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         
         let nextStepIndex = state.currentStep + 1;
         
-        // Intelligent skip logic
         if (nextStepIndex < STEPS.length && STEPS[nextStepIndex].id === 'gemini' && state.config.geminiApiKey) {
             nextStepIndex++;
         }
@@ -270,9 +337,8 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
     };
 
     const handleLogin = async () => {
-        // Omit non-serializable or transient state before saving to sessionStorage.
-        const { testingProxies, testResults, ...stateToSave } = state;
-        const resumeData = { ...stateToSave, currentStep: 2 }; // Return to Auth step
+        const { ...stateToSave } = state;
+        const resumeData = { ...stateToSave, currentStep: 2 };
         sessionStorage.setItem('wizardState', JSON.stringify(resumeData));
 
         if (state.authChoice === 'supabase') {
@@ -317,27 +383,6 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         render();
     };
 
-    const runProxyTest = async (url) => {
-        if (state.testingProxies.has(url)) return;
-
-        const abortController = new AbortController();
-        state.testingProxies.set(url, abortController);
-        render();
-
-        try {
-            const result = await testProxyConnection({ proxyUrl: url, signal: abortController.signal });
-            if (result.status !== 'cancelled') {
-                state.testResults.set(url, result);
-            }
-        } catch (error) {
-            console.error("Test failed unexpectedly:", error);
-            state.testResults.set(url, { status: 'error', message: 'Неожиданная ошибка клиента.' });
-        } finally {
-            state.testingProxies.delete(url);
-            render();
-        }
-    };
-
     const handleAction = async (e) => {
         const target = e.target.closest('[data-action], [data-choice]');
         if (!target) return;
@@ -356,10 +401,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             case 'next': await handleNext(); break;
             case 'back': handleBack(); break;
             case 'login': await handleLogin(); break;
-            case 'exit': 
-                state.testingProxies.forEach(c => c.abort());
-                onExit(); 
-                break;
+            case 'exit': onExit(); break;
             case 'finish': 
                 collectInputs();
                 if (supabaseService) {
@@ -368,9 +410,13 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 onComplete(state.config); 
                 break;
             case 'find-proxies': {
+                collectInputs();
+                if (!state.config.geminiApiKey) {
+                    alert('Пожалуйста, введите ваш Gemini API ключ на предыдущем шаге, чтобы использовать эту функцию.');
+                    return;
+                }
                 state.isLoading = true;
                 state.foundProxies = [];
-                state.testResults.clear();
                 render();
                 try {
                     const proxies = await findProxiesWithGemini({ apiKey: state.config.geminiApiKey });
@@ -384,35 +430,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 break;
             }
             case 'test-proxy': {
-                await runProxyTest(target.dataset.url);
-                break;
-            }
-            case 'cancel-test': {
-                const controller = state.testingProxies.get(target.dataset.url);
-                if (controller) {
-                    controller.abort();
-                }
-                break;
-            }
-            case 'use-proxy': {
-                 const url = target.dataset.url;
-                 const result = state.testResults.get(url);
-                 if (!result) return;
-                try {
-                    const newProxy = await supabaseService.addProxy({ 
-                        url: url, 
-                        last_status: 'ok',
-                        last_speed_ms: result.speed,
-                        geolocation: result.geolocation,
-                        is_active: true,
-                    });
-                    state.savedProxies.push(newProxy);
-                    state.foundProxies = state.foundProxies.filter(p => p.url !== url);
-                    state.testResults.delete(url);
-                    render();
-                } catch (err) {
-                    alert(`Не удалось сохранить прокси: ${err.message}`);
-                }
+                showProxyTestModal({ url: target.dataset.url });
                 break;
             }
         }
