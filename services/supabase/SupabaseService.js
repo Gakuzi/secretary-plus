@@ -645,4 +645,56 @@ export class SupabaseService {
         if (error) throw error;
         return { success: true };
     }
+
+    // --- Chat Analytics ---
+    async createNewSession() {
+        const { data: { user } } = await this.client.auth.getUser();
+        if (!user) throw new Error("User not authenticated.");
+
+        const { data, error } = await this.client
+            .from('sessions')
+            .insert({ user_id: user.id })
+            .select('id')
+            .single();
+        
+        if (error) throw error;
+        return data.id;
+    }
+
+    async logChatMessage(message, sessionId) {
+        const { data: { user } } = await this.client.auth.getUser();
+        if (!user) return; // Don't throw, just fail silently.
+
+        const payload = {
+            user_id: user.id,
+            session_id: sessionId,
+            sender: message.sender,
+            text_content: message.text,
+            image_metadata: message.image ? { mimeType: message.image.mimeType } : null,
+            card_data: message.card,
+            contextual_actions: message.contextualActions
+        };
+
+        const { error } = await this.client.from('chat_history').insert(payload);
+        if (error) {
+            console.error("Failed to log chat message:", error);
+        }
+    }
+    
+    async getChatHistoryForAdmin() {
+        const { data, error } = await this.client
+            .from('chat_history')
+            .select(`
+                *,
+                user:profiles(full_name, avatar_url, user_data:users(email))
+            `)
+            .order('created_at', { ascending: false })
+            .limit(500); // Limit to a reasonable number for performance
+
+        if (error) {
+            console.error("Error fetching chat history for admin:", error);
+            throw error;
+        }
+        return data;
+    }
 }

@@ -14,7 +14,7 @@ function markdownToHTML(text) {
 }
 
 
-export function createProfileModal(currentUserProfile, allUsers, settings, handlers, initialSyncStatus, syncTasks, supabaseUrl) {
+export function createProfileModal(currentUserProfile, allUsers, chatHistory, settings, handlers, initialSyncStatus, syncTasks, supabaseUrl) {
     const { onClose, onSave, onLogout, onDelete, onForceSync, onAnalyzeError, onViewData, onLaunchDbWizard, onUpdateUserRole } = handlers;
     
     let activeTab = 'profile';
@@ -67,10 +67,10 @@ export function createProfileModal(currentUserProfile, allUsers, settings, handl
             </div>
         `;
 
-        const syncTabHtml = `<div id="tab-sync" class="settings-tab-content hidden"></div>`;
+        const syncTabHtml = `<div id="tab-sync" class="settings-tab-content"></div>`;
 
         const adminTabHtml = isAdmin ? `
-            <div id="tab-admin" class="settings-tab-content hidden">
+            <div id="tab-admin" class="settings-tab-content">
                 <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
                     <h3 class="text-lg font-semibold mb-3">Управление пользователями</h3>
                     <div class="overflow-x-auto">
@@ -107,6 +107,8 @@ export function createProfileModal(currentUserProfile, allUsers, settings, handl
                 </div>
             </div>
         ` : '';
+        
+        const analyticsTabHtml = isAdmin ? `<div id="tab-analytics" class="settings-tab-content"></div>` : '';
 
         modalOverlay.innerHTML = `
             <div id="profile-modal-content" class="bg-white dark:bg-slate-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-4xl sm:rounded-lg shadow-xl">
@@ -118,15 +120,17 @@ export function createProfileModal(currentUserProfile, allUsers, settings, handl
                 <main class="flex-1 flex flex-col sm:flex-row overflow-hidden bg-slate-50 dark:bg-slate-900/70">
                     <aside class="w-full sm:w-56 border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-slate-700 p-2 sm:p-4 flex-shrink-0 bg-white dark:bg-slate-800">
                          <nav class="flex flex-row sm:flex-col sm:space-y-1 w-full justify-start">
-                            <a href="#profile" class="profile-tab-button ${activeTab === 'profile' ? 'active' : ''}" data-tab="profile">${Icons.UserIcon} <span>Мой профиль</span></a>
-                            <a href="#sync" class="profile-tab-button ${activeTab === 'sync' ? 'active' : ''}" data-tab="sync">${Icons.RefreshCwIcon} <span>Синхронизация</span></a>
-                            ${isAdmin ? `<a href="#admin" class="profile-tab-button ${activeTab === 'admin' ? 'active' : ''}" data-tab="admin">${Icons.UsersIcon} <span>Администрирование</span></a>` : ''}
+                            <a href="#profile" class="profile-tab-button" data-tab="profile">${Icons.UserIcon} <span>Мой профиль</span></a>
+                            <a href="#sync" class="profile-tab-button" data-tab="sync">${Icons.RefreshCwIcon} <span>Синхронизация</span></a>
+                            ${isAdmin ? `<a href="#admin" class="profile-tab-button" data-tab="admin">${Icons.UsersIcon} <span>Администрирование</span></a>` : ''}
+                             ${isAdmin ? `<a href="#analytics" class="profile-tab-button" data-tab="analytics">${Icons.ChartBarIcon} <span>Аналитика</span></a>` : ''}
                         </nav>
                     </aside>
                     <div class="flex-1 p-4 sm:p-6 overflow-y-auto" id="profile-tabs-content">
                         ${profileTabHtml}
                         ${syncTabHtml}
                         ${adminTabHtml}
+                        ${analyticsTabHtml}
                     </div>
                 </main>
                 
@@ -136,19 +140,43 @@ export function createProfileModal(currentUserProfile, allUsers, settings, handl
             </div>
         `;
         
-        // Render dynamic parts
-        const syncContainer = modalOverlay.querySelector('#tab-sync');
-        if (settings.isSupabaseEnabled) {
-            renderSyncSection(syncContainer);
-        } else {
-            syncContainer.innerHTML = `<div class="text-center p-8 text-slate-500 dark:text-slate-400">Синхронизация недоступна, так как режим Supabase отключен в настройках.</div>`;
+        // --- DYNAMIC CONTENT RENDERING ---
+
+        // Hide all tabs first
+        modalOverlay.querySelectorAll('.settings-tab-content').forEach(el => el.classList.add('hidden'));
+
+        // Show the active tab's content
+        const activeContent = modalOverlay.querySelector(`#tab-${activeTab}`);
+        if(activeContent) activeContent.classList.remove('hidden');
+
+        // Highlight the active tab button
+        modalOverlay.querySelectorAll('.profile-tab-button').forEach(btn => btn.classList.remove('active'));
+        const activeButton = modalOverlay.querySelector(`.profile-tab-button[data-tab="${activeTab}"]`);
+        if(activeButton) activeButton.classList.add('active');
+
+
+        // Render content for specific tabs
+        if (activeTab === 'sync') {
+             const syncContainer = modalOverlay.querySelector('#tab-sync');
+            if (settings.isSupabaseEnabled) {
+                renderSyncSection(syncContainer);
+            } else {
+                syncContainer.innerHTML = `<div class="text-center p-8 text-slate-500 dark:text-slate-400">Синхронизация недоступна, так как режим Supabase отключен в настройках.</div>`;
+            }
         }
+        
+        if (activeTab === 'analytics' && isAdmin) {
+             const analyticsContainer = modalOverlay.querySelector('#tab-analytics');
+             renderAnalyticsSection(analyticsContainer);
+        }
+
 
         // Re-attach listeners after re-render
         attachEventListeners();
     };
 
     const renderSyncSection = (container) => {
+        if (!container) return;
         const currentStatus = getSyncStatus();
         const hasAnyError = Object.values(currentStatus).some(s => s.error);
         const hasSchemaError = Object.values(currentStatus).some(s => 
@@ -156,7 +184,7 @@ export function createProfileModal(currentUserProfile, allUsers, settings, handl
         );
         
         const buttonHtml = `
-            <button data-action="force-sync" class="w-full sm:w-auto px-4 py-2 ${hasAnyError ? 'bg-orange-500 hover:bg-orange-600' : 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500'} text-white rounded-md text-sm font-semibold flex items-center justify-center gap-2">
+            <button data-action="force-sync" class="w-full sm:w-auto px-4 py-2 ${hasAnyError ? 'bg-orange-500 hover:bg-orange-600' : 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500'} text-slate-800 dark:text-white rounded-md text-sm font-semibold flex items-center justify-center gap-2">
                 ${hasAnyError ? Icons.AlertTriangleIcon : Icons.RefreshCwIcon}
                 <span>${hasAnyError ? 'Повторить синхронизацию' : 'Синхронизировать сейчас'}</span>
             </button>`;
@@ -220,6 +248,64 @@ export function createProfileModal(currentUserProfile, allUsers, settings, handl
                 ${schemaErrorHtml}
                 <div id="sync-status-list" class="space-y-1">${syncItemsHtml}</div>
             </div>`;
+    };
+
+    const renderAnalyticsSection = (container) => {
+        if (!container) return;
+
+        const groupedBySession = chatHistory.reduce((acc, msg) => {
+            (acc[msg.session_id] = acc[msg.session_id] || []).push(msg);
+            return acc;
+        }, {});
+
+        if (Object.keys(groupedBySession).length === 0) {
+            container.innerHTML = `<p class="text-slate-500">История чатов пока пуста.</p>`;
+            return;
+        }
+
+        const sessionsHtml = Object.entries(groupedBySession).map(([sessionId, messages]) => {
+            const firstMessage = messages[messages.length - 1]; // Messages are sorted descending
+            const user = firstMessage.user;
+            const sessionDate = new Date(firstMessage.created_at).toLocaleString('ru-RU');
+
+            const messagesHtml = messages.slice().reverse().map(msg => {
+                const isUser = msg.sender === 'user';
+                const avatar = isUser
+                    ? `<img src="${user.avatar_url}" class="w-6 h-6 rounded-full" alt="user">`
+                    : `<div class="w-6 h-6 rounded-full flex items-center justify-center text-xs bg-slate-200 dark:bg-slate-700">S+</div>`;
+                
+                let content = msg.text_content ? `<p class="text-sm">${msg.text_content}</p>` : '';
+                if(msg.card_data) content += `<div class="mt-1 text-xs text-blue-500">[КАРТОЧКА: ${msg.card_data.type}]</div>`;
+                if(msg.contextual_actions) content += `<div class="mt-1 text-xs text-indigo-500">[ДЕЙСТВИЯ]</div>`;
+
+                return `
+                    <div class="flex gap-2 py-1.5">
+                        <div class="flex-shrink-0">${avatar}</div>
+                        <div class="flex-1">${content}</div>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <details class="bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <summary class="p-3 cursor-pointer font-medium flex justify-between items-center">
+                        <div>
+                            <span>${user.user_data?.email || 'Неизвестный пользователь'}</span>
+                            <span class="ml-2 text-xs text-slate-500">${sessionDate}</span>
+                        </div>
+                         <span class="text-xs text-slate-400">Сессия: ${sessionId.slice(0,8)}...</span>
+                    </summary>
+                    <div class="p-3 border-t border-slate-200 dark:border-slate-700">
+                        ${messagesHtml}
+                    </div>
+                </details>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <h3 class="text-lg font-semibold mb-3">Аналитика чатов</h3>
+            <div class="space-y-2">${sessionsHtml}</div>
+        `;
     };
 
     const attachEventListeners = () => {

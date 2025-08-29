@@ -71,6 +71,7 @@ let state = {
     syncStatus: getSyncStatus(),
     isSyncing: false,
     proxyStatus: 'off', // 'off', 'connecting', 'ok', 'error'
+    sessionId: null,
 };
 
 // --- SERVICE INSTANCES ---
@@ -192,6 +193,17 @@ async function initializeSupabase() {
     }
 }
 
+async function startNewChatSession() {
+    if (state.isSupabaseReady && supabaseService) {
+        try {
+            state.sessionId = await supabaseService.createNewSession();
+        } catch (error) {
+            console.error("Failed to create new chat session:", error);
+            state.sessionId = null; // Ensure it's null on failure
+        }
+    }
+}
+
 async function handleAuthentication() {
     if (state.settings.isSupabaseEnabled && supabaseService) {
         const { data: { session } } = await supabaseService.client.auth.getSession();
@@ -239,6 +251,7 @@ async function initializeAppServices() {
     await googleProvider.initClient(GOOGLE_CLIENT_ID, null);
     googleProvider.setTimezone(state.settings.timezone);
     await handleAuthentication();
+    await startNewChatSession();
     startAutoSync();
 }
 
@@ -256,9 +269,10 @@ async function handleLogout() {
     window.location.reload();
 }
 
-function handleNewChat() {
+async function handleNewChat() {
     if (state.messages.length > 0 && confirm('Вы уверены, что хотите начать новый чат?')) {
         state.messages = [];
+        await startNewChatSession();
         renderMainContent();
     }
 }
@@ -320,6 +334,10 @@ async function processBotResponse(userMessage, isSilent) {
         supabaseService.incrementActionStat(botMessage.functionCallName);
         state.actionStats[botMessage.functionCallName] = (state.actionStats[botMessage.functionCallName] || 0) + 1;
     }
+
+    if (supabaseService && state.sessionId) {
+        supabaseService.logChatMessage(botMessage, state.sessionId);
+    }
     
     state.isLoading = false;
     hideLoadingIndicator();
@@ -352,6 +370,11 @@ async function handleSendMessage(prompt, image = null) {
     };
     state.messages.push(userMessage);
     addMessageToChat(userMessage);
+
+    if (supabaseService && state.sessionId) {
+        supabaseService.logChatMessage(userMessage, state.sessionId);
+    }
+
     // Clear contextual actions after sending a new message
     renderContextualActions([]);
     await processBotResponse(userMessage, false);
@@ -552,14 +575,17 @@ async function showProfileModal() {
         }
 
         let allUsers = [];
+        let chatHistory = [];
         if (state.isSupabaseReady && currentUserProfile.role === 'admin') {
             allUsers = await supabaseService.getAllUserProfiles();
+            chatHistory = await supabaseService.getChatHistoryForAdmin();
         }
         
         modalContainer.innerHTML = ''; // Clear loading spinner
         const modal = createProfileModal(
             currentUserProfile,
             allUsers,
+            chatHistory,
             state.settings,
             {
                 onClose: () => { modalContainer.innerHTML = ''; },

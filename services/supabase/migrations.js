@@ -10,13 +10,19 @@ DROP TABLE IF EXISTS public.tasks CASCADE;
 DROP TABLE IF EXISTS public.emails CASCADE;
 DROP TABLE IF EXISTS public.notes CASCADE;
 DROP TABLE IF EXISTS public.chat_memory CASCADE;
+DROP TABLE IF EXISTS public.chat_history CASCADE;
+DROP TABLE IF EXISTS public.sessions CASCADE;
 DROP TABLE IF EXISTS public.profiles CASCADE;
 
--- Создаем тип для ролей пользователей
+
+-- Создаем типы ENUM для ролей и отправителей
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
         CREATE TYPE public.user_role AS ENUM ('user', 'admin');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'chat_sender') THEN
+        CREATE TYPE public.chat_sender AS ENUM ('user', 'assistant', 'system');
     END IF;
 END$$;
 
@@ -31,7 +37,28 @@ CREATE TABLE public.profiles (
 );
 COMMENT ON TABLE public.profiles IS 'Профили пользователей с дополнительными данными и ролями.';
 
--- Создаем заново таблицы с улучшенной и расширенной схемой
+-- Таблица для сессий чата
+CREATE TABLE public.sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+COMMENT ON TABLE public.sessions IS 'Отслеживает отдельные сессии чата для группировки сообщений.';
+
+-- Таблица для истории чата
+CREATE TABLE public.chat_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    session_id UUID NOT NULL REFERENCES public.sessions(id) ON DELETE CASCADE,
+    sender public.chat_sender NOT NULL,
+    text_content TEXT,
+    image_metadata JSONB,
+    card_data JSONB,
+    contextual_actions JSONB,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+COMMENT ON TABLE public.chat_history IS 'Полный лог всех взаимодействий в чате для аналитики.';
+
 
 -- Таблица для событий календаря
 CREATE TABLE public.calendar_events (
@@ -151,6 +178,8 @@ COMMENT ON TABLE public.chat_memory IS 'Долговременная памят�
 
 -- Включаем Row Level Security на всех таблицах
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.calendar_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.files ENABLE ROW LEVEL SECURITY;
@@ -176,12 +205,32 @@ DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.prox
 DROP POLICY IF EXISTS "Пользователи могут видеть все профили." ON public.profiles;
 DROP POLICY IF EXISTS "Пользователи могут обновлять свой профиль." ON public.profiles;
 DROP POLICY IF EXISTS "Администраторы могут делать все." ON public.profiles;
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.sessions;
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.chat_history;
+
+
+-- Функция для проверки, является ли пользователь администратором
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role = 'admin'::public.user_role
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
 -- Политики для профилей
 CREATE POLICY "Пользователи могут видеть все профили." ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "Пользователи могут обновлять свой профиль." ON public.profiles FOR UPDATE USING (auth.uid() = id);
--- Политика для администраторов будет управляться через RPC функцию.
+
+-- Политики для сессий и истории чата
+CREATE POLICY "Пользователи могут управлять своими сессиями и историей." ON public.sessions FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Пользователи могут управлять своей историей чата." ON public.chat_history FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Администраторы могут просматривать все сессии и историю." ON public.sessions FOR SELECT USING (public.is_admin());
+CREATE POLICY "Администраторы могут просматривать всю историю чата." ON public.chat_history FOR SELECT USING (public.is_admin());
+
 
 -- Создаем политики, разрешающие пользователям доступ только к своим данным
 CREATE POLICY "Enable all access for authenticated users" ON public.calendar_events FOR ALL TO authenticated USING (auth.uid() = user_id);
@@ -211,17 +260,6 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
--- Функция для проверки, является ли пользователь администратором
-CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS BOOLEAN AS $$
-BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE id = auth.uid() AND role = 'admin'::public.user_role
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- RPC функция для обновления роли пользователя (только для администраторов)
 CREATE OR REPLACE FUNCTION public.update_user_role(target_user_id UUID, new_role public.user_role)
