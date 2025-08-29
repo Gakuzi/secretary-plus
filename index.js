@@ -288,10 +288,13 @@ if (!window.isSecretaryPlusAppInitialized) {
 
         } catch (error) {
             console.error("Supabase initialization failed:", error);
-            showSystemError(`Не удалось подключиться к облачному хранилищу. Некоторые функции будут недоступны.`);
             state.isSupabaseReady = false;
             supabaseService = null;
             serviceProviders.supabase = null;
+            // Show an alert because the chat UI isn't ready for a system message.
+            // Then switch to the setup view which will show the disconnected state.
+            showSystemError(`Не удалось подключиться к облачному хранилищу: ${error.message}`);
+            showSetupView('profile');
         }
     }
 

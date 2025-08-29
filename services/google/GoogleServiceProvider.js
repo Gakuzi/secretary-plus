@@ -90,14 +90,29 @@ export class GoogleServiceProvider {
     async loadGapiClient() {
         if (this.loadGapiPromise) return this.loadGapiPromise;
 
-        this.loadGapiPromise = new Promise((resolve) => {
+        this.loadGapiPromise = new Promise((resolve, reject) => {
+            // Set a timeout to prevent the app from hanging if GAPI fails to load.
+            const timeoutId = setTimeout(() => {
+                // Clean up the promise to allow for a retry on the next attempt.
+                this.loadGapiPromise = null;
+                reject(new Error("Не удалось загрузить клиент Google API (тайм-аут 10с). Проверьте сетевое соединение или наличие блокировщиков."));
+            }, 10000); // 10-second timeout
+    
             this.gapi.load('client', async () => {
-                await this.gapi.client.init({});
-                this.isGapiLoaded = true;
-                if (this.token) {
-                    this.gapi.client.setToken({ access_token: this.token });
+                clearTimeout(timeoutId);
+                try {
+                    // The init call can also fail if APIs are not enabled in Google Cloud.
+                    await this.gapi.client.init({});
+                    this.isGapiLoaded = true;
+                    if (this.token) {
+                        this.gapi.client.setToken({ access_token: this.token });
+                    }
+                    resolve();
+                } catch (error) {
+                     this.loadGapiPromise = null; // Allow retry on error.
+                     console.error("GAPI client initialization failed:", error);
+                     reject(error);
                 }
-                resolve();
             });
         });
         return this.loadGapiPromise;
