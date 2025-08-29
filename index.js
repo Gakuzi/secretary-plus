@@ -9,6 +9,7 @@ import { createProfileModal } from './components/ProfileModal.js';
 import { createStatsModal } from './components/StatsModal.js';
 import { createHelpModal } from './components/HelpModal.js';
 import { createDbSetupWizard } from './components/DbSetupWizard.js';
+import { createProxySetupWizard } from './components/ProxySetupWizard.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
@@ -27,7 +28,8 @@ const APP_STRUCTURE_CONTEXT = `
 - components/SetupWizard.js: Мастер первоначальной настройки.
 - components/SettingsModal.js: Окно для управления настройками после входа.
 - components/ProfileModal.js: Окно профиля, где отображается статус синхронизации.
-- SUPABASE_SETUP.md: Содержит SQL-скрипт для создания/обновления схемы БД.
+- components/DbSetupWizard.js: Мастер настройки воркера для управления схемой БД.
+- components/ProxySetupWizard.js: Мастер настройки прокси-воркера для Gemini.
 `;
 
 async function showBrowserNotification(title, options) {
@@ -455,6 +457,14 @@ function showDbSetupWizard() {
     modalContainer.appendChild(modal);
 }
 
+function showProxySetupWizard() {
+    modalContainer.innerHTML = '';
+    const modal = createProxySetupWizard({
+        onClose: () => modalContainer.innerHTML = '',
+    });
+    modalContainer.appendChild(modal);
+}
+
 function showSettingsModal() {
     modalContainer.innerHTML = '';
     const onSave = async (newSettings) => {
@@ -566,7 +576,11 @@ function showHelpModal(options = {}) {
             modalContainer.innerHTML = ''; // Close help modal first
             showDbSetupWizard();
         },
-        initialTab: options.initialTab || 'error-analysis'
+        onLaunchProxyWizard: () => {
+            modalContainer.innerHTML = ''; // Close help modal first
+            showProxySetupWizard();
+        },
+        initialTab: options.initialTab || 'about'
     });
     modalContainer.appendChild(modal);
 }

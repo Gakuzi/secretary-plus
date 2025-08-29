@@ -30,7 +30,7 @@ function markdownToHTML(text) {
 }
 
 
-export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchWizard, onLaunchDbWizard, initialTab = 'about' }) {
+export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchWizard, onLaunchDbWizard, onLaunchProxyWizard, initialTab = 'about' }) {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
     
@@ -94,7 +94,7 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                     <div id="tab-instructions" class="settings-tab-content hidden space-y-6">
                         <div class="p-4 bg-white dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
                              <h3 class="text-lg font-semibold">Настройка базы данных и синхронизации</h3>
-                             <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 mb-4">Для работы облачной синхронизации, управления прокси и автоматического обновления приложения, необходимо настроить базу данных Supabase и специальный "Управляющий воркер". Наш интерактивный мастер поможет вам сделать это шаг за шагом.</p>
+                             <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 mb-4">Для работы облачной синхронизации и автоматического обновления схемы БД необходим "Управляющий воркер". Наш мастер поможет вам его настроить.</p>
                              <button data-action="launch-db-wizard" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold transition-colors">
                                 ${Icons.DatabaseIcon}
                                 <span>Запустить мастер настройки БД</span>
@@ -102,8 +102,11 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                         </div>
                         <div class="p-4 bg-white dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
                              <h3 class="text-lg font-semibold">Настройка Прокси-воркера</h3>
-                             <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 mb-4">Прокси-воркер нужен для обхода региональных ограничений Gemini API. Вы можете настроить его, следуя инструкциям в Менеджере прокси, который доступен в основных настройках.</p>
-                             <p class="text-sm text-gray-500 dark:text-gray-300">Перейдите в <strong class="text-gray-700 dark:text-gray-100">${Icons.SettingsIcon} Настройки &rarr; Прокси</strong>, чтобы открыть менеджер и получить код для воркера.</p>
+                             <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 mb-4">Прокси-воркер нужен для обхода региональных ограничений Gemini API. Этот мастер поможет вам создать и настроить его в Cloudflare.</p>
+                             <button data-action="launch-proxy-wizard" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold transition-colors">
+                                ${Icons.CodeIcon}
+                                <span>Запустить мастер настройки Прокси</span>
+                            </button>
                         </div>
                     </div>
 
@@ -168,6 +171,12 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
         const launchDbWizardButton = e.target.closest('[data-action="launch-db-wizard"]');
         if (launchDbWizardButton) {
             onLaunchDbWizard();
+            return;
+        }
+
+        const launchProxyWizardButton = e.target.closest('[data-action="launch-proxy-wizard"]');
+        if (launchProxyWizardButton) {
+            onLaunchProxyWizard();
             return;
         }
 

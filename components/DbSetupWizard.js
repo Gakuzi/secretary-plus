@@ -14,11 +14,24 @@ addEventListener('fetch', event => {
 });
 
 async function handleRequest(request) {
+    // Handle CORS preflight requests
     if (request.method === 'OPTIONS') {
         return handleOptions(request);
     }
+
+    // Handle test GET requests from Cloudflare dashboard gracefully
+    if (request.method === 'GET') {
+        return new Response(JSON.stringify({
+            status: 'ok',
+            message: 'Management worker is running. This endpoint expects POST requests.',
+        }), { status: 200, headers: corsHeaders() });
+    }
+
     if (request.method !== 'POST') {
-        return new Response('Method Not Allowed', { status: 405 });
+        return new Response(JSON.stringify({ error: 'Method Not Allowed. Only POST requests are accepted.' }), {
+            status: 405,
+            headers: corsHeaders(),
+        });
     }
 
     // IMPORTANT: Replace with YOUR project reference ID
