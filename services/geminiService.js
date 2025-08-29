@@ -784,17 +784,28 @@ export const testProxyConnection = async ({ proxyUrl, signal }) => {
         return { status: 'error', message: 'URL прокси не указан.' };
     }
 
-    // Append a specific path for the test endpoint on the user's worker
     const testUrl = new URL(proxyUrl);
     testUrl.pathname = '/test-proxy';
 
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Timeout')), 10000); // 10-second timeout
+    });
+
     try {
         const startTime = performance.now();
-        const response = await fetch(testUrl.toString(), {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
-            signal,
-        });
+        
+        const response = await Promise.race([
+            fetch(testUrl.toString(), {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+                signal,
+            }),
+            timeoutPromise
+        ]);
+        
+        clearTimeout(timeoutId);
+
         const endTime = performance.now();
         const speed = Math.round(endTime - startTime);
 
@@ -804,26 +815,27 @@ export const testProxyConnection = async ({ proxyUrl, signal }) => {
 
         const data = await response.json();
         
-        // The test service (ipify) returns { "ip": "..." }
         if (!data.ip) {
              throw new Error("Invalid response from test service through proxy.");
         }
 
-        // Return a successful result. 'geolocation' is now the proxy's IP.
         return { status: 'ok', message: 'Соединение успешно.', speed, geolocation: data.ip };
 
     } catch (error) {
+        clearTimeout(timeoutId);
         if (error.name === 'AbortError') {
-            // This is a controlled cancellation, not a true error.
             return { status: 'cancelled', message: 'Тест отменен пользователем.', speed: null, geolocation: null };
         }
 
         console.error('Ошибка при тесте прокси:', error);
-        // Provide a user-friendly error message.
-        let message = `Ошибка сети. Убедитесь, что URL прокси правильный, и что на нем настроены CORS-заголовки. Проверьте инструкцию.`;
+        
+        let message = `Ошибка сети. Убедитесь, что URL прокси правильный и на нем настроены CORS-заголовки.`;
         if (error.message.includes('status')) {
             message = `Прокси вернул ошибку: ${error.message}. Проверьте код воркера.`;
+        } else if (error.message === 'Timeout') {
+            message = 'Тайм-аут: прокси не ответил в течение 10 секунд.';
         }
+        
         return { status: 'error', message: message, speed: null, geolocation: null };
     }
 };
