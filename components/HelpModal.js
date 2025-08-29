@@ -66,9 +66,9 @@ export function createHelpModal(onClose, settings, analyzeErrorFn) {
                              <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
                                 <h3 class="text-lg font-semibold text-gray-200">Мастер Настройки</h3>
                                 <p class="text-sm text-gray-400 mt-1 mb-4">Для первоначальной настройки или изменения ключевых параметров (API ключи, прокси) воспользуйтесь нашим интерактивным мастером.</p>
-                                 <a href="./setup-guide.html" target="_blank" rel="noopener noreferrer" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md font-semibold transition-colors">
-                                    Открыть Мастер Настройки
-                                 </a>
+                                 <button data-action="launch_setup_from_help" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md font-semibold transition-colors">
+                                    Запустить Мастер Настройки
+                                 </button>
                             </div>
                         </div>
 

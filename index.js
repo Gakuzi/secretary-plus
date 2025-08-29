@@ -296,52 +296,61 @@ if (!window.isSecretaryPlusAppInitialized) {
     }
 
     async function handleAuthStateChange(session) {
-        // Clear local settings on auth change to ensure DB is the source of truth
-        localStorage.removeItem('secretary-plus-settings-v4');
-        state.settings = getSettings(); // Reset to defaults
+        try {
+            // Clear local settings on auth change to ensure DB is the source of truth
+            localStorage.removeItem('secretary-plus-settings-v4');
+            state.settings = getSettings(); // Reset to defaults
 
-        if (session) {
-            state.supabaseUser = session.user;
-            const providerToken = session.provider_token;
-            googleProvider.setAuthToken(providerToken);
-            
-            try {
-                const dbSettings = await supabaseService.getUserSettings();
-                if (dbSettings) {
-                    console.log("Loaded settings from Supabase.");
-                    state.settings = { ...getSettings(), ...dbSettings };
-                    saveSettings(state.settings); // Update local cache with DB settings
-                }
-
-                googleProvider.setTimezone(state.settings.timezone);
-                await googleProvider.initClient(state.settings.googleClientId, () => {});
+            if (session) {
+                state.supabaseUser = session.user;
+                const providerToken = session.provider_token;
+                googleProvider.setAuthToken(providerToken);
                 
-                state.userProfile = await googleProvider.getUserProfile();
-                state.isGoogleConnected = true;
-                state.actionStats = await supabaseService.getActionStats();
-                state.proxies = await supabaseService.getProxies();
-                startAutoSync();
+                try {
+                    const dbSettings = await supabaseService.getUserSettings();
+                    if (dbSettings) {
+                        console.log("Loaded settings from Supabase.");
+                        state.settings = { ...getSettings(), ...dbSettings };
+                        saveSettings(state.settings); // Update local cache with DB settings
+                    }
 
-                if (!state.settings.geminiApiKey) {
-                    showSetupView('api-keys');
-                } else {
-                    showChatView();
+                    googleProvider.setTimezone(state.settings.timezone);
+                    await googleProvider.initClient(state.settings.googleClientId, () => {});
+                    
+                    state.userProfile = await googleProvider.getUserProfile();
+                    state.isGoogleConnected = true;
+                    state.actionStats = await supabaseService.getActionStats();
+                    state.proxies = await supabaseService.getProxies();
+                    startAutoSync();
+
+                    if (!state.settings.geminiApiKey) {
+                        showSetupView('api-keys');
+                    } else {
+                        showChatView();
+                    }
+
+                } catch (error) {
+                    console.error("Failed to fetch Google user profile or settings via Supabase:", error);
+                    showSystemError(`Не удалось получить профиль Google после аутентификации. Ошибка: ${error.message}`);
+                    await handleLogout();
                 }
-
-            } catch (error) {
-                console.error("Failed to fetch Google user profile or settings via Supabase:", error);
-                showSystemError(`Не удалось получить профиль Google после аутентификации. Ошибка: ${error.message}`);
-                await handleLogout();
+            } else {
+                // User is logged out
+                state.supabaseUser = null;
+                state.isGoogleConnected = false;
+                state.userProfile = null;
+                state.actionStats = {};
+                state.proxies = [];
+                googleProvider.setAuthToken(null);
+                stopAutoSync();
+                showSetupView('profile');
             }
-        } else {
-            // User is logged out
-            state.supabaseUser = null;
-            state.isGoogleConnected = false;
-            state.userProfile = null;
-            state.actionStats = {};
-            state.proxies = [];
-            googleProvider.setAuthToken(null);
-            stopAutoSync();
+        } catch (e) {
+            console.error("FATAL: Unhandled error in authentication flow.", e);
+            // We're stuck in 'loading'. We need to show *something*.
+            // The setup screen is the safest bet.
+            mainContent.innerHTML = ''; // Clear loading message
+            showSystemError(`Критическая ошибка при инициализации: ${e.message}. Попробуйте очистить кеш и перезагрузить страницу.`);
             showSetupView('profile');
         }
     }
@@ -801,6 +810,12 @@ if (!window.isSecretaryPlusAppInitialized) {
         
         const launchSetupButton = e.target.closest('[data-action="launch_setup"]');
         if (launchSetupButton) {
+            showSetupView('profile');
+        }
+
+        const launchSetupFromHelpButton = e.target.closest('[data-action="launch_setup_from_help"]');
+        if (launchSetupFromHelpButton) {
+            hideHelp();
             showSetupView('profile');
         }
     });
