@@ -301,7 +301,7 @@ body.recording-active {
 }
 
 
-/* --- SETTINGS MODAL TABS --- */
+/* --- SETTINGS MODAL TABS / HELP MODAL TABS --- */
 .settings-tab-button {
   padding: 0.5rem 1rem;
   border-radius: 0.375rem;
@@ -390,4 +390,22 @@ input:checked + .toggle-slider:before {
     background-color: var(--background-light);
     border-color: #4b5563; /* gray-600 */
     color: var(--text-primary);
+}
+
+/* --- SETUP WIZARD STYLES --- */
+.choice-card {
+    background-color: var(--background-light);
+    border: 2px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.choice-card:hover {
+    border-color: var(--accent-blue);
+    transform: translateY(-4px);
+}
+.choice-card.selected {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 2px var(--accent-blue);
 }

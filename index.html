@@ -29,6 +29,7 @@
     </script>
 </head>
 <body class="bg-gray-900 text-gray-100 font-sans">
+    <!-- This container is for the main application UI -->
     <div id="app" class="flex flex-col h-screen">
       <!-- App Header -->
       <header class="grid grid-cols-3 items-center p-4 bg-gray-800 border-b border-gray-700 shadow-md">
@@ -57,23 +58,17 @@
       <main id="main-content" class="flex-1 overflow-hidden">
         <!-- Welcome screen or chat will be rendered here -->
       </main>
-      
-      <!-- Camera View (hidden by default) -->
-      <div id="camera-view-container" class="hidden"></div>
-
-      <!-- Settings Modal (hidden by default) -->
-      <div id="settings-modal-container" class="hidden"></div>
-
-      <!-- Help Modal (hidden by default) -->
-      <div id="help-modal-container" class="hidden"></div>
-      
-      <!-- Stats Modal (hidden by default) -->
-      <div id="stats-modal-container" class="hidden"></div>
-
-      <!-- Profile Modal (hidden by default) -->
-      <div id="profile-modal-container" class="hidden"></div>
     </div>
 
+    <!-- This container is for the new unified Setup Wizard -->
+    <div id="setup-wizard-container"></div>
+    
+    <!-- This container is for all other modals (Help, Stats, Profile) -->
+    <div id="modal-container"></div>
+
+    <!-- Camera View (hidden by default) -->
+    <div id="camera-view-container" class="hidden"></div>
+    
     <!-- Main app script -->
     <script type="module" src="./index.js"></script>
 </body>
