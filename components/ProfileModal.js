@@ -1,67 +1,39 @@
-// This file is a new addition to the project.
-// It was created to handle the user profile modal functionality.
 import * as Icons from './icons/Icons.js';
+import { getSyncStatus } from '../utils/storage.js';
 
-// Helper to create a toggle switch element
-function createToggle(id, label, isChecked) {
-    return `
-        <div class="flex items-center justify-between py-2 border-b border-gray-700/50">
-            <label for="${id}" class="font-medium text-gray-300">${label}</label>
-            <label class="toggle-switch">
-                <input type="checkbox" id="${id}" ${isChecked ? 'checked' : ''}>
-                <span class="toggle-slider"></span>
-            </label>
-        </div>
-    `;
-}
+// Helper to render a sub-modal for data viewing or error analysis
+function renderSubModal(title, content, isHtml = false) {
+    const subModal = document.getElementById('profile-sub-modal');
+    if (!subModal) return;
 
-// Helper to create a service mapping dropdown
-function createServiceSelect(key, label, providers, selectedValue) {
-    return `
-        <div class="flex items-center justify-between py-2 border-b border-gray-700/50 last:border-b-0">
-            <label for="profile-${key}-provider-select" class="font-medium text-gray-300">${label}</label>
-            <select id="profile-${key}-provider-select" class="bg-gray-700 border border-gray-600 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-sm">
-                ${providers.map(p => `<option value="${p.id}" ${selectedValue === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}
-            </select>
-        </div>
-    `;
-}
-
-// Helper to create a sync status item
-function createSyncStatusItem(task, status) {
-    const iconSVG = Icons[task.icon] || '';
-    const lastSyncData = status[task.name];
-    let statusText = 'Никогда не синхронизировалось';
-    let statusColor = 'text-gray-500';
-
-    if (lastSyncData) {
-        if (lastSyncData.error) {
-            statusText = `Ошибка: ${lastSyncData.error}`;
-            statusColor = 'text-red-400';
-        } else if (lastSyncData.lastSync) {
-            statusText = `Синхронизировано: ${new Date(lastSyncData.lastSync).toLocaleString('ru-RU')}`;
-            statusColor = 'text-green-400';
-        }
-    }
-
-    return `
-        <div class="flex items-center justify-between text-sm py-1.5">
-            <div class="flex items-center gap-2 font-medium text-gray-300">
-                <span class="w-5 h-5">${iconSVG}</span>
-                <span>${task.label}</span>
-            </div>
-            <div class="truncate ${statusColor}" title="${statusText}">
-                ${statusText}
-            </div>
-        </div>
-    `;
-}
-
-
-export function createProfileModal(userProfile, settings, handlers, syncStatus, syncTasks) {
-    const { onClose, onSave, onLogout, onDelete, onForceSync } = handlers;
+    subModal.querySelector('#sub-modal-title').textContent = title;
+    const contentEl = subModal.querySelector('#sub-modal-content');
     
-    // Definitions for the settings form in the profile modal
+    if (isHtml) {
+        contentEl.innerHTML = content;
+    } else {
+        contentEl.textContent = content;
+    }
+    
+    subModal.classList.remove('hidden');
+}
+
+// Simple markdown to HTML for AI analysis results
+function markdownToHTML(text) {
+    if (!text) return '';
+    return text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code class="bg-gray-700 text-sm rounded px-1 py-0.5">$1</code>')
+        .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-4 mb-2">$1</h3>')
+        .replace(/^## (.*$)/gim, '<h2 class="text-xl font-bold mt-4 mb-2">$1</h2>')
+        .replace(/^- (.*$)/gim, '<li class="ml-4 list-disc">$1</li>')
+        .replace(/\n/g, '<br>');
+}
+
+
+export function createProfileModal(userProfile, settings, handlers, initialSyncStatus, syncTasks, supabaseUrl) {
+    const { onClose, onSave, onLogout, onDelete, onForceSync, onAnalyzeError, onViewData } = handlers;
+    
     const SERVICE_DEFINITIONS = {
         calendar: { label: 'Календарь', providers: [{ id: 'google', name: 'Google' }, { id: 'supabase', name: 'Кэш (Supabase)' }, { id: 'apple', name: 'Apple (.ics)' }] },
         tasks: { label: 'Задачи', providers: [{ id: 'google', name: 'Google Tasks' }, { id: 'supabase', name: 'Кэш (Supabase)' }] },
@@ -77,7 +49,7 @@ export function createProfileModal(userProfile, settings, handlers, syncStatus, 
         <div id="profile-modal-content" class="bg-gray-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-lg shadow-xl">
             <header class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
                 <h2 class="text-xl font-bold">Профиль пользователя</h2>
-                <button id="close-profile" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Закрыть профиль">&times;</button>
+                <button data-action="close" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Закрыть профиль">&times;</button>
             </header>
             <main class="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
                 <!-- User Info -->
@@ -89,78 +61,222 @@ export function createProfileModal(userProfile, settings, handlers, syncStatus, 
                     </div>
                 </div>
 
-                <!-- Sync Status -->
-                ${settings.isSupabaseEnabled ? `
-                <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-                        <h3 class="text-lg font-semibold">Синхронизация данных</h3>
-                        <button id="force-sync-button" class="w-full sm:w-auto px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold flex items-center justify-center gap-2">
-                            ${Icons.RefreshCwIcon}
-                            <span>Синхронизировать сейчас</span>
-                        </button>
-                    </div>
-                    <div id="sync-status-list" class="space-y-1">
-                        ${syncTasks.map(task => createSyncStatusItem(task, syncStatus)).join('')}
-                    </div>
-                </div>` : ''}
+                <!-- Sync Status Section -->
+                <div id="sync-section-container"></div>
 
                 <!-- Cloud Settings -->
                 <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
                     <h3 class="text-lg font-semibold mb-3">Настройки в облаке</h3>
-                    <p class="text-sm text-gray-400 mb-4">Эти настройки сохранены в Supabase и синхронизируются между устройствами. Ключи API здесь не отображаются.</p>
-                    
-                    <div class="space-y-2">
-                        ${createToggle('profile-email-polling-toggle', 'Проактивные уведомления по почте', settings.enableEmailPolling)}
-                        ${createToggle('profile-auto-sync-toggle', 'Автоматическая фоновая синхронизация', settings.enableAutoSync)}
+                     <div class="space-y-2">
+                         <div class="flex items-center justify-between py-2 border-b border-gray-700/50">
+                            <label for="profile-email-polling-toggle" class="font-medium text-gray-300">Проактивные уведомления по почте</label>
+                            <label class="toggle-switch"><input type="checkbox" id="profile-email-polling-toggle" ${settings.enableEmailPolling ? 'checked' : ''}><span class="toggle-slider"></span></label>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-b border-gray-700/50">
+                            <label for="profile-auto-sync-toggle" class="font-medium text-gray-300">Автоматическая фоновая синхронизация</label>
+                            <label class="toggle-switch"><input type="checkbox" id="profile-auto-sync-toggle" ${settings.enableAutoSync ? 'checked' : ''}><span class="toggle-slider"></span></label>
+                        </div>
                     </div>
                      <div class="space-y-2 border-t border-gray-700 pt-4 mt-4">
-                        ${Object.entries(SERVICE_DEFINITIONS).map(([key, def]) => 
-                            createServiceSelect(key, def.label, def.providers, settings.serviceMap[key])
-                        ).join('')}
+                        ${Object.entries(SERVICE_DEFINITIONS).map(([key, def]) => `
+                             <div class="flex items-center justify-between py-2 border-b border-gray-700/50 last:border-b-0">
+                                <label for="profile-${key}-provider-select" class="font-medium text-gray-300">${def.label}</label>
+                                <select id="profile-${key}-provider-select" class="bg-gray-700 border border-gray-600 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-sm">
+                                    ${def.providers.map(p => `<option value="${p.id}" ${settings.serviceMap[key] === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}
+                                </select>
+                            </div>`).join('')}
                      </div>
                 </div>
             </main>
             <footer class="p-4 bg-gray-800 border-t border-gray-700 flex flex-col-reverse sm:flex-row sm:justify-between items-center gap-3 flex-shrink-0">
                  <div class="w-full sm:w-auto">
-                     <button id="profile-logout-button" class="w-full sm:w-auto px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold">Выйти</button>
+                     <button data-action="logout" class="w-full sm:w-auto px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold">Выйти</button>
                 </div>
                 <div class="flex flex-col-reverse sm:flex-row w-full sm:w-auto gap-3">
-                     <button id="profile-delete-settings" class="w-full sm:w-auto px-4 py-2 bg-red-800 hover:bg-red-700 rounded-md text-sm font-semibold">Удалить из облака</button>
-                     <button id="profile-save-settings" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm font-semibold">Сохранить</button>
+                     <button data-action="delete" class="w-full sm:w-auto px-4 py-2 bg-red-800 hover:bg-red-700 rounded-md text-sm font-semibold">Удалить из облака</button>
+                     <button data-action="save" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm font-semibold">Сохранить</button>
                 </div>
             </footer>
+            
+            <!-- Sub-Modal for Data/Error -->
+            <div id="profile-sub-modal" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-4 z-10">
+                <div class="bg-gray-900 border border-gray-700 rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[80vh]">
+                    <header class="flex justify-between items-center p-4 border-b border-gray-700">
+                        <h3 id="sub-modal-title" class="text-lg font-bold"></h3>
+                        <button data-action="close-sub-modal" class="p-2 rounded-full hover:bg-gray-700">&times;</button>
+                    </header>
+                    <main id="sub-modal-content" class="p-4 overflow-y-auto"></main>
+                </div>
+            </div>
         </div>
     `;
+    
+    const syncContainer = modalOverlay.querySelector('#sync-section-container');
+    
+    const renderSyncSection = () => {
+        const currentStatus = getSyncStatus();
+        const hasErrors = Object.values(currentStatus).some(s => s.error);
+        
+        let buttonHtml;
+        if (hasErrors) {
+            buttonHtml = `
+                <button data-action="force-sync" class="w-full sm:w-auto px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-md text-sm font-semibold flex items-center justify-center gap-2">
+                    ${Icons.AlertTriangleIcon}
+                    <span>Повторить синхронизацию</span>
+                </button>`;
+        } else {
+             buttonHtml = `
+                <button data-action="force-sync" class="w-full sm:w-auto px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold flex items-center justify-center gap-2">
+                    ${Icons.RefreshCwIcon}
+                    <span>Синхронизировать сейчас</span>
+                </button>`;
+        }
 
-    // --- Event Listeners ---
-    modalOverlay.querySelector('#close-profile').addEventListener('click', onClose);
-    modalOverlay.querySelector('#profile-logout-button').addEventListener('click', onLogout);
-    modalOverlay.querySelector('#profile-delete-settings').addEventListener('click', onDelete);
-    const forceSyncButton = modalOverlay.querySelector('#force-sync-button');
-    if (forceSyncButton) {
-        forceSyncButton.addEventListener('click', onForceSync);
-    }
+        const projectRef = supabaseUrl ? new URL(supabaseUrl).hostname.split('.')[0] : null;
 
-    modalOverlay.querySelector('#profile-save-settings').addEventListener('click', () => {
-        // Gather all settings, starting with the existing ones to preserve keys not edited here
-        const newSettings = {
-            ...settings, 
-            enableEmailPolling: modalOverlay.querySelector('#profile-email-polling-toggle').checked,
-            enableAutoSync: modalOverlay.querySelector('#profile-auto-sync-toggle').checked,
-            serviceMap: {
-                calendar: modalOverlay.querySelector('#profile-calendar-provider-select').value,
-                tasks: modalOverlay.querySelector('#profile-tasks-provider-select').value,
-                contacts: modalOverlay.querySelector('#profile-contacts-provider-select').value,
-                files: modalOverlay.querySelector('#profile-files-provider-select').value,
-                notes: modalOverlay.querySelector('#profile-notes-provider-select').value,
+        const syncItemsHtml = syncTasks.map(task => {
+            const iconSVG = Icons[task.icon] || '';
+            const lastSyncData = currentStatus[task.name];
+            let statusText = 'Никогда не синхронизировалось';
+            let statusColor = 'text-gray-500';
+            let errorDetails = null;
+
+            if (lastSyncData) {
+                if (lastSyncData.error) {
+                    statusText = 'Ошибка синхронизации';
+                    statusColor = 'text-red-400';
+                    errorDetails = lastSyncData.error;
+                } else if (lastSyncData.lastSync) {
+                    statusText = `Синхронизировано: ${new Date(lastSyncData.lastSync).toLocaleString('ru-RU')}`;
+                    statusColor = 'text-green-400';
+                }
             }
-        };
-        onSave(newSettings);
-    });
+            
+            const tableLink = projectRef ? `https://supabase.com/dashboard/project/${projectRef}/editor/${task.tableName}` : '#';
 
-    modalOverlay.addEventListener('click', e => {
+            return `
+                <div class="flex items-center justify-between text-sm py-2 border-b border-gray-700/50 last:border-b-0">
+                    <div class="flex items-center gap-3">
+                        <span class="w-5 h-5 text-gray-400">${iconSVG}</span>
+                        <div class="flex flex-col">
+                            <span class="font-medium text-gray-200">${task.label}</span>
+                            <span class="text-xs ${statusColor}" title="${errorDetails || statusText}">${statusText}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 text-gray-400">
+                        ${errorDetails ? `<button data-action="analyze-error" data-task-name="${task.label}" data-error-message="${encodeURIComponent(errorDetails)}" class="px-2 py-1 text-xs bg-red-800 hover:bg-red-700 rounded-md text-white">Анализ</button>` : ''}
+                        <button data-action="view-data" data-table-name="${task.tableName}" data-label="${task.label}" title="Посмотреть данные" class="p-1.5 hover:bg-gray-700 rounded-full">${Icons.DatabaseIcon}</button>
+                        <a href="${tableLink}" target="_blank" title="Открыть в Supabase" class="p-1.5 hover:bg-gray-700 rounded-full ${!projectRef ? 'hidden' : ''}">${Icons.ExternalLinkIcon}</a>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        syncContainer.innerHTML = `
+             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
+                    <h3 class="text-lg font-semibold">Синхронизация данных</h3>
+                    <div id="force-sync-button-wrapper">${buttonHtml}</div>
+                </div>
+                <div id="sync-status-list" class="space-y-1">${syncItemsHtml}</div>
+            </div>`;
+    };
+
+    const handleAction = async (e) => {
+        const target = e.target.closest('[data-action]');
+        if (!target) return;
+        const action = target.dataset.action;
+
+        switch(action) {
+            case 'close': onClose(); break;
+            case 'logout': onLogout(); break;
+            case 'delete': onDelete(); break;
+            case 'save': {
+                const newSettings = {
+                    ...settings, 
+                    enableEmailPolling: modalOverlay.querySelector('#profile-email-polling-toggle').checked,
+                    enableAutoSync: modalOverlay.querySelector('#profile-auto-sync-toggle').checked,
+                    serviceMap: Object.keys(SERVICE_DEFINITIONS).reduce((acc, key) => {
+                        acc[key] = modalOverlay.querySelector(`#profile-${key}-provider-select`).value;
+                        return acc;
+                    }, {}),
+                };
+                onSave(newSettings);
+                break;
+            }
+            case 'force-sync': {
+                const wrapper = modalOverlay.querySelector('#force-sync-button-wrapper');
+                const button = wrapper.querySelector('button');
+                button.disabled = true;
+                button.innerHTML = `<div class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div> <span>Синхронизация...</span>`;
+                await onForceSync();
+                renderSyncSection(); // Re-render the whole section with new status
+                break;
+            }
+             case 'analyze-error': {
+                const taskName = target.dataset.taskName;
+                const errorMessage = decodeURIComponent(target.dataset.errorMessage);
+                const loadingHtml = `<p class="mb-4 text-sm">Анализ ошибки для "${taskName}"...</p><div class="flex items-center justify-center h-48"><div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;
+                renderSubModal(`Анализ ошибки: ${taskName}`, loadingHtml, true);
+                
+                try {
+                    const analysis = await onAnalyzeError({ context: `Ошибка при синхронизации ${taskName}`, error: errorMessage });
+                    const resultHtml = `
+                        <p class="text-sm text-gray-400 mb-2">Исходная ошибка:</p>
+                        <code class="block text-xs bg-gray-800 p-2 rounded-md mb-4 whitespace-pre-wrap">${errorMessage}</code>
+                        <div class="prose prose-invert max-w-none text-gray-300">${markdownToHTML(analysis)}</div>`;
+                    renderSubModal(`Анализ ошибки: ${taskName}`, resultHtml, true);
+                } catch(e) {
+                     renderSubModal(`Анализ ошибки: ${taskName}`, `Не удалось выполнить анализ: ${e.message}`, false);
+                }
+                break;
+            }
+            case 'view-data': {
+                const tableName = target.dataset.tableName;
+                const label = target.dataset.label;
+                renderSubModal(`Просмотр данных: ${label}`, 'Загрузка данных...', false);
+                const result = await onViewData({ tableName });
+
+                if (result.error) {
+                    renderSubModal(`Ошибка: ${label}`, `Не удалось загрузить данные: ${result.error}`, false);
+                } else if (!result.data || result.data.length === 0) {
+                     renderSubModal(`Просмотр данных: ${label}`, 'Нет синхронизированных данных для отображения.', false);
+                } else {
+                    const headers = Object.keys(result.data[0]);
+                    const tableHtml = `
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="border-b border-gray-600">
+                                    <tr>${headers.map(h => `<th class="p-2">${h}</th>`).join('')}</tr>
+                                </thead>
+                                <tbody>
+                                    ${result.data.map(row => `
+                                        <tr class="border-b border-gray-700/50">
+                                            ${headers.map(h => `<td class="p-2 align-top max-w-[200px] truncate" title="${row[h]}">${row[h] === null ? 'null' : row[h]}</td>`).join('')}
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>`;
+                     renderSubModal(`Последние ${result.data.length} записей: ${label}`, tableHtml, true);
+                }
+                break;
+            }
+            case 'close-sub-modal':
+                document.getElementById('profile-sub-modal').classList.add('hidden');
+                break;
+        }
+    };
+    
+    modalOverlay.addEventListener('click', (e) => {
         if (e.target === modalOverlay) onClose();
+        handleAction(e);
     });
+    
+    // Initial render
+    if (settings.isSupabaseEnabled) {
+        renderSyncSection();
+    }
 
     return modalOverlay;
 }

@@ -436,6 +436,7 @@ export class SupabaseService {
         const { data, error } = await this.client
             .from(tableName)
             .select('*')
+            .order('created_at', { ascending: false })
             .limit(limit);
             
         if (error) {

@@ -1,7 +1,7 @@
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
-import { callGemini, analyzeGenericErrorWithGemini, analyzeSyncErrorWithGemini } from './services/geminiService.js';
+import { callGemini, analyzeSyncErrorWithGemini } from './services/geminiService.js';
 import { getSettings, saveSettings, getSyncStatus, saveSyncStatus } from './utils/storage.js';
 import { createSetupWizard } from './components/SetupWizard.js';
 import { createSettingsModal } from './components/SettingsModal.js';
@@ -135,6 +135,7 @@ async function runAllSyncs() {
         saveSyncStatus(state.syncStatus);
     }
     state.isSyncing = false;
+    // The modal component will fetch the new status from storage itself.
 }
 
 function startAutoSync() {
@@ -427,34 +428,11 @@ function showSettingsModal() {
     showModal(modal);
 }
 
-async function handleForceSync() {
-    const syncButton = document.querySelector('#force-sync-button');
-    if (!syncButton || state.isSyncing) return;
-
-    const originalHTML = syncButton.innerHTML;
-    syncButton.innerHTML = `
-        <div class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
-        <span>Синхронизация...</span>`;
-    syncButton.disabled = true;
-
-    await runAllSyncs();
-
-    syncButton.innerHTML = originalHTML;
-    syncButton.disabled = false;
-    
-    // Re-render the modal to show updated statuses
-    if (document.querySelector('#profile-modal-content')) {
-        showProfileModal(); 
-    }
-    alert('Синхронизация завершена.');
-}
-
-
 function showProfileModal() {
     const handlers = {
         onClose: hideModal,
         onLogout: handleLogout,
-        onForceSync: handleForceSync,
+        onForceSync: runAllSyncs,
         onSave: (newSettings) => {
              state.settings = newSettings;
              saveSettings(state.settings);
@@ -485,6 +463,7 @@ function showProfileModal() {
              return analyzeSyncErrorWithGemini({
                 errorMessage: error,
                 context: context,
+                appStructure: APP_STRUCTURE_CONTEXT,
                 apiKey: state.settings.geminiApiKey,
                 proxyUrl: null, // Always call directly, proxy is for user prompts
             });
@@ -502,8 +481,9 @@ function showProfileModal() {
 }
 
 function showHelpModal() {
-    const handleAnalyzeError = (errorMessage) => analyzeGenericErrorWithGemini({
+    const handleAnalyzeError = (errorMessage) => analyzeSyncErrorWithGemini({
         errorMessage,
+        context: 'Анализ общей ошибки из Центра Помощи',
         appStructure: APP_STRUCTURE_CONTEXT,
         apiKey: state.settings.geminiApiKey,
         proxyUrl: null,

@@ -826,25 +826,28 @@ export const testProxyConnection = async ({ proxyUrl, signal }) => {
 };
 
 
-export const analyzeSyncErrorWithGemini = async ({ errorMessage, context, apiKey, proxyUrl }) => {
+export const analyzeSyncErrorWithGemini = async ({ errorMessage, context, appStructure, apiKey, proxyUrl }) => {
     if (!apiKey) {
         throw new Error("Ключ Gemini API не предоставлен.");
     }
     const clientOptions = { apiKey };
     if (proxyUrl) {
-        // The SDK constructor expects the endpoint without the protocol.
         clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
     }
     const ai = new GoogleGenAI(clientOptions);
 
-    const systemInstruction = `Ты — элитный инженер технической поддержки для веб-приложения "Секретарь+". Пользователь столкнулся с ошибкой.
+    const systemInstruction = `Ты — элитный Full-Stack инженер, отлаживающий веб-приложение "Секретарь+". Пользователь столкнулся с ошибкой во время фоновой синхронизации данных.
 Твоя задача:
-1.  **Проанализируй** техническое сообщение об ошибке.
-2.  **Объясни** простыми, понятными словами, что означает эта ошибка, как будто объясняешь не-техническому пользователю.
-3.  **Предложи** конкретное, пошаговое решение проблемы. Если решение требует действий в другом сервисе (например, Supabase или Google Cloud), дай четкие инструкции со ссылками, если это возможно.
-4.  Ответ должен быть в формате **Markdown**. Используй заголовки (#, ##), списки и выделение для лучшей читаемости.`;
+1.  **Проанализируй** техническое сообщение об ошибке. Особое внимание удели ошибкам, связанным с базой данных (например, "column does not exist", "relation does not exist"). Это может указывать на устаревшую схему Supabase.
+2.  **Учитывай структуру приложения**, чтобы дать максимально точный совет.
+3.  **Объясни** на русском языке простыми, понятными словами, что означает эта ошибка.
+4.  **Предложи** конкретное, пошаговое решение. Если проблема в схеме БД, четко скажи об этом и посоветуй пользователю выполнить SQL-скрипт из настроек Supabase. Ссылайся на конкретные файлы, если это возможно.
+5.  Ответ должен быть в формате **Markdown**.
 
-    const prompt = `Проанализируй следующую ошибку.
+**Структура приложения для контекста:**
+${appStructure}`;
+
+    const prompt = `Пользователь получил следующую ошибку. Проанализируй её и предложи решение.
 Контекст: ${context}
 Сообщение об ошибке:
 \`\`\`
@@ -861,50 +864,7 @@ ${errorMessage}
         });
         return response.text;
     } catch (error) {
-        console.error("Error calling Gemini for error analysis:", error);
-        return `### Ошибка при анализе\nНе удалось связаться с Gemini для анализа ошибки. Пожалуйста, проверьте свой API ключ и подключение к интернету.\n\n**Исходная ошибка:**\n\`\`\`\n${errorMessage}\n\`\`\``;
-    }
-};
-
-export const analyzeGenericErrorWithGemini = async ({ errorMessage, appStructure, apiKey, proxyUrl }) => {
-    if (!apiKey) {
-        throw new Error("Ключ Gemini API не предоставлен.");
-    }
-    const clientOptions = { apiKey };
-    if (proxyUrl) {
-        clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
-    }
-    const ai = new GoogleGenAI(clientOptions);
-
-    const systemInstruction = `Ты — элитный Full-Stack инженер, отлаживающий веб-приложение "Секретарь+". Пользователь столкнулся с ошибкой.
-Твоя задача:
-1.  **Проанализируй** техническое сообщение об ошибке, которое предоставит пользователь.
-2.  **Учитывай структуру приложения**, чтобы дать максимально точный совет.
-3.  **Объясни** простыми, понятными словами, что означает эта ошибка.
-4.  **Предложи** конкретное, пошаговое решение проблемы. Если решение требует действий в другом сервисе (например, Supabase, Google Cloud) или редактирования кода/настроек, дай четкие инструкции. Ссылайся на конкретные файлы, если это возможно.
-5.  Ответ должен быть в формате **Markdown** на русском языке. Используй заголовки, списки и выделение для лучшей читаемости.
-
-**Структура приложения для контекста:**
-${appStructure}`;
-
-    const prompt = `Пользователь получил следующую ошибку. Проанализируй её и предложи решение.
-
-**Сообщение об ошибке:**
-\`\`\`
-${errorMessage}
-\`\`\``;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: GEMINI_MODEL,
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            config: {
-                systemInstruction: systemInstruction,
-            },
-        });
-        return response.text;
-    } catch (error) {
-        console.error("Error calling Gemini for generic error analysis:", error);
+        console.error("Error calling Gemini for sync error analysis:", error);
         return `### Ошибка при анализе\nНе удалось связаться с Gemini для анализа ошибки. Пожалуйста, проверьте свой API ключ и подключение к интернету.\n\n**Исходная ошибка:**\n\`\`\`\n${errorMessage}\n\`\`\``;
     }
 };

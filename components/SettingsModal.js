@@ -335,7 +335,7 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 state.foundProxies = [];
                 render();
                 try {
-                    const proxies = await findProxiesWithGemini({ apiKey: settings.geminiApiKey });
+                    const proxies = await findProxiesWithGemini({ apiKey: settings.geminiApiKey, proxyUrl: null });
                     state.foundProxies = proxies;
                 } catch (err) {
                     alert(`Ошибка поиска прокси: ${err.message}`);
