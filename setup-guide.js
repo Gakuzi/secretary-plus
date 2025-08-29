@@ -123,14 +123,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p class="text-xs text-gray-400">${state.user.email}</p>
                 </div>
             </div>
-            <div class="step-navigation mt-4">
-                 <div></div> <!-- Spacer -->
-                 <button class="wizard-nav-button next-button" data-nav-target="keys">Продолжить</button>
-            </div>
         `;
         containers.userProfile.style.display = 'block';
         steps.auth.dataset.status = 'completed';
 
+        // Load settings from DB
         const { data, error } = await state.supabaseClient.from('user_settings').select('settings').single();
         if (error && error.code !== 'PGRST116') throw error;
         
@@ -138,10 +135,16 @@ document.addEventListener('DOMContentLoaded', () => {
         inputs.geminiApiKey.value = state.settings.geminiApiKey || '';
         inputs.googleClientId.value = state.settings.googleClientId || '';
         
-        const { data: proxiesData, error: proxiesError } = await state.supabaseClient.from('proxies').select('*');
+        const { data: proxiesData, error: proxiesError } = await state.supabaseClient.from('proxies').select('*').order('priority');
         if (proxiesError) throw proxiesError;
         state.selectedProxies = proxiesData || [];
         renderSelectedProxies();
+
+        // Auto-navigate to next step
+        setStatus(containers.authStatus, 'loading', 'Загружаем ваши настройки и переходим к следующему шагу...');
+        setTimeout(() => {
+            showStep('keys');
+        }, 1500);
     };
     
     // --- EVENT HANDLERS ---
@@ -203,7 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const foundProxies = await findProxiesWithGemini(state.settings.geminiApiKey);
             const existingUrls = new Set(state.selectedProxies.map(p => p.url));
-            const newProxies = foundProxies.filter(p => !existingUrls.has(p.url));
+            const newProxies = foundProxies.filter(p => p.url && !existingUrls.has(p.url));
 
             containers.foundProxies.innerHTML = '';
             if (newProxies.length === 0) {
@@ -228,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons.saveProxies.disabled = true;
         try {
             const proxiesToUpsert = state.selectedProxies.map((p, index) => ({
-                user_id: state.user.id, // CRITICAL FIX for RLS
+                user_id: state.user.id,
                 url: p.url,
                 alias: p.alias || p.geolocation,
                 geolocation: p.geolocation,
@@ -254,9 +257,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     buttons.goToApp.addEventListener('click', () => {
-        // Use localStorage to signal completion to the main app window
         localStorage.setItem('setup_completed', 'true');
-        window.close();
+        window.location.href = './index.html';
     });
 
     document.body.addEventListener('click', e => {
@@ -268,6 +270,78 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- PROXY LISTS LOGIC ---
     
+    function showProxyTestModal(proxyData) {
+        const modalContainer = document.getElementById('proxy-test-modal-container');
+        modalContainer.innerHTML = `
+            <div class="proxy-test-modal-overlay">
+                <div class="proxy-test-modal-content">
+                    <h3 class="step-subtitle">Тестирование прокси</h3>
+                    <div class="modal-body"></div>
+                    <div class="modal-footer"></div>
+                </div>
+            </div>
+        `;
+        
+        const modal = modalContainer.querySelector('.proxy-test-modal-overlay');
+        const body = modal.querySelector('.modal-body');
+        const footer = modal.querySelector('.modal-footer');
+        
+        const close = () => modalContainer.innerHTML = '';
+        
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) close();
+        });
+
+        const runTest = async () => {
+            body.innerHTML = `<p class="status-loading">Тестирование...</p>`;
+            footer.innerHTML = '';
+
+            const result = await testProxyConnection(proxyData.url, state.settings.geminiApiKey);
+            
+            updateProxyUI(proxyData.url, result);
+            
+            const isOk = result.status === 'ok';
+            body.innerHTML = `
+                <p class="proxy-item-url">${proxyData.url}</p>
+                <p class="proxy-item-details">${proxyData.geolocation}</p>
+                <div class="mt-4">
+                    <p class="status-message ${isOk ? 'status-success' : 'status-error'}">
+                        Статус: ${isOk ? 'Работает' : 'Ошибка'}
+                        ${isOk && result.speed ? ` (Скорость: ${result.speed} мс)` : ''}
+                        ${!isOk ? `<br><span class="text-xs">${result.message}</span>` : ''}
+                    </p>
+                </div>
+            `;
+
+            footer.innerHTML = `
+                <button class="wizard-nav-button prev-button retry-button">Повторить</button>
+                <button class="wizard-nav-button prev-button close-button">Закрыть</button>
+                ${isOk ? '<button class="wizard-nav-button next-button accept-button">Принять</button>' : ''}
+            `;
+
+            footer.querySelector('.retry-button').onclick = runTest;
+            footer.querySelector('.close-button').onclick = close;
+            const acceptButton = footer.querySelector('.accept-button');
+            if (acceptButton) {
+                acceptButton.onclick = () => {
+                    if (!state.selectedProxies.some(p => p.url === proxyData.url)) {
+                        state.selectedProxies.push({ 
+                            url: proxyData.url, 
+                            geolocation: proxyData.geolocation, 
+                            alias: proxyData.geolocation,
+                            last_status: result.status,
+                            last_speed_ms: result.speed
+                        });
+                        renderSelectedProxies();
+                    }
+                    close();
+                };
+            }
+        };
+
+        runTest();
+    }
+
     const renderProxyItem = (proxy, containerType) => {
         const isSelected = containerType === 'selected';
         const item = document.createElement('div');
@@ -284,8 +358,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </p>
             </div>
             <div class="proxy-item-actions">
-                ${!isSelected ? `<button class="test-btn">Тест</button><button class="add-btn">Добавить</button>` : ''}
-                ${isSelected ? `<button class="remove-btn">Удалить</button>` : ''}
+                 ${!isSelected ? `<button class="test-btn">Тест</button>` : ''}
+                 ${isSelected ? `<button class="remove-btn">Удалить</button>` : ''}
             </div>
         `;
         return item;
@@ -296,12 +370,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!item) return;
         const dot = item.querySelector('.proxy-status-dot');
         dot.dataset.status = status;
-        item.dataset.lastStatus = status; // Save status for adding later
+        item.dataset.lastStatus = status;
         const speedEl = item.querySelector('.speed-info');
         if (speed) {
             speedEl.textContent = ` · ${speed} мс`;
             speedEl.style.display = 'inline';
-            item.dataset.lastSpeed = speed; // Save speed for adding later
+            item.dataset.lastSpeed = speed;
         } else {
             speedEl.style.display = 'none';
         }
@@ -322,27 +396,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!item) return;
 
         const proxyUrl = item.dataset.url;
+        const proxyGeo = item.dataset.geo;
         
         if (target.matches('.test-btn')) {
-            target.disabled = true;
-            target.textContent = '...';
-            updateProxyUI(proxyUrl, { status: 'testing' });
-            const result = await testProxyConnection(proxyUrl, state.settings.geminiApiKey);
-            updateProxyUI(proxyUrl, result);
-            target.disabled = false;
-            target.textContent = 'Тест';
-        }
-
-        if (target.matches('.add-btn')) {
-            if (state.selectedProxies.some(p => p.url === proxyUrl)) return;
-            state.selectedProxies.push({ 
-                url: proxyUrl, 
-                geolocation: item.dataset.geo, 
-                alias: item.dataset.geo,
-                last_status: item.dataset.lastStatus,
-                last_speed_ms: item.dataset.lastSpeed
-            });
-            renderSelectedProxies();
+            showProxyTestModal({ url: proxyUrl, geolocation: proxyGeo });
         }
     });
 
@@ -362,26 +419,23 @@ document.addEventListener('DOMContentLoaded', () => {
         
         state.supabaseClient.auth.onAuthStateChange(async (event, session) => {
             if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session) {
-                if (!state.user) { // Prevent re-rendering if user is already set
+                if (!state.user) {
                     state.user = session.user;
                     await renderAuthenticatedState();
                 }
             } else if (event === 'SIGNED_OUT') {
                 state.user = null;
-                // Reset to initial state
                 showStep('auth');
                 buttons.connectLogin.style.display = 'block';
                 containers.userProfile.style.display = 'none';
                 containers.authStatus.style.display = 'none';
             }
 
-            // Clean URL from auth tokens after processing
             if (window.location.hash.includes('access_token')) {
                 history.replaceState(null, document.title, window.location.pathname + window.location.search);
             }
         });
 
-        // Check for existing session on page load
         const { data: { session } } = await state.supabaseClient.auth.getSession();
         if (session) {
             state.user = session.user;
