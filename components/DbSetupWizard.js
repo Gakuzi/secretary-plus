@@ -2,86 +2,27 @@ import * as Icons from './icons/Icons.js';
 
 const WIZARD_STEPS = [
     { id: 'intro', title: 'Введение' },
-    { id: 'data-reset', title: 'Сброс данных (опционально)' },
-    { id: 'get-token', title: 'Токен Supabase' },
+    { id: 'data-reset', title: 'Сброс данных' },
+    { id: 'get-connection-string', title: 'Строка подключения' },
     { id: 'create-worker', title: 'Создание Воркера' },
     { id: 'deploy-code', title: 'Код Воркера' },
     { id: 'test-save', title: 'Тест и Сохранение' },
 ];
 
 const MANAGEMENT_WORKER_CODE = `
+// Import the postgres.js library directly from a CDN. This works in Cloudflare Workers.
+import postgres from 'https://unpkg.com/postgres@3.4.4/esm/index.js';
+
 addEventListener('fetch', event => {
     event.respondWith(handleRequest(event.request));
 });
 
-async function handleRequest(request) {
-    // Handle CORS preflight requests
-    if (request.method === 'OPTIONS') {
-        return handleOptions(request);
-    }
-
-    // Handle test GET requests from Cloudflare dashboard gracefully
-    if (request.method === 'GET') {
-        return new Response(JSON.stringify({
-            status: 'ok',
-            message: 'Management worker is running. This endpoint expects POST requests.',
-        }), { status: 200, headers: corsHeaders() });
-    }
-
-    if (request.method !== 'POST') {
-        return new Response(JSON.stringify({ error: 'Method Not Allowed. Only POST requests are accepted.' }), {
-            status: 405,
-            headers: corsHeaders(),
-        });
-    }
-
-    // IMPORTANT: This should be automatically set to your project reference ID
-    const PROJECT_REF = 'YOUR_PROJECT_REF';
-    // **FIXED**: The correct endpoint for the SQL execution is /database/sql
-    const SUPABASE_API_URL = \`https://api.supabase.com/v1/projects/\${PROJECT_REF}/database/sql\`;
-
-    try {
-        const { query } = await request.json();
-        if (!query) {
-            return new Response(JSON.stringify({ error: '"query" parameter is missing.' }), { status: 400, headers: corsHeaders() });
-        }
-
-        const response = await fetch(SUPABASE_API_URL, {
-            method: 'POST',
-            headers: {
-                'Authorization': \`Bearer \${SUPABASE_MANAGEMENT_TOKEN}\`, // Token from Environment Variables
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ query: query }),
-        });
-
-        const responseText = await response.text();
-        const headers = corsHeaders();
-        // Forward content-type header from Supabase
-        const contentType = response.headers.get('Content-Type');
-        if (contentType) {
-            headers['Content-Type'] = contentType;
-        }
-
-        if (!response.ok) {
-            console.error('Supabase API Error:', responseText);
-            // Return Supabase's error response directly
-            return new Response(responseText, { status: response.status, headers });
-        }
-        
-        return new Response(responseText, { status: response.status, headers });
-
-    } catch (error) {
-        console.error('Worker Error:', error);
-        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders() });
-    }
-}
-
+// Standard CORS handling
 function handleOptions(request) {
     return new Response(null, {
         headers: {
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         },
     });
@@ -90,9 +31,49 @@ function handleOptions(request) {
 function corsHeaders() {
     return {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     };
+}
+
+async function handleRequest(request) {
+    if (request.method === 'OPTIONS') {
+        return handleOptions(request);
+    }
+    if (request.method === 'GET') {
+        return new Response(JSON.stringify({ status: 'ok' }), { headers: { ...corsHeaders(), 'Content-Type': 'application/json' }});
+    }
+    if (request.method !== 'POST') {
+        return new Response('Method Not Allowed', { status: 405 });
+    }
+
+    try {
+        // DATABASE_URL is an Environment Variable in Cloudflare containing the full Postgres connection string.
+        if (typeof DATABASE_URL === 'undefined') {
+            throw new Error('DATABASE_URL secret is not defined in worker settings.');
+        }
+
+        const sql = postgres(DATABASE_URL, {
+          ssl: 'require', // Supabase requires SSL
+          max: 1,         // Use a single connection
+          connect_timeout: 10,
+        });
+
+        const { query } = await request.json();
+        if (!query) {
+             return new Response(JSON.stringify({ error: '"query" parameter is missing.' }), { status: 400, headers: { ...corsHeaders(), 'Content-Type': 'application/json' } });
+        }
+
+        const result = await sql.unsafe(query);
+        await sql.end(); // Important: close the connection
+
+        return new Response(JSON.stringify(result), {
+          status: 200,
+          headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+        });
+
+    } catch (error) {
+        console.error('Worker Error:', error);
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders(), 'Content-Type': 'application/json' } });
+    }
 }
 `.trim();
 
@@ -142,12 +123,12 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
             case 'intro':
                 contentHtml = markdownToHTML(`
                     <p class="mb-4">Этот мастер поможет вам настроить **Управляющий воркер** — безопасный сервис для автоматического обновления схемы вашей базы данных Supabase.</p>
-                    <p class="mb-4">Это необходимо для добавления новых функций в приложение без риска потери данных.</p>
+                    <p class="mb-2 text-sm text-yellow-600 dark:text-yellow-400">Мы перешли на новый, более надежный метод прямого подключения к БД, так как старый API Supabase работал нестабильно.</p>
                     <div class="p-3 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-sm space-y-2">
                         <p><strong>Что вам понадобится:</strong></p>
                         <ul class="list-disc list-inside text-slate-600 dark:text-slate-400">
                             <li>Аккаунт <a href="https://cloudflare.com" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">Cloudflare</a> (бесплатного тарифа достаточно).</li>
-                            <li>Токен доступа к вашему аккаунту Supabase.</li>
+                            <li>Строка подключения к вашей базе данных Supabase.</li>
                         </ul>
                     </div>
                 `);
@@ -176,30 +157,30 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                 `;
                 break;
 
-            case 'get-token':
+            case 'get-connection-string':
                 contentHtml = `
-                    <p class="mb-4">Сначала необходимо сгенерировать токен доступа (Access Token) для вашего аккаунта Supabase.</p>
+                    <p class="mb-4">Вам понадобится **строка подключения (Connection String)** к вашей базе данных.</p>
                     <ol class="list-decimal list-inside space-y-2 text-slate-700 dark:text-slate-300 mb-4">
-                        <li>Откройте <a href="https://supabase.com/dashboard/account/tokens" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">страницу токенов Supabase</a> в новой вкладке.</li>
-                        <li>Нажмите <strong>Generate New Token</strong>.</li>
-                        <li>Дайте ему имя (например, \`secretary-plus-manager\`) и нажмите <strong>Generate token</strong>.</li>
-                        <li class="font-semibold text-yellow-500 dark:text-yellow-300">Сразу скопируйте токен. Он больше не будет показан.</li>
+                        <li>Откройте <a href="https://supabase.com/dashboard/project/${state.projectRef}/settings/database" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">настройки базы данных вашего проекта Supabase</a>.</li>
+                        <li>Найдите раздел <strong>Connection string</strong>.</li>
+                        <li>Выберите вкладку <strong>URI</strong>.</li>
+                        <li class="font-semibold text-yellow-500 dark:text-yellow-300">Скопируйте строку. Она содержит ваш пароль от БД, поэтому храните ее в секрете.</li>
                     </ol>
-                    <p>Этот токен понадобится на следующем шаге. Не закрывайте его и ни с кем не делитесь.</p>
+                    <p>Эта строка понадобится на следующем шаге.</p>
                 `;
                 break;
             
             case 'create-worker':
                 contentHtml = `
-                    <p class="mb-4">Теперь создайте новый Cloudflare Worker и безопасно сохраните в него ваш токен.</p>
+                    <p class="mb-4">Теперь создайте новый Cloudflare Worker и безопасно сохраните в него вашу строку подключения.</p>
                     <ol class="list-decimal list-inside space-y-2 text-slate-700 dark:text-slate-300">
                         <li>В <a href="https://dash.cloudflare.com/" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">панели Cloudflare</a>, перейдите в <strong>Workers & Pages</strong> и создайте новый воркер.</li>
                         <li>Перейдите в настройки созданного воркера: <strong>Settings &rarr; Variables</strong>.</li>
                         <li>В разделе **Environment Variables**, нажмите **Add variable**.</li>
                         <li>Заполните поля:
                             <ul class="list-disc list-inside ml-6 my-2 p-3 bg-slate-100 dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-600 font-mono text-sm">
-                                <li>Variable name: <code class="text-green-600 dark:text-green-400">SUPABASE_MANAGEMENT_TOKEN</code></li>
-                                <li>Value: <em>(вставьте ваш токен из Supabase)</em></li>
+                                <li>Variable name: <code class="text-green-600 dark:text-green-400">DATABASE_URL</code></li>
+                                <li>Value: <em>(вставьте вашу строку подключения из Supabase)</em></li>
                             </ul>
                         </li>
                         <li>Нажмите на иконку замка, чтобы <strong>Encrypt</strong> (зашифровать) переменную, и сохраните.</li>
@@ -208,24 +189,18 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                 break;
             
             case 'deploy-code':
-                const codeWithRef = MANAGEMENT_WORKER_CODE.replace('YOUR_PROJECT_REF', state.projectRef || 'YOUR_PROJECT_REF');
                 contentHtml = `
                     <p class="mb-4">Вернитесь в редактор кода вашего воркера, удалите всё содержимое и вставьте код ниже.</p>
-                     <div class="mb-4">
-                        <label for="project-ref-input" class="font-semibold text-sm">Ваш Supabase Project ID:</label>
-                        <input type="text" id="project-ref-input" class="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 mt-1 font-mono text-sm" value="${state.projectRef}" placeholder="abcdefghijklmnopqrst">
-                        <p class="text-xs text-slate-500 mt-1">ID был автоматически определен из ваших настроек. При необходимости исправьте его.</p>
-                    </div>
+                     <p class="text-xs text-slate-500 mb-4">Этот код использует библиотеку \`postgres.js\` для прямого и безопасного подключения к вашей базе данных.</p>
                     <div class="rounded-md border border-slate-200 dark:border-slate-700">
                         <div class="flex justify-between items-center bg-slate-100 dark:bg-slate-900 px-4 py-2 text-xs text-slate-500 dark:text-slate-400 rounded-t-md">
                             <span>JAVASCRIPT (CLOUDFLARE WORKER)</span>
                             <button class="text-xs font-semibold bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 px-2 py-1 rounded-md transition-colors" data-action="copy-code">Копировать</button>
                         </div>
-                        <pre class="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-b-md overflow-x-auto"><code id="worker-code-block" class="text-sm whitespace-pre font-mono">${codeWithRef}</code></pre>
+                        <pre class="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-b-md overflow-x-auto"><code id="worker-code-block" class="text-sm whitespace-pre font-mono">${MANAGEMENT_WORKER_CODE}</code></pre>
                     </div>
                      <p class="mt-4">После вставки кода нажмите <strong>Save and Deploy</strong> в интерфейсе Cloudflare.</p>
                 `;
-                isNextDisabled = !state.projectRef;
                 break;
 
             case 'test-save':
@@ -251,6 +226,7 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                         ${statusHtml || '<span class="text-slate-500">Ожидание теста...</span>'}
                     </div>
                 `;
+                isNextDisabled = state.testStatus !== 'ok';
                 break;
         }
 
@@ -260,7 +236,7 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
             </div>
             ${state.currentStep < WIZARD_STEPS.length - 1 ? 
                 `<button data-action="next" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold disabled:bg-slate-400 dark:disabled:bg-slate-500 disabled:cursor-not-allowed" ${isNextDisabled ? 'disabled' : ''}>Далее</button>` : 
-                `<button data-action="finish" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold disabled:bg-slate-400 dark:disabled:bg-slate-500 disabled:cursor-not-allowed" ${state.testStatus !== 'ok' ? 'disabled' : ''}>Сохранить и закрыть</button>`
+                `<button data-action="finish" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold disabled:bg-slate-400 dark:disabled:bg-slate-500 disabled:cursor-not-allowed" ${isNextDisabled ? 'disabled' : ''}>Сохранить и закрыть</button>`
             }
         `;
 
@@ -286,9 +262,7 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
         const action = target.dataset.action;
 
         // Collect inputs before changing step
-        const projectRefInput = wizardElement.querySelector('#project-ref-input');
         const workerUrlInput = wizardElement.querySelector('#worker-url-input');
-        if (projectRefInput) state.projectRef = projectRefInput.value.trim();
         if (workerUrlInput) state.workerUrl = workerUrlInput.value.trim();
 
         switch (action) {
@@ -330,18 +304,15 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ query: 'SELECT 1;' }),
                     });
-                    const responseText = await response.text();
+                    
+                    const responseJson = await response.json();
                     
                     if (!response.ok) {
-                        if (response.status === 404) {
-                             throw new Error('Ошибка 404 (Not Found). Проверьте токен доступа (Access Token) в настройках воркера Cloudflare. Он должен быть верным и зашифрованным.');
-                        }
-                        throw new Error(`Воркер вернул ошибку ${response.status}: ${responseText}`);
+                        throw new Error(`Воркер вернул ошибку ${response.status}: ${responseJson.error || 'Неизвестная ошибка'}`);
                     }
 
-                    const data = JSON.parse(responseText);
-                    if (!Array.isArray(data)) {
-                        throw new Error(`Воркер вернул неожиданный ответ. Проверьте PROJECT_REF в коде воркера. Ответ: ${responseText}`);
+                    if (!Array.isArray(responseJson)) {
+                        throw new Error(`Воркер вернул неожиданный ответ. Проверьте код и переменную DATABASE_URL.`);
                     }
                     state.testStatus = 'ok';
                     state.testMessage = 'Проверка пройдена успешно!';
@@ -357,21 +328,15 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
     
     wizardElement.addEventListener('click', handleAction);
     wizardElement.addEventListener('input', (e) => {
-        const projectRefInput = e.target.closest('#project-ref-input');
-        if (projectRefInput) {
-            state.projectRef = projectRefInput.value.trim();
-            const codeBlock = wizardElement.querySelector('#worker-code-block');
-            if (codeBlock) {
-                 codeBlock.textContent = MANAGEMENT_WORKER_CODE.replace('YOUR_PROJECT_REF', state.projectRef || 'YOUR_PROJECT_REF');
-            }
-            // Re-render footer to enable/disable button
-            const footerEl = wizardElement.querySelector('footer');
-            const isNextDisabled = !state.projectRef;
-             footerEl.querySelector('[data-action="next"]').disabled = isNextDisabled;
-        }
         const workerUrlInput = e.target.closest('#worker-url-input');
         if(workerUrlInput) {
             state.workerUrl = workerUrlInput.value.trim();
+             const finishButton = wizardElement.querySelector('[data-action="finish"]');
+            if (finishButton) {
+                // The finish button is on the same step, but next is not.
+                // We disable it here, but the main render() handles re-enabling on successful test.
+                finishButton.disabled = true;
+            }
         }
     });
 
