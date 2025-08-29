@@ -348,13 +348,12 @@ const baseTools = [
 ];
 
 export const callGemini = async ({
-    prompt,
+    userMessage,
     history,
     serviceProviders,
     serviceMap,
     timezone,
     isGoogleConnected,
-    image,
     apiKey,
     proxyUrl
 }) => {
@@ -386,9 +385,10 @@ export const callGemini = async ({
         return { role, parts };
     }).filter(msg => msg.parts.length > 0);
 
+    // Add the current user message to the context for the API call
     const userParts = [];
-    if (prompt) userParts.push({ text: prompt });
-    if (image) userParts.push({ inlineData: { mimeType: image.mimeType, data: image.base64 } });
+    if (userMessage.text) userParts.push({ text: userMessage.text });
+    if (userMessage.image) userParts.push({ inlineData: { mimeType: userMessage.image.mimeType, data: userMessage.image.base64 } });
     if (userParts.length > 0) {
         contents.push({ role: 'user', parts: userParts });
     }

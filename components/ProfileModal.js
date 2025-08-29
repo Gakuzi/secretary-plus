@@ -71,10 +71,10 @@ export function createProfileModal(userProfile, settings, handlers, syncStatus, 
     };
 
     const modalOverlay = document.createElement('div');
-    modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
+    modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4';
 
     modalOverlay.innerHTML = `
-        <div id="profile-modal-content" class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col m-4">
+        <div id="profile-modal-content" class="bg-gray-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-lg shadow-xl">
             <header class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
                 <h2 class="text-xl font-bold">Профиль пользователя</h2>
                 <button id="close-profile" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Закрыть профиль">&times;</button>

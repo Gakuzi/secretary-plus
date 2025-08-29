@@ -18,7 +18,7 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
     
     const render = () => {
         modalElement.innerHTML = `
-            <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div class="bg-gray-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-4xl sm:rounded-lg shadow-xl">
                 <header class="flex justify-between items-center p-4 border-b border-gray-700">
                     <h2 class="text-xl font-bold flex items-center gap-2">${Icons.SettingsIcon} Настройки</h2>
                     <button data-action="close" class="p-2 rounded-full hover:bg-gray-700">&times;</button>

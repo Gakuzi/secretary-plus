@@ -242,7 +242,7 @@ async function getActiveProxy() {
     return sorted.length > 0 ? sorted[0].url : null;
 };
 
-async function processBotResponse(prompt, image = null) {
+async function processBotResponse(userMessage, isSilent) {
     state.isLoading = true;
     showLoadingIndicator();
     let proxyUrl = null;
@@ -259,15 +259,19 @@ async function processBotResponse(prompt, image = null) {
         updateProxyStatusIndicator('off');
     }
 
+    // Determine the history to send to Gemini
+    const historyForGemini = isSilent 
+        ? state.messages // For silent, the message is not in state yet
+        : state.messages.slice(0, -1); // For regular, the message is the last one in state
+
     try {
         const response = await callGemini({
-            prompt,
-            history: state.messages.slice(0, -1),
+            userMessage,
+            history: historyForGemini,
             serviceProviders,
             serviceMap: state.settings.serviceMap,
             timezone: state.settings.timezone,
             isGoogleConnected: state.isGoogleConnected,
-            image,
             apiKey: state.settings.geminiApiKey,
             proxyUrl: proxyUrl, // Pass the found proxyUrl (or null)
         });
@@ -300,7 +304,7 @@ async function processBotResponse(prompt, image = null) {
     }
 }
 
-async function handleSendMessage(prompt, image = null) {
+async function handleSendMessage(prompt, image = null, options = { silent: false }) {
     if (state.isLoading || (!prompt && !image)) return;
     renderContextualActions(null);
     if (mainContent.querySelector('.welcome-screen-container')) {
@@ -309,10 +313,15 @@ async function handleSendMessage(prompt, image = null) {
     }
 
     const userMessage = { sender: MessageSender.USER, text: prompt, image, id: Date.now() };
-    state.messages.push(userMessage);
-    addMessageToChat(userMessage);
-    await processBotResponse(prompt, image);
+    
+    if (!options.silent) {
+        state.messages.push(userMessage);
+        addMessageToChat(userMessage);
+    }
+
+    await processBotResponse(userMessage, options.silent);
 }
+
 
 // Simplified card action handler
 async function handleCardAction(e) {
@@ -338,22 +347,24 @@ async function handleCardAction(e) {
     } else if (action === 'request_delete') {
          promptToSend = `Да, я подтверждаю удаление: ${payload.type} с ID ${payload.id}.`;
     } else {
-        promptToSend = `[CONTEXT] User interacted with a card item. Type: ${payload.type}, ID: ${payload.id}. Full data: ${JSON.stringify(payload)}. Generate a summary and relevant actions.`;
+        // Fallback for other actions, can be more specific if needed
+        promptToSend = `Выполни "${action}" с данными: ${JSON.stringify(payload)}`;
     }
 
-    if (promptToSend) await handleSendMessage(promptToSend);
+    if (promptToSend) await handleSendMessage(promptToSend, null, { silent: true });
 }
+
 
 async function handleQuickReply(e) {
     const target = e.target.closest('.quick-reply-button');
     if (!target || target.disabled) return;
     target.closest('.quick-replies-container').remove();
-    await handleSendMessage(target.dataset.replyText);
+    await handleSendMessage(target.dataset.replyText, null, { silent: true });
 }
 
 async function handleActionPrompt(e) {
     const target = e.target.closest('[data-action-prompt]');
-    if (target) await handleSendMessage(target.dataset.actionPrompt);
+    if (target) await handleSendMessage(target.dataset.actionPrompt, null, { silent: true });
 }
 
 // --- PROACTIVE FEATURES ---
@@ -364,7 +375,7 @@ async function checkForNewEmail() {
         if (latestEmail && latestEmail.id !== state.lastSeenEmailId) {
             state.lastSeenEmailId = latestEmail.id;
             const systemPrompt = `Пришло новое письмо от "${latestEmail.from}" с темой "${latestEmail.subject}". Содержимое: "${latestEmail.snippet}". Проанализируй и кратко сообщи мне об этом, предложив релевантные действия.`;
-            await processBotResponse(systemPrompt, null, true);
+            await handleSendMessage(systemPrompt, null, { silent: true });
         }
     } catch (error) {
         console.error("Error checking for new email:", error);
@@ -585,7 +596,7 @@ async function runApp() {
     
     mainContent.addEventListener('click', (e) => {
         const promptTarget = e.target.closest('[data-action="welcome_prompt"]');
-        if (promptTarget) handleSendMessage(JSON.parse(promptTarget.dataset.payload).prompt);
+        if (promptTarget) handleSendMessage(JSON.parse(promptTarget.dataset.payload).prompt, null, { silent: true });
         if (e.target.closest('#open-wizard-from-welcome')) showSetupWizard(false);
     });
 
