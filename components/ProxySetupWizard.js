@@ -10,13 +10,15 @@ const WIZARD_STEPS = [
 const PROXY_WORKER_CODE = `
 // The host for the Gemini API
 const GEMINI_API_HOST = "generativelanguage.googleapis.com";
+// The host for your Supabase project
+const SUPABASE_HOST = "abdrijvdzuikezysfqzu.supabase.co";
 
 addEventListener('fetch', event => {
     event.respondWith(handleRequest(event.request));
 });
 
 /**
- * Handles CORS preflight requests.
+ * Handles CORS preflight requests (OPTIONS method).
  * @param {Request} request
  * @returns {Response}
  */
@@ -24,38 +26,76 @@ function handleOptions(request) {
     const headers = {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, x-goog-api-client, x-goog-api-key', // Important headers for Gemini SDK
+        // Allow all headers requested by the client
+        'Access-Control-Allow-Headers': request.headers.get('Access-Control-Request-Headers') || '*',
     };
     return new Response(null, { headers });
 }
 
 /**
- * Fetches requests and adds CORS headers.
+ * Routes requests to either Gemini or Supabase based on the path, or returns an error.
  * @param {Request} request
  * @returns {Promise<Response>}
  */
 async function handleRequest(request) {
+    // First, handle any CORS preflight requests.
     if (request.method === 'OPTIONS') {
         return handleOptions(request);
     }
 
     const url = new URL(request.url);
-    url.host = GEMINI_API_HOST;
+    let targetHost;
 
+    // Rule for Gemini API (e.g., /v1beta/models/gemini-pro:generateContent)
+    if (url.pathname.startsWith('/v1beta/')) {
+        targetHost = GEMINI_API_HOST;
+    } 
+    // Rule for all Supabase APIs (auth, database, storage, functions)
+    else if (
+        url.pathname.startsWith('/auth/v1') || 
+        url.pathname.startsWith('/rest/v1') ||
+        url.pathname.startsWith('/storage/v1') ||
+        url.pathname.startsWith('/functions/v1')
+    ) {
+        targetHost = SUPABASE_HOST;
+    } else {
+        // If the path doesn't match known patterns, reject the request.
+        return new Response(
+            JSON.stringify({ error: "Request path not supported by this proxy." }), 
+            { 
+                status: 404,
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Access-Control-Allow-Origin': '*' // Also add CORS here for the error response
+                } 
+            }
+        );
+    }
+
+    // Set the target host on the URL
+    url.host = targetHost;
+
+    // Create a new request object with the modified URL
     const modifiedRequest = new Request(url, request);
 
     try {
         const response = await fetch(modifiedRequest);
-        const modifiedResponse = new Response(response.body, response);
         
-        // Set CORS headers on the response
+        // Create a new, mutable response to add our own CORS headers
+        const modifiedResponse = new Response(response.body, response);
         modifiedResponse.headers.set("Access-Control-Allow-Origin", "*");
         modifiedResponse.headers.set("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
         
         return modifiedResponse;
 
     } catch (e) {
-        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+        return new Response(JSON.stringify({ error: e.message }), { 
+            status: 500,
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Access-Control-Allow-Origin': '*' 
+            } 
+        });
     }
 }
 `.trim();
@@ -102,7 +142,8 @@ export function createProxySetupWizard({ onClose }) {
             
             case 'deploy-code':
                 contentHtml = `
-                    <p class="mb-4">Теперь перейдите в редактор кода вашего нового воркера (<strong>Edit code</strong>), удалите всё содержимое и вставьте код ниже.</p>
+                    <p class="mb-2">Теперь перейдите в редактор кода вашего нового воркера (<strong>Edit code</strong>), удалите всё содержимое и вставьте код ниже.</p>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Этот код создаст прокси-сервер, который может перенаправлять запросы как к Gemini, так и к Supabase, решая проблемы с доступом к обоим сервисам.</p>
                     <div class="rounded-md border border-slate-200 dark:border-slate-700">
                         <div class="flex justify-between items-center bg-slate-100 dark:bg-slate-900 px-4 py-2 text-xs text-slate-500 dark:text-slate-400 rounded-t-md">
                             <span>JAVASCRIPT (CLOUDFLARE WORKER)</span>
