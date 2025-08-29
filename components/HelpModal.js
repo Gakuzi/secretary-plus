@@ -1,4 +1,4 @@
-import { QuestionMarkCircleIcon, CodeIcon } from './icons/Icons.js';
+import { QuestionMarkCircleIcon, CodeIcon, AlertTriangleIcon } from './icons/Icons.js';
 import { getSettings } from '../utils/storage.js';
 import { SUPABASE_CONFIG } from '../config.js';
 
@@ -98,14 +98,14 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                 <nav class="sm:hidden flex-shrink-0 border-b border-gray-700 p-2 flex items-center justify-around gap-2">
                     <a href="#error-analysis" class="settings-tab-button active text-center flex-1" data-tab="error-analysis">Анализ</a>
                     <a href="#instructions" class="settings-tab-button text-center flex-1" data-tab="instructions">Инструкции</a>
-                    <a href="#dev-tools" class="settings-tab-button text-center flex-1" data-tab="dev-tools">Инструменты</a>
+                    <a href="#tools" class="settings-tab-button text-center flex-1" data-tab="tools">Инструменты</a>
                 </nav>
                 <!-- Desktop Sidebar -->
                 <aside class="hidden sm:flex w-52 border-r border-gray-700 p-4 flex-shrink-0">
                     <nav class="flex flex-col space-y-2 w-full">
                         <a href="#error-analysis" class="settings-tab-button active text-left" data-tab="error-analysis">Анализ ошибок</a>
                         <a href="#instructions" class="settings-tab-button text-left" data-tab="instructions">Инструкции</a>
-                        <a href="#dev-tools" class="settings-tab-button text-left" data-tab="dev-tools">Инструменты</a>
+                        <a href="#tools" class="settings-tab-button text-left" data-tab="tools">Инструменты</a>
                     </nav>
                 </aside>
                 <div class="flex-1 p-4 sm:p-6 overflow-y-auto" id="help-tabs-content">
@@ -132,25 +132,24 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                     <!-- Instructions Tab -->
                     <div id="tab-instructions" class="settings-tab-content hidden"></div>
 
-                    <!-- Setup Guide Tab -->
-                    <div id="tab-setup-guide" class="settings-tab-content hidden space-y-6">
+                    <!-- Tools Tab -->
+                    <div id="tab-tools" class="settings-tab-content hidden space-y-6">
                          <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
                             <h3 class="text-lg font-semibold text-gray-200">Сброс и повторная настройка</h3>
                             <p class="text-sm text-gray-400 mt-1 mb-4">
                                 Если вы хотите начать настройку с самого начала или считаете, что допустили ошибку, вы можете перезапустить мастер.
                             </p>
-                            <div class="text-sm p-3 rounded-md bg-yellow-900/30 border border-yellow-700 text-yellow-300">
-                                <p class="font-bold">Внимание:</p>
-                                <p>Это действие удалит все ваши текущие настройки, сохраненные в браузере (включая API ключи). Настройки, синхронизированные с Supabase, останутся без изменений.</p>
+                            <div class="text-sm p-3 rounded-md bg-yellow-900/30 border border-yellow-700 text-yellow-300 flex items-start gap-3">
+                                <div class="w-5 h-5 flex-shrink-0 mt-0.5">${AlertTriangleIcon}</div>
+                                <div>
+                                    <p class="font-bold">Внимание:</p>
+                                    <p>Это действие удалит все ваши текущие настройки, сохраненные в браузере (включая API ключи). Настройки, синхронизированные с Supabase, останутся без изменений.</p>
+                                </div>
                             </div>
                             <button id="relaunch-wizard-button" class="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md font-semibold transition-colors">
                                 Перезапустить Мастер Настройки
                             </button>
                         </div>
-                    </div>
-
-                    <!-- Dev Tools Tab -->
-                    <div id="tab-dev-tools" class="settings-tab-content hidden space-y-6">
                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
                             <h3 class="text-lg font-semibold text-gray-200">Инструменты разработчика</h3>
                             <p class="text-sm text-gray-400 mt-1 mb-4">Быстрый доступ для редактирования и отладки ассистента в Google AI Studio.</p>
@@ -160,6 +159,7 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                             </button>
                         </div>
                     </div>
+
                 </div>
             </main>
         </div>
