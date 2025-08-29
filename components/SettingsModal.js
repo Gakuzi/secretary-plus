@@ -2,280 +2,9 @@ import { getSettings, saveSettings } from '../utils/storage.js';
 import { testProxyConnection, findProxiesWithGemini } from '../services/geminiService.js';
 import * as Icons from './icons/Icons.js';
 
-const SUPABASE_SCHEMA_SQL = `-- =================================================================
---  Скрипт настройки базы данных "Секретарь+"
---  Версия: 2.5.1
---  Этот скрипт является идемпотентным и обратно совместимым. 
---  Он безопасно создает или обновляет схему до последней версии.
--- =================================================================
-
--- 1. Таблица контактов (contacts)
-CREATE TABLE IF NOT EXISTS public.contacts (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  source_id TEXT NOT NULL,
-  display_name TEXT,
-  email TEXT,
-  phone TEXT,
-  avatar_url TEXT
-);
-DO $$ BEGIN
-  -- Handle legacy 'source' column
-  IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='contacts' AND column_name='source') AND NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='contacts' AND column_name='source_id') THEN
-    ALTER TABLE public.contacts RENAME COLUMN "source" TO "source_id";
-  END IF;
-  -- Ensure standard timestamp columns exist
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='contacts' and column_name='created_at') THEN ALTER TABLE public.contacts ADD COLUMN "created_at" timestamptz DEFAULT now(); END IF;
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='contacts' and column_name='updated_at') THEN ALTER TABLE public.contacts ADD COLUMN "updated_at" timestamptz DEFAULT now(); END IF;
-  -- Ensure new data columns exist
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='contacts' and column_name='addresses') THEN ALTER TABLE public.contacts ADD COLUMN "addresses" jsonb; END IF;
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='contacts' and column_name='organizations') THEN ALTER TABLE public.contacts ADD COLUMN "organizations" jsonb; END IF;
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='contacts' and column_name='birthdays') THEN ALTER TABLE public.contacts ADD COLUMN "birthdays" jsonb; END IF;
-  -- Ensure constraints
-  ALTER TABLE public.contacts ALTER COLUMN source_id SET NOT NULL;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'contacts_user_id_source_id_key' AND conrelid = 'public.contacts'::regclass) THEN
-    ALTER TABLE public.contacts ADD UNIQUE(user_id, source_id);
-  END IF;
-END $$;
-
-
--- 2. Таблица файлов (files)
-CREATE TABLE IF NOT EXISTS public.files (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  source_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  mime_type TEXT,
-  url TEXT,
-  icon_link TEXT,
-  created_time TIMESTAMPTZ,
-  modified_time TIMESTAMPTZ,
-  viewed_by_me_time TIMESTAMPTZ,
-  size BIGINT,
-  owner TEXT,
-  permissions JSONB
-);
-DO $$ BEGIN
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='files' and column_name='created_at') THEN ALTER TABLE public.files ADD COLUMN "created_at" timestamptz DEFAULT now(); END IF;
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='files' and column_name='updated_at') THEN ALTER TABLE public.files ADD COLUMN "updated_at" timestamptz DEFAULT now(); END IF;
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='files' and column_name='last_modifying_user') THEN ALTER TABLE public.files ADD COLUMN "last_modifying_user" text; END IF;
-  ALTER TABLE public.files ALTER COLUMN source_id SET NOT NULL;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'files_user_id_source_id_key' AND conrelid = 'public.files'::regclass) THEN
-    ALTER TABLE public.files ADD UNIQUE(user_id, source_id);
-  END IF;
-END $$;
-
-
--- 3. Таблица заметок (notes)
-CREATE TABLE IF NOT EXISTS public.notes (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  title TEXT,
-  content TEXT NOT NULL
-);
-DO $$ BEGIN
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='notes' and column_name='created_at') THEN ALTER TABLE public.notes ADD COLUMN "created_at" timestamptz DEFAULT now(); END IF;
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='notes' and column_name='updated_at') THEN ALTER TABLE public.notes ADD COLUMN "updated_at" timestamptz DEFAULT now(); END IF;
-END $$;
-
-
--- 4. Таблица событий календаря (calendar_events)
-CREATE TABLE IF NOT EXISTS public.calendar_events (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    source_id TEXT NOT NULL,
-    title TEXT,
-    description TEXT,
-    start_time TIMESTAMPTZ,
-    end_time TIMESTAMPTZ,
-    event_link TEXT,
-    meet_link TEXT
-);
-DO $$ BEGIN
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='calendar_events' and column_name='created_at') THEN ALTER TABLE public.calendar_events ADD COLUMN "created_at" timestamptz DEFAULT now(); END IF;
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='calendar_events' and column_name='updated_at') THEN ALTER TABLE public.calendar_events ADD COLUMN "updated_at" timestamptz DEFAULT now(); END IF;
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='calendar_events' and column_name='attendees') THEN ALTER TABLE public.calendar_events ADD COLUMN "attendees" jsonb; END IF;
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='calendar_events' and column_name='status') THEN ALTER TABLE public.calendar_events ADD COLUMN "status" text; END IF;
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='calendar_events' and column_name='creator_email') THEN ALTER TABLE public.calendar_events ADD COLUMN "creator_email" text; END IF;
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='calendar_events' and column_name='is_all_day') THEN ALTER TABLE public.calendar_events ADD COLUMN "is_all_day" boolean DEFAULT false; END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'calendar_events_user_id_source_id_key' AND conrelid = 'public.calendar_events'::regclass) THEN
-    ALTER TABLE public.calendar_events ADD UNIQUE(user_id, source_id);
-  END IF;
-END $$;
-
-
--- 5. Таблица задач (tasks)
-CREATE TABLE IF NOT EXISTS public.tasks (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    source_id TEXT NOT NULL,
-    title TEXT,
-    notes TEXT,
-    due_date TIMESTAMPTZ,
-    status TEXT
-);
-DO $$ BEGIN
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='tasks' and column_name='created_at') THEN ALTER TABLE public.tasks ADD COLUMN "created_at" timestamptz DEFAULT now(); END IF;
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='tasks' and column_name='updated_at') THEN ALTER TABLE public.tasks ADD COLUMN "updated_at" timestamptz DEFAULT now(); END IF;
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='tasks' and column_name='completed_at') THEN ALTER TABLE public.tasks ADD COLUMN "completed_at" timestamptz; END IF;
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='tasks' and column_name='parent_task_id') THEN ALTER TABLE public.tasks ADD COLUMN "parent_task_id" text; END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tasks_user_id_source_id_key' AND conrelid = 'public.tasks'::regclass) THEN
-    ALTER TABLE public.tasks ADD UNIQUE(user_id, source_id);
-  END IF;
-END $$;
-
-
--- 6. Таблица долговременной памяти (chat_memory)
-CREATE TABLE IF NOT EXISTS public.chat_memory (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    summary TEXT NOT NULL,
-    keywords TEXT[],
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
-
--- 7. Таблица метаданных почты (emails)
-CREATE TABLE IF NOT EXISTS public.emails (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    source_id TEXT NOT NULL,
-    subject TEXT,
-    sender TEXT,
-    snippet TEXT,
-    received_at TIMESTAMPTZ,
-    full_body TEXT,
-    attachments_metadata JSONB
-);
-DO $$ BEGIN
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='emails' and column_name='created_at') THEN ALTER TABLE public.emails ADD COLUMN "created_at" timestamptz DEFAULT now(); END IF;
-  IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='emails' and column_name='updated_at') THEN ALTER TABLE public.emails ADD COLUMN "updated_at" timestamptz DEFAULT now(); END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'emails_user_id_source_id_key' AND conrelid = 'public.emails'::regclass) THEN
-    ALTER TABLE public.emails ADD UNIQUE(user_id, source_id);
-  END IF;
-END $$;
-
--- 8. Таблица статистики действий (action_stats)
-CREATE TABLE IF NOT EXISTS public.action_stats (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    function_name TEXT NOT NULL,
-    call_count INT DEFAULT 1 NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'action_stats_user_id_function_name_key' AND conrelid = 'public.action_stats'::regclass) THEN
-    ALTER TABLE public.action_stats ADD UNIQUE(user_id, function_name);
-  END IF;
-END $$;
-
--- 9. Таблица настроек пользователя (user_settings)
-CREATE TABLE IF NOT EXISTS public.user_settings (
-  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  settings JSONB NOT NULL,
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
-
--- 10. Таблица прокси-серверов (proxies)
-CREATE TABLE IF NOT EXISTS public.proxies (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    url TEXT NOT NULL,
-    priority INT DEFAULT 0 NOT NULL,
-    is_active BOOLEAN DEFAULT true NOT NULL,
-    last_status TEXT DEFAULT 'untested' NOT NULL, -- 'untested', 'ok', 'error'
-    last_checked_at TIMESTAMPTZ,
-    last_speed_ms INT,
-    geolocation TEXT,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'proxies_user_id_url_key' AND conrelid = 'public.proxies'::regclass) THEN
-    ALTER TABLE public.proxies ADD UNIQUE(user_id, url);
-  END IF;
-END $$;
-
-
--- 11. Включение Row Level Security (RLS) для всех таблиц
-ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.files ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.calendar_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.chat_memory ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.emails ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.action_stats ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.proxies ENABLE ROW LEVEL SECURITY;
-
-
--- 12. Создание политик безопасности (удаляем старые, если они есть, чтобы избежать ошибок)
-DROP POLICY IF EXISTS "Allow users to manage their own contacts" ON public.contacts;
-CREATE POLICY "Allow users to manage their own contacts" ON public.contacts FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own files" ON public.files;
-CREATE POLICY "Allow users to manage their own files" ON public.files FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own notes" ON public.notes;
-CREATE POLICY "Allow users to manage their own notes" ON public.notes FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own calendar events" ON public.calendar_events;
-CREATE POLICY "Allow users to manage their own calendar events" ON public.calendar_events FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own tasks" ON public.tasks;
-CREATE POLICY "Allow users to manage their own tasks" ON public.tasks FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own chat memory" ON public.chat_memory;
-CREATE POLICY "Allow users to manage their own chat memory" ON public.chat_memory FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own emails" ON public.emails;
-CREATE POLICY "Allow users to manage their own emails" ON public.emails FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own stats" ON public.action_stats;
-CREATE POLICY "Allow users to manage their own stats" ON public.action_stats FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can manage their own settings" ON public.user_settings;
-CREATE POLICY "Users can manage their own settings" ON public.user_settings FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own proxies" ON public.proxies;
-CREATE POLICY "Allow users to manage their own proxies" ON public.proxies FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-
--- 13. RPC-функции
-CREATE OR REPLACE FUNCTION increment_stat(fn_name TEXT)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  INSERT INTO public.action_stats (user_id, function_name, call_count)
-  VALUES (auth.uid(), fn_name, 1)
-  ON CONFLICT (user_id, function_name)
-  DO UPDATE SET call_count = action_stats.call_count + 1;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION upsert_user_settings(new_settings JSONB)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  INSERT INTO public.user_settings (user_id, settings)
-  VALUES (auth.uid(), new_settings)
-  ON CONFLICT (user_id)
-  DO UPDATE SET settings = EXCLUDED.settings, updated_at = now();
-END;
-$$;`;
-
-
-export function createSettingsModal({ settings, supabaseService, onClose, onSave, initialTab = 'connections' }) {
+export function createSettingsModal({ settings, supabaseService, onClose, onSave, onLaunchDbWizard }) {
     const modalElement = document.createElement('div');
     modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
-
-    let state = {
-        isLoading: false,
-        isShowingSql: false,
-    };
     
     const showProxyManagerModal = () => {
         const managerContainer = document.createElement('div');
@@ -548,17 +277,12 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
         });
         
         renderManager();
-        wizardElement.appendChild(managerContainer);
+        modalElement.appendChild(managerContainer);
         handleDragAndDrop(managerContainer.querySelector('#saved-proxy-list-dnd'));
         loadSavedProxies();
     };
-
-    const projectRef = supabaseService?.url ? new URL(supabaseService.url).hostname.split('.')[0] : null;
-    const sqlEditorLink = projectRef ? `https://supabase.com/dashboard/project/${projectRef}/sql/new` : null;
-
+    
     const render = () => {
-        const sqlSectionDisplay = state.isShowingSql ? 'block' : 'none';
-        
         modalElement.innerHTML = `
             <div id="settings-content" class="bg-white dark:bg-slate-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-lg shadow-xl">
                 <header class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
@@ -567,11 +291,11 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 </header>
 
                 <main class="flex-1 flex flex-col sm:flex-row overflow-hidden bg-slate-50 dark:bg-slate-900/70">
-                    <aside class="hidden sm:flex w-52 border-r border-slate-200 dark:border-slate-700 p-4 flex-shrink-0 bg-white dark:bg-slate-800">
-                         <nav class="flex flex-col space-y-2 w-full">
-                            <a href="#connections" class="settings-tab-button text-left active" data-tab="connections">Подключения</a>
-                            <a href="#database" class="settings-tab-button text-left" data-tab="database">База данных</a>
-                            <a href="#about" class="settings-tab-button text-left" data-tab="about">О приложении</a>
+                    <aside class="w-full sm:w-52 border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-slate-700 p-2 sm:p-4 flex-shrink-0 bg-white dark:bg-slate-800">
+                         <nav class="flex flex-row sm:flex-col sm:space-y-2 w-full justify-around">
+                            <a href="#connections" class="settings-tab-button text-center sm:text-left active" data-tab="connections">Подключения</a>
+                            <a href="#database" class="settings-tab-button text-center sm:text-left" data-tab="database">База данных</a>
+                            <a href="#about" class="settings-tab-button text-center sm:text-left" data-tab="about">О приложении</a>
                         </nav>
                     </aside>
 
@@ -608,23 +332,17 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                         <!-- Database Tab -->
                         <div id="tab-database" class="settings-tab-content hidden space-y-6">
                              <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Обновление Базы Данных</h3>
-                                <p class="text-sm text-slate-600 dark:text-slate-400 my-4">Для добавления новых функций и исправления ошибок, иногда требуется обновить структуру вашей базы данных Supabase. Это простой и безопасный процесс.</p>
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Управление Базой Данных</h3>
+                                <p class="text-sm text-slate-600 dark:text-slate-400 my-4">Для автоматического обновления схемы базы данных и добавления новых функций используется Управляющий воркер. Если вы столкнулись с ошибками синхронизации, запустите мастер для его настройки или проверки.</p>
                                 <div class="text-sm p-3 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 text-blue-800 dark:text-blue-200">
-                                    <p class="font-bold mb-2">Процесс обновления (2 клика):</p>
-                                    <ol class="list-decimal list-inside space-y-1">
-                                        <li>Нажмите кнопку **"Копировать SQL-скрипт"** ниже.</li>
-                                        <li>Нажмите кнопку **"Открыть Редактор Supabase"**.</li>
-                                        <li>В открывшейся вкладке Supabase вставьте скопированный скрипт и нажмите **"RUN"**.</li>
-                                    </ol>
-                                    <p class="mt-2 text-xs">Это безопасно. Скрипт только добавляет новые таблицы и поля, не удаляя ваши данные.</p>
+                                    <p class="font-bold mb-2">Зачем это нужно?</p>
+                                     <p>Воркер — это безопасный способ для приложения вносить изменения в структуру базы данных, не требуя от вас ручного выполнения SQL-скриптов.</p>
                                 </div>
-                                <div class="flex flex-col sm:flex-row gap-3 mt-4">
-                                    <button data-action="copy-sql" class="w-full flex-1 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2">
-                                        ${Icons.CodeIcon}
-                                        <span>Копировать SQL-скрипт</span>
+                                <div class="mt-4">
+                                    <button data-action="launch-db-wizard" class="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2">
+                                        ${Icons.DatabaseIcon}
+                                        <span>Запустить мастер настройки БД</span>
                                     </button>
-                                    ${sqlEditorLink ? `<a href="${sqlEditorLink}" target="_blank" rel="noopener noreferrer" class="w-full flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2">${Icons.ExternalLinkIcon} <span>Открыть Редактор Supabase</span></a>` : `<button class="w-full flex-1 px-4 py-2 bg-slate-400 text-white rounded-md font-semibold text-sm cursor-not-allowed" disabled>Редактор Supabase (настройте Supabase)</button>`}
                                 </div>
                             </div>
                         </div>
@@ -693,24 +411,9 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
             case 'manage-proxies':
                 showProxyManagerModal();
                 break;
-            case 'copy-sql':
-                navigator.clipboard.writeText(SUPABASE_SCHEMA_SQL).then(() => {
-                    const originalText = target.innerHTML;
-                    target.innerHTML = `✓ Скопировано!`;
-                    setTimeout(() => { target.innerHTML = originalText; }, 2000);
-                });
+            case 'launch-db-wizard':
+                onLaunchDbWizard();
                 break;
-        }
-    };
-
-    const activateInitialTab = () => {
-        modalElement.querySelectorAll('.settings-tab-button').forEach(btn => btn.classList.remove('active'));
-        modalElement.querySelectorAll('.settings-tab-content').forEach(content => content.classList.add('hidden'));
-
-        modalElement.querySelectorAll(`.settings-tab-button[data-tab="${initialTab}"]`).forEach(btn => btn.classList.add('active'));
-        const initialTabContent = modalElement.querySelector(`#tab-${initialTab}`);
-        if (initialTabContent) {
-            initialTabContent.classList.remove('hidden');
         }
     };
 
@@ -736,6 +439,17 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
 
     render();
     loadAppInfo();
-    activateInitialTab();
+    
+    // Activate initial tab if provided, otherwise default to connections
+    const initialTab = 'connections';
+    modalElement.querySelectorAll('.settings-tab-button').forEach(btn => btn.classList.remove('active'));
+    modalElement.querySelectorAll('.settings-tab-content').forEach(content => content.classList.add('hidden'));
+
+    modalElement.querySelectorAll(`.settings-tab-button[data-tab="${initialTab}"]`).forEach(btn => btn.classList.add('active'));
+    const initialTabContent = modalElement.querySelector(`#tab-${initialTab}`);
+    if (initialTabContent) {
+        initialTabContent.classList.remove('hidden');
+    }
+
     return modalElement;
 }

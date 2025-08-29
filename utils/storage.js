@@ -7,6 +7,7 @@ const defaultSettings = {
     isSupabaseEnabled: true, // Master switch for Supabase
     supabaseUrl: '',
     supabaseAnonKey: '',
+    managementWorkerUrl: '', // URL for the DB management worker
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     enableEmailPolling: true, // For proactive email notifications
     enableAutoSync: true, // For background data synchronization
@@ -44,6 +45,7 @@ export function saveSettings(settings) {
             isSupabaseEnabled: settings.isSupabaseEnabled,
             supabaseUrl: settings.supabaseUrl,
             supabaseAnonKey: settings.supabaseAnonKey,
+            managementWorkerUrl: settings.managementWorkerUrl,
             timezone: settings.timezone,
             enableEmailPolling: settings.enableEmailPolling,
             enableAutoSync: settings.enableAutoSync,

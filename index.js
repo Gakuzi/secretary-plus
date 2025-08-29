@@ -9,6 +9,7 @@ import { createProfileModal } from './components/ProfileModal.js';
 import { createStatsModal } from './components/StatsModal.js';
 import { createHelpModal } from './components/HelpModal.js';
 import { createProxySetupWizard } from './components/ProxySetupWizard.js';
+import { createDbSetupWizard } from './components/DbSetupWizard.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
@@ -28,6 +29,7 @@ const APP_STRUCTURE_CONTEXT = `
 - components/SettingsModal.js: Окно для управления настройками после входа.
 - components/ProfileModal.js: Окно профиля, где отображается статус синхронизации.
 - components/ProxySetupWizard.js: Мастер настройки прокси-воркера для Gemini.
+- components/DbSetupWizard.js: Мастер настройки воркера для управления БД.
 `;
 
 async function showBrowserNotification(title, options) {
@@ -443,7 +445,27 @@ function showProxySetupWizard() {
     modalContainer.appendChild(modal);
 }
 
-function showSettingsModal(options = {}) {
+function showDbSetupWizard() {
+    modalContainer.innerHTML = '';
+    const onDbSave = async (newSettings) => {
+        state.settings = newSettings;
+        saveSettings(newSettings);
+        if (state.isSupabaseReady && supabaseService) {
+            await supabaseService.saveUserSettings(newSettings);
+        }
+        modalContainer.innerHTML = '';
+        await initializeAppServices();
+    };
+    const modal = createDbSetupWizard({
+        settings: state.settings,
+        supabaseConfig: SUPABASE_CONFIG,
+        onClose: () => modalContainer.innerHTML = '',
+        onSave: onDbSave,
+    });
+    modalContainer.appendChild(modal);
+}
+
+function showSettingsModal() {
     modalContainer.innerHTML = '';
     const onSave = async (newSettings) => {
         state.settings = newSettings;
@@ -459,7 +481,10 @@ function showSettingsModal(options = {}) {
         supabaseService: supabaseService,
         onClose: () => modalContainer.innerHTML = '',
         onSave,
-        initialTab: options.initialTab || 'connections',
+        onLaunchDbWizard: () => {
+            modalContainer.innerHTML = ''; // Close settings first
+            showDbSetupWizard();
+        },
     });
     modalContainer.appendChild(modal);
 }
@@ -501,7 +526,7 @@ function showProfileModal() {
 
     const onLaunchDbWizard = () => {
         modalContainer.innerHTML = ''; // Close profile modal first
-        showSettingsModal({ initialTab: 'database' });
+        showDbSetupWizard();
     };
 
     const modal = createProfileModal(
@@ -530,7 +555,7 @@ function showStatsModal() {
     modalContainer.appendChild(modal);
 }
 
-function showHelpModal(options = {}) {
+function showHelpModal() {
     modalContainer.innerHTML = '';
     const onRelaunchWizard = () => {
         if (confirm('Это действие удалит ваши текущие настройки из браузера. Вы уверены?')) {
@@ -547,23 +572,19 @@ function showHelpModal(options = {}) {
             proxyUrl: await getActiveProxy()
         });
      };
-     
-    const onOpenDbSettings = () => {
-        modalContainer.innerHTML = ''; // Close help modal first
-        showSettingsModal({ initialTab: 'database' });
-    };
-
     const modal = createHelpModal({
         onClose: () => modalContainer.innerHTML = '',
         settings: state.settings,
         analyzeErrorFn,
         onRelaunchWizard,
-        onLaunchDbWizard: onOpenDbSettings,
+        onLaunchDbWizard: () => {
+            modalContainer.innerHTML = ''; // Close help modal first
+            showDbSetupWizard();
+        },
         onLaunchProxyWizard: () => {
             modalContainer.innerHTML = ''; // Close help modal first
             showProxySetupWizard();
         },
-        initialTab: options.initialTab || 'about'
     });
     modalContainer.appendChild(modal);
 }
@@ -690,9 +711,9 @@ settingsButton.innerHTML = SettingsIcon;
 statsButton.innerHTML = ChartBarIcon;
 helpButton.innerHTML = QuestionMarkCircleIcon;
 
-settingsButton.addEventListener('click', () => showSettingsModal());
+settingsButton.addEventListener('click', showSettingsModal);
 statsButton.addEventListener('click', showStatsModal);
-helpButton.addEventListener('click', () => showHelpModal());
+helpButton.addEventListener('click', showHelpModal);
 
 // Start the app
 showInitialScreen();

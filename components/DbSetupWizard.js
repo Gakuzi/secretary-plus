@@ -2,6 +2,7 @@ import * as Icons from './icons/Icons.js';
 
 const WIZARD_STEPS = [
     { id: 'intro', title: 'Введение' },
+    { id: 'data-reset', title: 'Сброс данных (опционально)' },
     { id: 'get-token', title: 'Токен Supabase' },
     { id: 'create-worker', title: 'Создание Воркера' },
     { id: 'deploy-code', title: 'Код Воркера' },
@@ -34,7 +35,7 @@ async function handleRequest(request) {
         });
     }
 
-    // IMPORTANT: Replace with YOUR project reference ID
+    // IMPORTANT: This should be automatically set to your project reference ID
     const PROJECT_REF = 'YOUR_PROJECT_REF';
     const SUPABASE_API_URL = \`https://api.supabase.com/v1/projects/\${PROJECT_REF}/sql\`;
 
@@ -55,20 +56,22 @@ async function handleRequest(request) {
 
         const responseText = await response.text();
         const headers = corsHeaders();
-        for (let [key, value] of response.headers) {
-            if (key.toLowerCase().startsWith('content-')) {
-                headers[key] = value;
-            }
+        // Forward content-type header from Supabase
+        const contentType = response.headers.get('Content-Type');
+        if (contentType) {
+            headers['Content-Type'] = contentType;
         }
 
         if (!response.ok) {
             console.error('Supabase API Error:', responseText);
+            // Return Supabase's error response directly
             return new Response(responseText, { status: response.status, headers });
         }
         
         return new Response(responseText, { status: response.status, headers });
 
     } catch (error) {
+        console.error('Worker Error:', error);
         return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders() });
     }
 }
@@ -85,7 +88,6 @@ function handleOptions(request) {
 
 function corsHeaders() {
     return {
-        'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -93,10 +95,27 @@ function corsHeaders() {
 }
 `.trim();
 
+const DATA_RESET_SQL = `
+-- ВНИМАНИЕ: Этот скрипт удалит все данные из таблиц синхронизации!
+-- Таблицы с настройками (user_settings, proxies, action_stats) затронуты не будут.
+TRUNCATE 
+    public.contacts, 
+    public.files, 
+    public.calendar_events, 
+    public.tasks, 
+    public.emails, 
+    public.chat_memory
+RESTART IDENTITY CASCADE;
+
+-- Сообщение об успешном выполнении
+SELECT 'Все таблицы данных синхронизации были успешно очищены.' as status;
+`.trim();
+
 // Simple markdown helper for this component
 function markdownToHTML(text) {
-    if (!text) return '';
-    return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    return text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code class="bg-slate-200 dark:bg-slate-700 text-sm rounded px-1 py-0.5">$1</code>');
 }
 
 
@@ -131,6 +150,29 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                         </ul>
                     </div>
                 `);
+                break;
+
+            case 'data-reset':
+                contentHtml = `
+                    <p class="mb-4">Если вы хотите начать синхронизацию с чистого листа, вы можете очистить все таблицы с данными.</p>
+                     <div class="text-sm p-3 rounded-md bg-yellow-100/50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300 flex items-start gap-3 mb-4">
+                        <div class="w-5 h-5 flex-shrink-0 mt-0.5">${Icons.AlertTriangleIcon}</div>
+                        <div>
+                            <p class="font-bold">Внимание:</p>
+                            <p>Это действие **необратимо** удалит все ваши синхронизированные контакты, файлы, события и т.д. Ваши настройки приложения останутся.</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 mb-2">Чтобы выполнить сброс:</p>
+                    <ol class="list-decimal list-inside space-y-2 text-slate-700 dark:text-slate-300">
+                        <li>Нажмите "Копировать SQL-скрипт".</li>
+                        <li>Откройте <a href="https://supabase.com/dashboard/project/${state.projectRef}/sql/new" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">SQL Редактор вашего проекта Supabase</a>.</li>
+                        <li>Вставьте скрипт и нажмите **"RUN"**.</li>
+                    </ol>
+                     <button class="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-semibold transition-colors" data-action="copy-reset-sql">
+                        ${Icons.CodeIcon} Копировать SQL-скрипт для сброса
+                    </button>
+                    <p class="mt-4 text-center text-sm text-slate-500">Если вы не хотите сбрасывать данные, просто нажмите "Далее".</p>
+                `;
                 break;
 
             case 'get-token':
@@ -269,6 +311,12 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                     setTimeout(() => { target.textContent = 'Копировать'; }, 2000);
                 });
                 break;
+            case 'copy-reset-sql':
+                 navigator.clipboard.writeText(DATA_RESET_SQL).then(() => {
+                    target.innerHTML = `✓ Скопировано!`;
+                    setTimeout(() => { target.innerHTML = `${Icons.CodeIcon} Копировать SQL-скрипт для сброса`; }, 2000);
+                });
+                break;
             case 'test-worker':
                 state.testStatus = 'testing';
                 state.testMessage = '';
@@ -282,19 +330,17 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                         body: JSON.stringify({ query: 'SELECT 1;' }),
                     });
                     const responseText = await response.text();
+                    
                     if (!response.ok) {
+                        if (response.status === 404) {
+                             throw new Error('Ошибка 404 (Not Found). Проверьте токен доступа (Access Token) в настройках воркера Cloudflare. Он должен быть верным и зашифрованным.');
+                        }
                         throw new Error(`Воркер вернул ошибку ${response.status}: ${responseText}`);
                     }
+
                     const data = JSON.parse(responseText);
-                    // Supabase returns an array for a successful query
                     if (!Array.isArray(data)) {
-                        if (JSON.stringify(data).includes("Authentication failed")) {
-                             throw new Error('Ошибка аутентификации. Проверьте токен, сохраненный в переменных окружения воркера.');
-                        }
-                        if (data.error) {
-                             throw new Error(`API Error: ${data.error.message}`);
-                        }
-                        throw new Error('Воркер вернул неожиданный ответ.');
+                        throw new Error(`Воркер вернул неожиданный ответ. Проверьте PROJECT_REF в коде воркера. Ответ: ${responseText}`);
                     }
                     state.testStatus = 'ok';
                     state.testMessage = 'Проверка пройдена успешно!';

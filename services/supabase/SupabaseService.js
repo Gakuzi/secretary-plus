@@ -444,6 +444,27 @@ export class SupabaseService {
         }
     }
 
+    // --- DB Management via Worker ---
+    async executeSql(workerUrl, sql) {
+        if (!workerUrl) throw new Error("Management worker URL is not configured.");
+        
+        const response = await fetch(workerUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query: sql }),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("Management worker error:", errorText);
+            throw new Error(`DB management worker failed with status ${response.status}: ${errorText}`);
+        }
+
+        return response.json();
+    }
+
 
     // --- Proxy Management ---
     async getProxies() {
