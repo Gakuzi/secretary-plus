@@ -1,7 +1,7 @@
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
-import { callGemini, analyzeSyncErrorWithGemini } from './services/geminiService.js';
+import { callGemini, analyzeSyncErrorWithGemini, testProxyConnection } from './services/geminiService.js';
 import { getSettings, saveSettings, getSyncStatus, saveSyncStatus } from './utils/storage.js';
 import { createSetupWizard } from './components/SetupWizard.js';
 import { createSettingsModal } from './components/SettingsModal.js';
@@ -82,6 +82,7 @@ const appleProvider = new AppleServiceProvider();
 let supabaseService = null;
 let emailCheckInterval = null;
 let syncInterval = null;
+let proxyTestInterval = null;
 
 const serviceProviders = {
     google: googleProvider,
@@ -179,6 +180,58 @@ function stopAutoSync() {
     if (syncInterval) clearInterval(syncInterval);
 }
 
+// --- PROXY TESTING LOGIC ---
+const PROXY_TEST_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function runActiveProxyTests() {
+    if (!state.settings.useProxy || !state.isSupabaseReady || !supabaseService) {
+        updateProxyStatusIndicator('off');
+        return;
+    }
+    
+    const activeProxies = await supabaseService.getActiveProxies();
+    if (activeProxies.length === 0) {
+        updateProxyStatusIndicator('error');
+        return;
+    }
+
+    let isAnyProxyOk = false;
+    for (const proxy of activeProxies) {
+        const result = await testProxyConnection({ 
+            proxyUrl: proxy.url, 
+            apiKey: state.settings.geminiApiKey 
+        });
+        
+        await supabaseService.updateProxy(proxy.id, {
+            last_test_status: result.status,
+            last_test_speed: result.speed,
+        });
+        
+        if (result.status === 'ok') {
+            isAnyProxyOk = true;
+        }
+    }
+    
+    updateProxyStatusIndicator(isAnyProxyOk ? 'ok' : 'error');
+}
+
+function startAutoProxyTesting() {
+    if (proxyTestInterval) clearInterval(proxyTestInterval);
+    if (!state.settings.useProxy) {
+        updateProxyStatusIndicator('off');
+        return;
+    }
+    // Run once on start, then set interval
+    updateProxyStatusIndicator('connecting');
+    setTimeout(runActiveProxyTests, 3000); // Initial run after 3s
+    proxyTestInterval = setInterval(runActiveProxyTests, PROXY_TEST_INTERVAL_MS);
+}
+
+function stopAutoProxyTesting() {
+    if (proxyTestInterval) clearInterval(proxyTestInterval);
+}
+
+
 // --- AUTH & INITIALIZATION ---
 async function initializeSupabase() {
     if (!state.settings.isSupabaseEnabled) {
@@ -255,6 +308,7 @@ async function initializeAppServices() {
     await handleAuthentication();
     await startNewChatSession();
     startAutoSync();
+    startAutoProxyTesting();
 }
 
 // --- EVENT HANDLERS & LOGIC ---
@@ -284,7 +338,7 @@ async function getActiveProxy() {
     if (!state.settings.useProxy || !state.isSupabaseReady || !supabaseService) {
         return null;
     }
-    const proxies = await supabaseService.getProxies();
+    const proxies = await supabaseService.getActiveProxies();
     // Find the first active proxy
     const sorted = [...proxies]
         .filter(p => p.is_active)
@@ -552,6 +606,7 @@ function showSettingsModal() {
             googleProvider.setTimezone(newSettings.timezone);
             if(newSettings.enableAutoSync) startAutoSync(); else stopAutoSync();
             if(newSettings.enableEmailPolling) setupEmailPolling(); else stopEmailPolling();
+            startAutoProxyTesting(); // Restart proxy testing based on new settings
             modalContainer.innerHTML = '';
         },
         onLaunchDbWizard: () => {
@@ -605,6 +660,7 @@ async function showProfileModal() {
                     googleProvider.setTimezone(newSettings.timezone);
                     if(newSettings.enableAutoSync) startAutoSync(); else stopAutoSync();
                     if(newSettings.enableEmailPolling) setupEmailPolling(); else stopEmailPolling();
+                    startAutoProxyTesting(); // Restart proxy testing based on new settings
                     modalContainer.innerHTML = ''; // Close the modal after saving.
                 },
                 onLogout: handleLogout,

@@ -260,13 +260,21 @@ body.recording-active {
 }
 
 /* Storage Proxy Item in Middle Column */
-.proxy-list-item-storage {
+.proxy-storage-card {
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    transition: box-shadow 0.2s, border-color 0.2s;
     display: flex;
-    align-items: center;
-    gap: 0.75rem; /* 12px */
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.5rem; /* rounded-lg */
+    flex-direction: column;
+    gap: 0.5rem;
 }
+
+.proxy-storage-card .status-text-ok { color: #22c55e; }
+.dark .proxy-storage-card .status-text-ok { color: #4ade80; }
+.proxy-storage-card .status-text-error { color: #ef4444; }
+.dark .proxy-storage-card .status-text-error { color: #f87171; }
+.proxy-storage-card .status-text-untested { color: #64748b; }
+.dark .proxy-storage-card .status-text-untested { color: #94a3b8; }
 
 
 /* --- PROFILE MODAL TABS --- */

@@ -49,10 +49,6 @@ export function createProxyManagerModal({ supabaseService, onClose }) {
             const isSomeoneElseEditing = state.editingId !== null && !isEditing;
             const isDisabled = isEditing || isSomeoneElseEditing || state.isTesting;
 
-            const urlContent = isEditing
-                ? `<input type="text" class="proxy-edit-input flex-1 bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-2 py-1 font-mono text-sm" value="${p.url}">`
-                : `<div class="flex-1 font-mono text-sm truncate" title="${p.url}">${p.url}</div>`;
-            
             const actionButtons = isEditing
                 ? `
                     <button data-action="save-edit" data-id="${p.id}" class="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded font-semibold">Сохранить</button>
@@ -64,17 +60,39 @@ export function createProxyManagerModal({ supabaseService, onClose }) {
                     <button data-action="delete" data-id="${p.id}" class="p-2 text-red-600 dark:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full disabled:opacity-50" title="Удалить" ${isDisabled ? 'disabled' : ''}>${Icons.TrashIcon.replace('width="24" height="24"', 'width="16" height="16"')}</button>
                 `;
             
+            let statusText = 'Не тестировался';
+            if (p.last_test_status === 'ok') statusText = 'Успешно';
+            if (p.last_test_status === 'error') statusText = 'Ошибка';
+
             return `
-                 <div class="proxy-list-item-storage bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 ${isSomeoneElseEditing ? 'opacity-50' : ''}">
-                    <label class="toggle-switch">
-                        <input type="checkbox" data-action="toggle-activation" data-id="${p.id}" ${p.is_active ? 'checked' : ''} ${isDisabled ? 'disabled' : ''}>
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <div class="flex-1 flex flex-col min-w-0">
-                        ${urlContent}
-                        <span class="text-xs text-slate-500 dark:text-slate-400">${p.geolocation || 'Неизвестно'}</span>
+                 <div class="proxy-storage-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 ${isSomeoneElseEditing ? 'opacity-50' : ''}">
+                    <div class="flex items-center justify-between">
+                        <label class="toggle-switch">
+                            <input type="checkbox" data-action="toggle-activation" data-id="${p.id}" ${p.is_active ? 'checked' : ''} ${isDisabled ? 'disabled' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <div class="flex items-center gap-1">${actionButtons}</div>
                     </div>
-                    <div class="flex items-center gap-1">${actionButtons}</div>
+                    <div class="flex-1 flex flex-col min-w-0">
+                         ${isEditing
+                            ? `<input type="text" class="proxy-edit-input flex-1 bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-2 py-1 font-mono text-sm" value="${p.url}">`
+                            : `<div class="flex-1 font-mono text-sm truncate font-semibold" title="${p.url}">${p.url}</div>`
+                          }
+                    </div>
+                    <div class="mt-1 pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center text-xs text-slate-500 dark:text-slate-400">
+                         <div class="flex items-center gap-1.5">
+                            <span class="font-medium">Статус:</span>
+                            <span class="font-bold status-text-${p.last_test_status || 'untested'}">${statusText}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="font-medium">Скорость:</span>
+                            <span class="font-semibold text-slate-700 dark:text-slate-200">${p.last_test_speed ? `${p.last_test_speed} мс` : 'N/A'}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="font-medium">Локация:</span>
+                            <span class="font-semibold text-slate-700 dark:text-slate-200">${p.geolocation || 'N/A'}</span>
+                        </div>
+                    </div>
                 </div>
             `;
         }).join('');
@@ -270,6 +288,7 @@ export function createProxyManagerModal({ supabaseService, onClose }) {
 
     const runTest = async (url) => {
         if(state.isTesting) return;
+        const proxyToUpdate = state.storageProxies.find(p => p.url === url);
 
         testAbortController = new AbortController();
         state.isTesting = true;
@@ -313,7 +332,16 @@ export function createProxyManagerModal({ supabaseService, onClose }) {
                  }
             }
             
-            state.testResult = { ...result, url, details };
+            state.testResult = { ...result, url, details, location: proxyToUpdate?.geolocation };
+            
+            if (proxyToUpdate) {
+                await supabaseService.updateProxy(proxyToUpdate.id, { 
+                    last_test_status: result.status, 
+                    last_test_speed: result.speed 
+                });
+                proxyToUpdate.last_test_status = result.status;
+                proxyToUpdate.last_test_speed = result.speed;
+            }
 
         } catch (e) {
             state.testResult = { status: 'error', url, speed: null, message: e.message, details: `Критическая ошибка при попытке теста: ${e.message}` };

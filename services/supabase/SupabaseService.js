@@ -593,6 +593,17 @@ export class SupabaseService {
         if (error) throw error;
         return data || [];
     }
+    
+    async getActiveProxies() {
+        const { data, error } = await this.client
+            .from('proxies')
+            .select('*')
+            .eq('is_active', true)
+            .order('priority', { ascending: true });
+
+        if (error) throw error;
+        return data || [];
+    }
 
     async addProxy(proxyData) {
         const { data: { user } } = await this.client.auth.getUser();

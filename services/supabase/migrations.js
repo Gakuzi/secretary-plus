@@ -2,7 +2,6 @@
 // и создает политики, гарантирующие, что пользователи могут получить доступ только к своим собственным данным.
 export const FULL_MIGRATION_SQL = `
 -- Удаляем старые таблицы данных, чтобы начать с чистого листа.
--- Настройки и прокси не трогаем.
 DROP TABLE IF EXISTS public.calendar_events CASCADE;
 DROP TABLE IF EXISTS public.contacts CASCADE;
 DROP TABLE IF EXISTS public.files CASCADE;
@@ -13,6 +12,9 @@ DROP TABLE IF EXISTS public.chat_memory CASCADE;
 DROP TABLE IF EXISTS public.chat_history CASCADE;
 DROP TABLE IF EXISTS public.sessions CASCADE;
 DROP TABLE IF EXISTS public.profiles CASCADE;
+DROP TABLE IF EXISTS public.user_settings CASCADE;
+DROP TABLE IF EXISTS public.action_stats CASCADE;
+DROP TABLE IF EXISTS public.proxies CASCADE;
 
 
 -- Создаем типы ENUM для ролей и отправителей
@@ -176,6 +178,40 @@ CREATE TABLE public.chat_memory (
 );
 COMMENT ON TABLE public.chat_memory IS 'Долговременная память ассистента.';
 
+-- Таблица для хранения настроек пользователя
+CREATE TABLE public.user_settings (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    settings JSONB,
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+COMMENT ON TABLE public.user_settings IS 'Облачное хранилище настроек пользователя.';
+
+-- Таблица для статистики использования инструментов
+CREATE TABLE public.action_stats (
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    function_name TEXT,
+    call_count INTEGER DEFAULT 1,
+    PRIMARY KEY (user_id, function_name)
+);
+COMMENT ON TABLE public.action_stats IS 'Статистика вызова функций Gemini.';
+
+-- Таблица для хранения прокси-серверов
+CREATE TABLE public.proxies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    url TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT FALSE,
+    priority INTEGER DEFAULT 0,
+    geolocation TEXT,
+    last_checked_at TIMESTAMPTZ,
+    last_test_status TEXT,
+    last_test_speed INTEGER,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (user_id, url)
+);
+COMMENT ON TABLE public.proxies IS 'Список прокси-серверов пользователя для доступа к Gemini.';
+
+
 -- Включаем Row Level Security на всех таблицах
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
@@ -298,6 +334,28 @@ BEGIN
   UPDATE public.profiles
   SET role = new_role
   WHERE id = target_user_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- RPC для сохранения/обновления настроек
+CREATE OR REPLACE FUNCTION public.upsert_user_settings(new_settings JSONB)
+RETURNS void AS $$
+BEGIN
+  INSERT INTO public.user_settings (user_id, settings)
+  VALUES (auth.uid(), new_settings)
+  ON CONFLICT (user_id)
+  DO UPDATE SET settings = new_settings, updated_at = now();
+END;
+$$ LANGUAGE plpgsql;
+
+-- RPC для инкремента статистики
+CREATE OR REPLACE FUNCTION public.increment_stat(fn_name TEXT)
+RETURNS void AS $$
+BEGIN
+  INSERT INTO public.action_stats (user_id, function_name, call_count)
+  VALUES (auth.uid(), fn_name, 1)
+  ON CONFLICT (user_id, function_name)
+  DO UPDATE SET call_count = action_stats.call_count + 1;
 END;
 $$ LANGUAGE plpgsql;
 `.trim();
