@@ -8,8 +8,8 @@ import { createSettingsModal } from './components/SettingsModal.js';
 import { createProfileModal } from './components/ProfileModal.js';
 import { createStatsModal } from './components/StatsModal.js';
 import { createHelpModal } from './components/HelpModal.js';
-import { createProxySetupWizard } from './components/ProxySetupWizard.js';
 import { createDbSetupWizard } from './components/DbSetupWizard.js';
+import { createProxySetupWizard } from './components/ProxySetupWizard.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
@@ -28,8 +28,8 @@ const APP_STRUCTURE_CONTEXT = `
 - components/SetupWizard.js: Мастер первоначальной настройки.
 - components/SettingsModal.js: Окно для управления настройками после входа.
 - components/ProfileModal.js: Окно профиля, где отображается статус синхронизации.
+- components/DbSetupWizard.js: Мастер настройки управляющего воркера для автоматического обновления схемы БД.
 - components/ProxySetupWizard.js: Мастер настройки прокси-воркера для Gemini.
-- components/DbSetupWizard.js: Мастер настройки воркера для управления БД.
 `;
 
 async function showBrowserNotification(title, options) {
@@ -286,204 +286,94 @@ async function processBotResponse(userMessage, isSilent) {
             updateProxyStatusIndicator('error');
             if (!isSilent) showSystemError("Режим прокси включен, но не найдено ни одного активного прокси-сервера. Проверьте настройки.");
         }
-    } else {
-        updateProxyStatusIndicator('off');
+    }
+    
+    const botMessage = await callGemini({
+        userMessage: userMessage,
+        history: state.messages,
+        serviceProviders,
+        serviceMap: state.settings.serviceMap,
+        timezone: state.settings.timezone,
+        isGoogleConnected: state.isGoogleConnected,
+        apiKey: state.settings.geminiApiKey,
+        proxyUrl: proxyUrl,
+    });
+    
+    // Update proxy status based on the result of the API call
+    if(state.settings.useProxy && proxyUrl) {
+        // If we got a valid bot message (not a system error about the proxy itself), it means the proxy worked.
+        if (botMessage && botMessage.sender !== MessageSender.SYSTEM) {
+             updateProxyStatusIndicator('ok');
+        } else if (botMessage.text.includes("Gemini")) { 
+            // If the error message is from Gemini (e.g., bad API key), the proxy is still OK.
+            updateProxyStatusIndicator('ok');
+        } else {
+             updateProxyStatusIndicator('error');
+        }
     }
 
-    // Determine the history to send to Gemini
-    const historyForGemini = isSilent 
-        ? state.messages // For silent, the message is not in state yet
-        : state.messages.slice(0, -1); // For regular, the message is the last one in state
-
-    try {
-        const response = await callGemini({
-            userMessage,
-            history: historyForGemini,
-            serviceProviders,
-            serviceMap: state.settings.serviceMap,
-            timezone: state.settings.timezone,
-            isGoogleConnected: state.isGoogleConnected,
-            apiKey: state.settings.geminiApiKey,
-            proxyUrl: proxyUrl, // Pass the found proxyUrl (or null)
-        });
-
-        if (isSilent && response.sender === MessageSender.ASSISTANT && response.text) {
-            showBrowserNotification('Секретарь+', {
-                body: response.text,
+    if (botMessage.functionCallName && supabaseService) {
+        supabaseService.incrementActionStat(botMessage.functionCallName);
+        state.actionStats[botMessage.functionCallName] = (state.actionStats[botMessage.functionCallName] || 0) + 1;
+    }
+    
+    state.isLoading = false;
+    hideLoadingIndicator();
+    
+    // If we are in a silent operation (like email polling), don't add to chat
+    if (isSilent) {
+        if(botMessage.text && botMessage.text.trim().length > 0) {
+             showBrowserNotification("Новое важное сообщение", {
+                body: botMessage.text,
                 icon: './favicon.svg'
             });
         }
-
-        // After the call, update status based on the result
-        if (proxyUrl) {
-            if (response.sender !== MessageSender.SYSTEM) {
-                updateProxyStatusIndicator('ok');
-            } else {
-                updateProxyStatusIndicator('error');
-            }
-        }
-        
-        if (response.functionCallName && supabaseService && state.isSupabaseReady) {
-            state.actionStats[response.functionCallName] = (state.actionStats[response.functionCallName] || 0) + 1;
-            await supabaseService.incrementActionStat(response.functionCallName);
-        }
-
-        if (!isSilent) hideLoadingIndicator();
-        state.messages.push(response);
-        addMessageToChat(response);
-        renderContextualActions(response.contextualActions);
-    } catch (error) {
-        if (!isSilent) {
-            hideLoadingIndicator();
-            showSystemError(`Произошла ошибка: ${error.message}`);
-        }
-        if (proxyUrl) { // If we were attempting to use a proxy, mark it as an error
-            updateProxyStatusIndicator('error');
-        }
-    } finally {
-        state.isLoading = false;
-        if (!isSilent) hideLoadingIndicator();
-    }
-}
-
-async function handleSendMessage(prompt, image = null, options = { silent: false }) {
-    if (state.isLoading || (!prompt && !image)) return;
-    renderContextualActions(null);
-    if (mainContent.querySelector('.welcome-screen-container')) {
-        renderMainContent(); // Re-render to remove welcome and add chat log
-        await new Promise(resolve => setTimeout(resolve, 0)); // Allow DOM to update
-    }
-
-    const userMessage = { sender: MessageSender.USER, text: prompt, image, id: Date.now() };
-    
-    if (!options.silent) {
-        state.messages.push(userMessage);
-        addMessageToChat(userMessage);
-    }
-
-    await processBotResponse(userMessage, options.silent);
-}
-
-
-// Simplified card action handler
-async function handleCardAction(e) {
-    const target = e.target.closest('[data-action]');
-    
-    // **FIX:** This check is now more robust. It ensures that the handler only
-    // proceeds if there is a non-empty `data-payload` attribute. This prevents
-    // errors from buttons in modals that use `data-action` for other purposes.
-    if (!target || !target.dataset.payload) {
         return;
     }
-
-    e.preventDefault();
-    const action = target.dataset.action;
-    const payload = JSON.parse(target.dataset.payload);
-    let promptToSend = '';
-
-    if (action === 'download_ics') {
-        const link = document.createElement('a');
-        link.href = `data:text/calendar;charset=utf-8;base64,${payload.data}`;
-        link.download = payload.filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        return;
-    }
-
-    if (action.startsWith('analyze_')) {
-        promptToSend = `Проанализируй этот элемент и предложи действия. Данные: ${JSON.stringify(payload)}`;
-    } else if (action === 'request_delete') {
-         promptToSend = `Да, я подтверждаю удаление: ${payload.type} с ID ${payload.id}.`;
-    } else {
-        // Fallback for other actions, can be more specific if needed
-        promptToSend = `Выполни "${action}" с данными: ${JSON.stringify(payload)}`;
-    }
-
-    if (promptToSend) await handleSendMessage(promptToSend, null, { silent: true });
-}
-
-
-async function handleQuickReply(e) {
-    const target = e.target.closest('.quick-reply-button');
-    if (!target || target.disabled) return;
     
-    // Give visual feedback and disable other buttons
-    const container = target.closest('.quick-replies-container');
-    container.querySelectorAll('button').forEach(btn => {
-        btn.disabled = true;
-    });
-    target.classList.add('clicked');
+    state.messages.push(botMessage);
+    addMessageToChat(botMessage);
     
-    await handleSendMessage(target.dataset.replyText);
+    // Render contextual actions if they exist
+    renderContextualActions(botMessage.contextualActions || []);
 }
 
-// --- MODAL & VIEW MANAGEMENT ---
-
-function showSetupWizard(resumeState = null) {
-    wizardContainer.innerHTML = '';
-    const onComplete = (newSettings) => {
-        saveSettings(newSettings);
-        wizardContainer.innerHTML = '';
-        window.location.reload();
+async function handleSendMessage(prompt, image = null) {
+    if (state.isLoading) return;
+    const userMessage = {
+        id: Date.now().toString(),
+        sender: MessageSender.USER,
+        text: prompt,
+        image: image
     };
-    const onExit = () => {
-        wizardContainer.innerHTML = '';
-        if (state.settings.geminiApiKey) {
-            onAppReady();
-        }
-    };
-    const wizard = createSetupWizard({ onComplete, onExit, googleProvider, supabaseConfig: SUPABASE_CONFIG, googleClientId: GOOGLE_CLIENT_ID, resumeState });
-    wizardContainer.appendChild(wizard);
+    state.messages.push(userMessage);
+    addMessageToChat(userMessage);
+    // Clear contextual actions after sending a new message
+    renderContextualActions([]);
+    await processBotResponse(userMessage, false);
 }
 
-function showProxySetupWizard() {
-    modalContainer.innerHTML = '';
-    const modal = createProxySetupWizard({
-        onClose: () => modalContainer.innerHTML = '',
-    });
-    modalContainer.appendChild(modal);
-}
-
-function showDbSetupWizard() {
-    modalContainer.innerHTML = '';
-    const onDbSave = async (newSettings) => {
-        state.settings = newSettings;
-        saveSettings(newSettings);
-        if (state.isSupabaseReady && supabaseService) {
-            await supabaseService.saveUserSettings(newSettings);
-        }
-        modalContainer.innerHTML = '';
-        await initializeAppServices();
-    };
-    const modal = createDbSetupWizard({
-        settings: state.settings,
-        supabaseConfig: SUPABASE_CONFIG,
-        onClose: () => modalContainer.innerHTML = '',
-        onSave: onDbSave,
-    });
-    modalContainer.appendChild(modal);
-}
-
+// --- MODAL & WIZARD MANAGEMENT ---
 function showSettingsModal() {
     modalContainer.innerHTML = '';
-    const onSave = async (newSettings) => {
-        state.settings = newSettings;
-        saveSettings(newSettings);
-        if (state.isSupabaseReady && supabaseService) {
-            await supabaseService.saveUserSettings(newSettings);
-        }
-        modalContainer.innerHTML = '';
-        await initializeAppServices();
-    };
     const modal = createSettingsModal({
         settings: state.settings,
         supabaseService: supabaseService,
-        onClose: () => modalContainer.innerHTML = '',
-        onSave,
+        onClose: () => { modalContainer.innerHTML = ''; },
+        onSave: async (newSettings) => {
+            state.settings = newSettings;
+            if (supabaseService) {
+                await supabaseService.saveUserSettings(newSettings);
+            }
+            saveSettings(newSettings);
+            googleProvider.setTimezone(newSettings.timezone);
+            if(newSettings.enableAutoSync) startAutoSync(); else stopAutoSync();
+            if(newSettings.enableEmailPolling) setupEmailPolling(); else stopEmailPolling();
+            modalContainer.innerHTML = '';
+        },
         onLaunchDbWizard: () => {
-            modalContainer.innerHTML = ''; // Close settings first
-            showDbSetupWizard();
+             modalContainer.innerHTML = ''; // Close settings before opening wizard
+             showDbSetupWizard();
         },
     });
     modalContainer.appendChild(modal);
@@ -491,100 +381,81 @@ function showSettingsModal() {
 
 function showProfileModal() {
     modalContainer.innerHTML = '';
-    const onSave = async (newSettings) => {
-        state.settings = newSettings;
-        saveSettings(newSettings);
-        if (state.isSupabaseReady && supabaseService) {
-            await supabaseService.saveUserSettings(newSettings);
-        }
-        modalContainer.innerHTML = '';
-        await initializeAppServices();
-    };
-    const onDelete = async () => {
-        if (confirm('Вы уверены, что хотите удалить ВСЕ свои настройки из облака Supabase? Это действие необратимо.')) {
-            await supabaseService.deleteUserSettings();
-            alert('Настройки удалены из облака.');
-            modalContainer.innerHTML = '';
-        }
-    };
-    const onForceSync = async () => {
-        await runAllSyncs();
-        showProfileModal();
-    };
-     const onAnalyzeError = async ({ context, error }) => {
-        return await analyzeSyncErrorWithGemini({
-            errorMessage: error,
-            context: context,
-            appStructure: APP_STRUCTURE_CONTEXT,
-            apiKey: state.settings.geminiApiKey,
-            proxyUrl: await getActiveProxy()
-        });
-    };
-    const onViewData = async ({ tableName }) => {
-        return await supabaseService.getSampleData(tableName);
-    };
-
-    const onLaunchDbWizard = () => {
-        modalContainer.innerHTML = ''; // Close profile modal first
-        showDbSetupWizard();
-    };
-
     const modal = createProfileModal(
         state.userProfile,
         state.settings,
         {
-            onClose: () => modalContainer.innerHTML = '',
-            onSave,
+            onClose: () => { modalContainer.innerHTML = ''; },
+            onSave: async (newSettings) => {
+                state.settings = newSettings;
+                 if (supabaseService) {
+                    await supabaseService.saveUserSettings(newSettings);
+                }
+                saveSettings(newSettings);
+                googleProvider.setTimezone(newSettings.timezone);
+                if(newSettings.enableAutoSync) startAutoSync(); else stopAutoSync();
+                if(newSettings.enableEmailPolling) setupEmailPolling(); else stopEmailPolling();
+            },
             onLogout: handleLogout,
-            onDelete,
-            onForceSync,
-            onAnalyzeError,
-            onViewData,
-            onLaunchDbWizard,
+            onDelete: async () => {
+                if (confirm('Вы уверены, что хотите удалить все ваши настройки из облака? Это действие необратимо.')) {
+                    await supabaseService.deleteUserSettings();
+                    // Keep local settings but disable Supabase
+                    state.settings.isSupabaseEnabled = false;
+                    saveSettings(state.settings);
+                    window.location.reload();
+                }
+            },
+            onForceSync: runAllSyncs,
+            onAnalyzeError: async ({ context, error }) => analyzeSyncErrorWithGemini({
+                errorMessage: error,
+                context: context,
+                appStructure: APP_STRUCTURE_CONTEXT,
+                apiKey: state.settings.geminiApiKey,
+                proxyUrl: await getActiveProxy(),
+            }),
+            onViewData: async ({ tableName }) => supabaseService.getSampleData(tableName),
+            onLaunchDbWizard: () => {
+                modalContainer.innerHTML = ''; // Close profile before opening wizard
+                showDbSetupWizard();
+            },
         },
         state.syncStatus,
         syncTasks,
-        state.settings.isSupabaseEnabled ? SUPABASE_CONFIG.url : null
+        SUPABASE_CONFIG.url,
     );
-    modalContainer.appendChild(modal);
-}
-
-function showStatsModal() {
-    modalContainer.innerHTML = '';
-    const modal = createStatsModal(state.actionStats, () => modalContainer.innerHTML = '');
     modalContainer.appendChild(modal);
 }
 
 function showHelpModal() {
     modalContainer.innerHTML = '';
-    const onRelaunchWizard = () => {
-        if (confirm('Это действие удалит ваши текущие настройки из браузера. Вы уверены?')) {
-            localStorage.removeItem('secretary-plus-settings-v4');
-            showSetupWizard();
-        }
-    };
-     const analyzeErrorFn = async (errorMessage) => {
-         return await analyzeSyncErrorWithGemini({
-            errorMessage: errorMessage,
-            context: 'Пользователь вручную вставил ошибку для анализа в Центре Помощи.',
+    const modal = createHelpModal({
+        onClose: () => { modalContainer.innerHTML = ''; },
+        settings: state.settings,
+        // FIX: Make arrow function async to allow await
+        analyzeErrorFn: async (errorText) => analyzeSyncErrorWithGemini({
+            errorMessage: errorText,
+            context: 'User is analyzing a pasted error in the Help Center.',
             appStructure: APP_STRUCTURE_CONTEXT,
             apiKey: state.settings.geminiApiKey,
-            proxyUrl: await getActiveProxy()
-        });
-     };
-    const modal = createHelpModal({
-        onClose: () => modalContainer.innerHTML = '',
-        settings: state.settings,
-        analyzeErrorFn,
-        onRelaunchWizard,
-        onLaunchDbWizard: () => {
-            modalContainer.innerHTML = ''; // Close help modal first
-            showDbSetupWizard();
+            proxyUrl: await getActiveProxy(),
+        }),
+        onRelaunchWizard: () => {
+            if (confirm('Вы уверены? Ваши текущие ключи, сохраненные в браузере, будут удалены.')) {
+                 localStorage.removeItem('secretary-plus-settings-v4');
+                 window.location.reload();
+            }
         },
-        onLaunchProxyWizard: () => {
-            modalContainer.innerHTML = ''; // Close help modal first
-            showProxySetupWizard();
-        },
+        onLaunchDbWizard: showDbSetupWizard,
+        onLaunchProxyWizard: showProxySetupWizard
+    });
+    modalContainer.appendChild(modal);
+}
+
+function showStatsModal() {
+    modalContainer.innerHTML = '';
+    const modal = createStatsModal(state.actionStats, () => {
+        modalContainer.innerHTML = '';
     });
     modalContainer.appendChild(modal);
 }
@@ -592,128 +463,107 @@ function showHelpModal() {
 function showCameraView() {
     cameraViewContainer.innerHTML = '';
     cameraViewContainer.classList.remove('hidden');
-    const onCapture = (image) => handleSendMessage('', image);
-    const onClose = () => {
-        cameraViewContainer.classList.add('hidden');
-        cameraViewContainer.innerHTML = '';
-    };
-    const cameraView = createCameraView(onCapture, onClose);
+    const cameraView = createCameraView(
+        (image) => { handleSendMessage('Что на этом фото?', image); },
+        () => {
+            cameraViewContainer.innerHTML = '';
+            cameraViewContainer.classList.add('hidden');
+        }
+    );
     cameraViewContainer.appendChild(cameraView);
 }
 
-// --- EMAIL POLLING ---
+function showDbSetupWizard() {
+     wizardContainer.innerHTML = '';
+     const wizard = createDbSetupWizard({
+        settings: state.settings,
+        supabaseConfig: SUPABASE_CONFIG,
+        onClose: () => { wizardContainer.innerHTML = ''; },
+        onSave: (newSettings) => {
+            state.settings = newSettings;
+            saveSettings(newSettings);
+            wizardContainer.innerHTML = '';
+            alert('Настройки Управляющего воркера сохранены!');
+        }
+     });
+     wizardContainer.appendChild(wizard);
+}
+
+function showProxySetupWizard() {
+     wizardContainer.innerHTML = '';
+     const wizard = createProxySetupWizard({
+        onClose: () => { wizardContainer.innerHTML = ''; },
+     });
+     wizardContainer.appendChild(wizard);
+}
+
+
+// --- POLLING LOGIC ---
+function stopEmailPolling() {
+    if (emailCheckInterval) clearInterval(emailCheckInterval);
+}
 
 function setupEmailPolling() {
-    if (emailCheckInterval) clearInterval(emailCheckInterval);
+    stopEmailPolling();
     if (!state.settings.enableEmailPolling || !state.isGoogleConnected) return;
-
-    emailCheckInterval = setInterval(async () => {
+    
+    const checkEmails = async () => {
         try {
             const emails = await googleProvider.getRecentEmails({ max_results: 1 });
-            if (emails.length > 0) {
+            if (emails && emails.length > 0) {
                 const latestEmail = emails[0];
                 if (latestEmail.id !== state.lastSeenEmailId) {
                     state.lastSeenEmailId = latestEmail.id;
-                    const from = latestEmail.from.replace(/<.*?>/g, '').trim();
-                    const prompt = `Мне пришло новое письмо от ${from} с темой "${latestEmail.subject}". Проанализируй его содержимое и предложи действия. Данные: ${JSON.stringify(latestEmail)}`;
-                    await handleSendMessage(prompt, null, { silent: true });
+                    const prompt = `Проанализируй это новое письмо и скажи, является ли оно важным или срочным. Если да, кратко изложи суть. Если нет, ничего не отвечай. Письмо:\nОт: ${latestEmail.from}\nТема: ${latestEmail.subject}\n\n${latestEmail.body}`;
+                    await processBotResponse({ text: prompt }, true);
                 }
             }
         } catch (error) {
             console.error("Email polling failed:", error);
+            // Optionally stop polling on repeated failures
         }
-    }, 60 * 1000); // Check every minute
+    };
+
+    setTimeout(checkEmails, 5000);
+    emailCheckInterval = setInterval(checkEmails, 60000);
 }
 
-// --- GLOBAL EVENT LISTENERS ---
-// Using event delegation on the document body for dynamic elements
-
-document.body.addEventListener('click', (e) => {
-    handleQuickReply(e);
-    handleCardAction(e);
-
-    const contextualAction = e.target.closest('[data-action-prompt]');
-    if (contextualAction) {
-        const prompt = contextualAction.dataset.actionPrompt;
-        renderContextualActions(null); // Hide actions after click
-        handleSendMessage(prompt);
-        return;
-    }
-
-     // New handler for client-side actions
-    const clientAction = e.target.closest('[data-client-action]');
-    if (clientAction) {
-        e.preventDefault();
-        const action = clientAction.dataset.clientAction;
-        if (action === 'open_settings') {
-            showSettingsModal();
-        }
-        return;
-    }
-
-     const welcomePrompt = e.target.closest('[data-action="welcome_prompt"]');
-    if (welcomePrompt) {
-        const payload = JSON.parse(welcomePrompt.dataset.payload);
-        handleSendMessage(payload.prompt);
-        return;
-    }
-
-    const openWizardButton = e.target.closest('#open-wizard-from-welcome');
-    if(openWizardButton) {
-        showSetupWizard();
-        return;
-    }
+// --- MAIN APP INITIALIZATION ---
+async function main() {
+    settingsButton.innerHTML = SettingsIcon;
+    statsButton.innerHTML = ChartBarIcon;
+    helpButton.innerHTML = QuestionMarkCircleIcon;
+    settingsButton.addEventListener('click', showSettingsModal);
+    helpButton.addEventListener('click', showHelpModal);
+    statsButton.addEventListener('click', showStatsModal);
     
-    // New handler for opening help from settings
-    const openHelpLink = e.target.closest('#open-help-from-settings');
-    if (openHelpLink) {
-        e.preventDefault();
-        modalContainer.innerHTML = ''; // Close current modal
-        showHelpModal({ initialTab: 'instructions' });
-        return;
-    }
-});
-
-// --- APP INITIALIZATION ---
-
-async function onAppReady() {
-    await initializeAppServices();
-    renderMainContent();
-}
-
-function showInitialScreen() {
-    const wizardResumeStateRaw = sessionStorage.getItem('wizardState');
-    if (wizardResumeStateRaw) {
-        sessionStorage.removeItem('wizardState');
-        try {
-            const resumeState = JSON.parse(wizardResumeStateRaw);
-            showSetupWizard(resumeState);
-            return;
-        } catch (e) {
-            console.error("Failed to parse wizard resume state", e);
-        }
-    }
+    const savedWizardState = sessionStorage.getItem('wizardState');
+    sessionStorage.removeItem('wizardState');
     
-    // Show wizard if Gemini key is missing
-    if (!state.settings.geminiApiKey) {
-        showSetupWizard();
+    const settings = getSettings();
+    if (!settings.geminiApiKey) {
+         wizardContainer.innerHTML = '';
+         const wizard = createSetupWizard({
+            onComplete: (newSettings) => {
+                state.settings = newSettings;
+                saveSettings(newSettings);
+                wizardContainer.innerHTML = '';
+                initializeAppServices().then(renderMainContent);
+            },
+            onExit: () => {
+                wizardContainer.innerHTML = '';
+                initializeAppServices().then(renderMainContent);
+            },
+            googleProvider,
+            supabaseConfig: SUPABASE_CONFIG,
+            googleClientId: GOOGLE_CLIENT_ID,
+            resumeState: savedWizardState ? JSON.parse(savedWizardState) : null
+         });
+         wizardContainer.appendChild(wizard);
     } else {
-        onAppReady();
+        await initializeAppServices();
+        renderMainContent();
     }
 }
 
-// Setup header buttons
-const headerLogoContainer = document.getElementById('header-logo-container');
-if (headerLogoContainer) {
-    headerLogoContainer.innerHTML = `<img src="https://cdn3.iconfinder.com/data/icons/user-icon-1/100/06-1User-512.png" alt="Секретарь+ Логотип" class="w-full h-full rounded-full">`;
-}
-settingsButton.innerHTML = SettingsIcon;
-statsButton.innerHTML = ChartBarIcon;
-helpButton.innerHTML = QuestionMarkCircleIcon;
-
-settingsButton.addEventListener('click', showSettingsModal);
-statsButton.addEventListener('click', showStatsModal);
-helpButton.addEventListener('click', showHelpModal);
-
-// Start the app
-showInitialScreen();
+main();
