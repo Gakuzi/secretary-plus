@@ -108,7 +108,7 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
         switch (stepConfig.id) {
             case 'intro':
                 contentHtml = markdownToHTML(`
-                    <p class="mb-4">Этот мастер поможет вам настроить **"Управляющий воркер"** — безопасный сервис для автоматического обновления схемы вашей базы данных Supabase.</p>
+                    <p class="mb-4">Этот мастер поможет вам настроить **Управляющий воркер** — безопасный сервис для автоматического обновления схемы вашей базы данных Supabase.</p>
                     <p class="mb-4">Это необходимо для добавления новых функций в приложение без риска потери данных.</p>
                     <div class="p-3 bg-gray-900 border border-gray-700 rounded-md text-sm space-y-2">
                         <p><strong>Что вам понадобится:</strong></p>
@@ -268,13 +268,12 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ query: 'SELECT 1;' }),
                     });
+                    const responseText = await response.text();
                     if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`Воркер вернул ошибку ${response.status}: ${errorText}`);
+                        throw new Error(`Воркер вернул ошибку ${response.status}: ${responseText}`);
                     }
-                    const data = await response.json();
+                    const data = JSON.parse(responseText);
                     if (!Array.isArray(data) || data[0]['?column?'] !== 1) {
-                         // Check for a common error from Supabase API when token is missing/wrong in the worker
                         if (JSON.stringify(data).includes("Authentication failed")) {
                              throw new Error('Ошибка аутентификации. Проверьте токен, сохраненный в переменных окружения воркера.');
                         }

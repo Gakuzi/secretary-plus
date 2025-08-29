@@ -2,6 +2,80 @@ import { QuestionMarkCircleIcon, CodeIcon, AlertTriangleIcon, SettingsIcon } fro
 import { getSettings } from '../utils/storage.js';
 import { SUPABASE_CONFIG } from '../config.js';
 
+// --- EMBEDDED CONTENT ---
+
+const README_CONTENT = `
+### 🚀 Основные функции
+- **🧠 Интеллектуальный ассистент:** Распознает естественный язык для выполнения сложных задач.
+- **☁️ Облачная синхронизация:** Хранит ваши контакты и файлы в Supabase для быстрого доступа и интеграции между сервисами.
+- **🗣️ Мультимодальный ввод:** Общайтесь с помощью текста, голоса или изображений.
+- **📅 Интеграция с Google:** Управляйте Google Календарем, Контактами и Диском прямо из чата.
+- **🃏 Интерактивные карточки:** Получайте результаты в виде наглядных карточек с действиями.
+- **🔒 Безопасность:** Ваши данные защищены с помощью аутентификации Supabase и политик безопасности на уровне строк (RLS).
+`;
+
+const PROXY_SETUP_MD = `
+# Инструкция по настройке Прокси-воркера
+Этот воркер необходим для обхода региональных ограничений Gemini API. Он будет перенаправлять ваши запросы и добавлять необходимые CORS-заголовки.
+---
+### Шаг 1: Создание Cloudflare Worker
+1.  Войдите в [панель управления Cloudflare](https://dash.cloudflare.com/).
+2.  В меню слева выберите **Workers & Pages**.
+3.  Нажмите **Create application** > **Create Worker**.
+4.  Дайте воркеру уникальное имя (например, \`my-gemini-proxy-123\`) и нажмите **Deploy**.
+### Шаг 2: Редактирование кода воркера
+1.  После развертывания нажмите **Configure Worker** (или **Edit code**).
+2.  Удалите весь существующий код и вставьте следующий:
+\`\`\`javascript
+// Адрес API Gemini
+const GEMINI_API_HOST = "generativelanguage.googleapis.com";
+
+addEventListener('fetch', event => {
+  event.respondWith(handleRequest(event.request));
+});
+
+async function handleRequest(request) {
+  const url = new URL(request.url);
+  
+  // Перенаправляем все запросы на API Gemini
+  url.host = GEMINI_API_HOST;
+
+  // Создаем новый запрос с измененным URL
+  const newRequest = new Request(url, request);
+  
+  // Отправляем запрос к API
+  const response = await fetch(newRequest);
+
+  // Создаем новый ответ, чтобы можно было добавить CORS-заголовки
+  const newResponse = new Response(response.body, response);
+  newResponse.headers.set("Access-Control-Allow-Origin", "*");
+  newResponse.headers.set("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
+  newResponse.headers.set("Access-Control-Allow-Headers", "*");
+
+  return newResponse;
+}
+\`\`\`
+3.  Нажмите **Save and Deploy**.
+4.  **Скопируйте URL** этого воркера (например, \`https://my-gemini-proxy-123.workers.dev\`).
+5.  Вставьте этот URL в соответствующее поле в **Менеджере прокси** в приложении "Секретарь+".
+`;
+
+const SUPABASE_SETUP_MD = `
+# Настройка Supabase для "Секретарь+"
+Это руководство поможет вам настроить проект Supabase, который будет использоваться как безопасная база данных и сервис аутентификации для приложения.
+---
+### Шаг 1: Создание проекта
+1.  [Откройте панель управления Supabase](https://supabase.com/dashboard/projects) и нажмите **"New project"**.
+2.  Придумайте имя проекта, сгенерируйте и сохраните надежный пароль от базы данных.
+3.  Выберите регион и нажмите **"Create new project"**.
+### Шаг 2: Выполнение SQL-скрипта
+1.  В меню вашего нового проекта выберите **SQL Editor** (редактор SQL).
+2.  Нажмите **"+ New query"**.
+3.  Скопируйте и вставьте SQL-скрипт по [этой ссылке](https://github.com/user/repo/blob/main/SUPABASE_SETUP.md) в редактор.
+4.  Нажмите **"RUN"**. Этот скрипт создаст все необходимые таблицы и настроит политики безопасности.
+`;
+
+
 // A simple markdown to HTML converter, duplicated for use in this component.
 function markdownToHTML(text) {
     if (!text) return '';
@@ -85,7 +159,7 @@ function createGuideFromMarkdown(markdown) {
     return `<div class="prose prose-invert max-w-none">${finalHtml}</div>`;
 }
 
-export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchWizard, onLaunchDbWizard, initialTab = 'error-analysis' }) {
+export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchWizard, onLaunchDbWizard, initialTab = 'about' }) {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
     
@@ -98,21 +172,34 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
             
             <main class="flex-1 flex flex-col sm:flex-row overflow-hidden">
                 <!-- Mobile Tabs -->
-                <nav class="sm:hidden flex-shrink-0 border-b border-gray-700 p-2 flex items-center justify-around gap-2">
-                    <a href="#error-analysis" class="settings-tab-button active text-center flex-1" data-tab="error-analysis">Анализ</a>
+                <nav class="sm:hidden flex-shrink-0 border-b border-gray-700 p-2 flex items-center justify-around gap-1 text-xs">
+                    <a href="#about" class="settings-tab-button text-center flex-1" data-tab="about">О приложении</a>
                     <a href="#instructions" class="settings-tab-button text-center flex-1" data-tab="instructions">Инструкции</a>
+                    <a href="#error-analysis" class="settings-tab-button text-center flex-1" data-tab="error-analysis">Анализ</a>
                     <a href="#tools" class="settings-tab-button text-center flex-1" data-tab="tools">Инструменты</a>
+                    <a href="#contact" class="settings-tab-button text-center flex-1" data-tab="contact">Связь</a>
                 </nav>
                 <!-- Desktop Sidebar -->
                 <aside class="hidden sm:flex w-52 border-r border-gray-700 p-4 flex-shrink-0">
                     <nav class="flex flex-col space-y-2 w-full">
-                        <a href="#error-analysis" class="settings-tab-button active text-left" data-tab="error-analysis">Анализ ошибок</a>
+                        <a href="#about" class="settings-tab-button text-left" data-tab="about">О приложении</a>
                         <a href="#instructions" class="settings-tab-button text-left" data-tab="instructions">Инструкции</a>
+                        <a href="#error-analysis" class="settings-tab-button active text-left" data-tab="error-analysis">Анализ ошибок</a>
                         <a href="#tools" class="settings-tab-button text-left" data-tab="tools">Инструменты</a>
+                        <a href="#contact" class="settings-tab-button text-left" data-tab="contact">Связь с автором</a>
                     </nav>
                 </aside>
                 <div class="flex-1 p-4 sm:p-6 overflow-y-auto" id="help-tabs-content">
                     
+                    <!-- About Tab -->
+                     <div id="tab-about" class="settings-tab-content hidden prose prose-invert max-w-none">
+                        <h2 class="text-2xl font-bold">Что такое "Секретарь+"?</h2>
+                        <p class="text-gray-300">
+                           **Секретарь+** — это интеллектуальный веб-ассистент, созданный для централизации и управления вашей цифровой продуктивностью. Используя мощь Gemini от Google и облачную платформу Supabase, приложение предоставляет единый разговорный интерфейс для взаимодействия с вашими календарями, контактами, документами и другими сервисами.
+                        </p>
+                        ${markdownToHTML(README_CONTENT)}
+                    </div>
+
                     <!-- Error Analysis Tab -->
                     <div id="tab-error-analysis" class="settings-tab-content space-y-6">
                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
@@ -163,15 +250,23 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                                 Перезапустить Мастер Настройки
                             </button>
                         </div>
+                    </div>
+                    
+                    <!-- Contact Tab -->
+                    <div id="tab-contact" class="settings-tab-content hidden space-y-6">
                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                            <h3 class="text-lg font-semibold text-gray-200">Инструменты разработчика</h3>
-                            <p class="text-sm text-gray-400 mt-1 mb-4">Быстрый доступ для редактирования и отладки ассистента в Google AI Studio.</p>
-                            <button id="edit-service-button" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md font-semibold transition-colors">
-                                ${CodeIcon}
-                                <span>Редактировать в AI Studio</span>
-                            </button>
+                            <h3 class="text-lg font-semibold text-gray-200">Обратная связь</h3>
+                            <p class="text-sm text-gray-400 mt-1 mb-4">Если у вас есть вопросы, предложения или вы столкнулись с ошибкой, которую не удалось решить, вы можете связаться с автором напрямую.</p>
+                            <a href="https://t.me/eklimov" target="_blank" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 rounded-md font-semibold transition-colors">
+                                ${Icons.TelegramIcon.replace('fill="currentColor"', 'fill="white"')}
+                                <span>Написать в Telegram</span>
+                            </a>
+                             <p class="text-xs text-gray-500 mt-4 text-center">
+                                Автор: Климов Евгений
+                            </p>
                         </div>
                     </div>
+
 
                 </div>
             </main>
@@ -181,18 +276,10 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
     // --- Tab Loading ---
     const loadInstructions = () => {
         const guideContainer = modalOverlay.querySelector('#tab-instructions');
-        if (guideContainer.innerHTML !== '') return; // Already loaded or loading
+        if (guideContainer.innerHTML !== '') return; // Already loaded
 
-        guideContainer.innerHTML = `<div class="flex items-center justify-center h-48"><div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;
-        fetch('./PROXY_WORKER_SETUP.md')
-            .then(res => res.ok ? res.text() : Promise.reject(`HTTP error! status: ${res.status}`))
-            .then(markdown => {
-                guideContainer.innerHTML = createGuideFromMarkdown(markdown);
-            })
-            .catch(err => {
-                console.error("Failed to load instructions:", err);
-                guideContainer.innerHTML = `<p class="text-red-400">Не удалось загрузить инструкцию: ${err.message}</p>`;
-            });
+        const combinedInstructions = `${SUPABASE_SETUP_MD}\n\n<br/><hr class="my-8 border-gray-700"><br/>\n\n${PROXY_SETUP_MD}`;
+        guideContainer.innerHTML = createGuideFromMarkdown(combinedInstructions);
     };
 
     // --- Event Listeners ---
@@ -257,11 +344,24 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                 setTimeout(() => { copyButton.textContent = 'Копировать'; }, 2000);
             });
         }
+        
+        // Copy Report Button
+        const copyReportButton = e.target.closest('#copy-report-button');
+        if (copyReportButton) {
+             const reportText = copyReportButton.dataset.report;
+             navigator.clipboard.writeText(reportText).then(() => {
+                copyReportButton.textContent = 'Отчет скопирован!';
+                setTimeout(() => { copyReportButton.textContent = 'Скопировать отчет'; }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy report: ', err);
+                copyReportButton.textContent = 'Ошибка копирования';
+            });
+        }
+
 
         // Action buttons
         const analyzeButton = e.target.closest('#analyze-error-button');
         const relaunchButton = e.target.closest('#relaunch-wizard-button');
-        const editServiceButton = e.target.closest('#edit-service-button');
         const launchDbWizardButton = e.target.closest('[data-action="launch-db-wizard"]');
 
         if (launchDbWizardButton) {
@@ -293,7 +393,14 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
 
             try {
                 const analysis = await analyzeErrorFn(errorMessage);
-                resultContainer.innerHTML = `<div class="prose prose-invert max-w-none">${markdownToHTML(analysis)}</div>`;
+                const fullReport = `--- ОТЧЕТ ОБ ОШИБКЕ ДЛЯ СЕКРЕТАРЬ+ ---\n\n## Исходная ошибка:\n\`\`\`\n${errorMessage}\n\`\`\`\n\n## Анализ ИИ:\n${analysis}`;
+                resultContainer.innerHTML = `
+                    <div class="prose prose-invert max-w-none">${markdownToHTML(analysis)}</div>
+                    <div class="mt-6 border-t border-gray-700 pt-4 flex flex-col sm:flex-row gap-3">
+                        <button id="copy-report-button" data-report="${encodeURIComponent(fullReport)}" class="w-full flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md font-semibold transition-colors">Скопировать отчет</button>
+                        <a href="https://t.me/eklimov" target="_blank" class="w-full flex-1 px-4 py-2 bg-sky-500 hover:bg-sky-600 rounded-md font-semibold transition-colors text-center">Связаться с автором</a>
+                    </div>
+                `;
             } catch (error) {
                 resultContainer.innerHTML = `<p class="text-red-400">Не удалось выполнить анализ: ${error.message}</p>`;
             } finally {
@@ -304,10 +411,6 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
 
         if (relaunchButton && onRelaunchWizard) {
             onRelaunchWizard();
-        }
-
-        if (editServiceButton) {
-            window.open('https://aistudio.google.com/app/apps/drive/1-YFIo56NWOtYuQYpZUWiPcMY323lJPuK?showAssistant=true&showPreview=true', '_blank');
         }
     });
     
