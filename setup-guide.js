@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
         proxyStatus: document.getElementById('proxy-status-container'),
         foundProxies: document.getElementById('found-proxies-container'),
         selectedProxies: document.getElementById('selected-proxies-container'),
+        proxyTestModal: document.getElementById('proxy-test-modal-container'),
     };
 
     // --- UTILITY & API FUNCTIONS ---
@@ -84,6 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function testProxyConnection(proxyUrl, apiKey) {
         if (!proxyUrl || !apiKey) return { status: 'error', speed: null, message: 'Missing URL or API Key' };
+        // Use a lightweight endpoint for checking functionality
         const testEndpoint = `${proxyUrl}/v1beta/models?key=${apiKey}`;
         const startTime = performance.now();
         try {
@@ -91,12 +93,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (response.ok) {
                 const data = await response.json();
                 if (data.models && Array.isArray(data.models)) {
-                    return { status: 'ok', speed: Math.round(performance.now() - startTime), message: 'OK' };
+                    return { status: 'ok', speed: Math.round(performance.now() - startTime), message: 'Соединение успешно.' };
                 }
+                 return { status: 'error', speed: null, message: 'Ответ от прокси некорректен.' };
             }
-            return { status: 'error', speed: null, message: `Status: ${response.status}` };
+            return { status: 'error', speed: null, message: `Статус ответа: ${response.status}` };
         } catch (error) {
-            return { status: 'error', speed: null, message: 'Fetch failed' };
+            return { status: 'error', speed: null, message: 'Сетевая ошибка (CORS или недоступность).' };
         }
     }
 
@@ -184,14 +187,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (error) {
             setStatus(containers.keysStatus, 'error', `Ошибка сохранения: ${error.message}`);
+            buttons.saveKeys.disabled = false;
+            buttons.saveKeys.textContent = 'Сохранить и продолжить';
         } else {
             state.settings = settingsUpdate;
             setStatus(containers.keysStatus, 'success', 'Ключи успешно сохранены в вашем аккаунте.');
             steps.keys.dataset.status = 'completed';
-            showStep('proxy');
+            // Auto-navigate to next step
+            setTimeout(() => {
+                 showStep('proxy');
+            }, 1000);
         }
-        buttons.saveKeys.disabled = false;
-        buttons.saveKeys.textContent = 'Сохранить и продолжить';
     });
 
     buttons.findProxies.addEventListener('click', async () => {
@@ -230,20 +236,31 @@ document.addEventListener('DOMContentLoaded', () => {
         setStatus(containers.proxyStatus, 'loading', 'Сохраняем список прокси...');
         buttons.saveProxies.disabled = true;
         try {
-            const proxiesToUpsert = state.selectedProxies.map((p, index) => ({
-                user_id: state.user.id,
-                url: p.url,
-                alias: p.alias || p.geolocation,
-                geolocation: p.geolocation,
-                is_active: true,
-                priority: index,
-                last_status: p.last_status,
-                last_speed_ms: p.last_speed_ms
-            }));
+            // Delete proxies that were removed by the user
+            const currentProxyUrls = new Set(state.selectedProxies.map(p => p.url));
+            const { data: existingProxies, error: fetchError } = await state.supabaseClient.from('proxies').select('id, url');
+            if(fetchError) throw fetchError;
 
-            if(proxiesToUpsert.length > 0) {
-                const { error } = await state.supabaseClient.from('proxies').upsert(proxiesToUpsert, { onConflict: 'user_id, url' });
-                if (error) throw error;
+            const proxiesToDelete = existingProxies.filter(p => !currentProxyUrls.has(p.url));
+            if (proxiesToDelete.length > 0) {
+                const { error: deleteError } = await state.supabaseClient.from('proxies').delete().in('id', proxiesToDelete.map(p => p.id));
+                if (deleteError) throw deleteError;
+            }
+
+            // Upsert the current list
+            if (state.selectedProxies.length > 0) {
+                const proxiesToUpsert = state.selectedProxies.map((p, index) => ({
+                    user_id: state.user.id,
+                    url: p.url,
+                    alias: p.alias || p.geolocation,
+                    geolocation: p.geolocation,
+                    is_active: true,
+                    priority: index,
+                    last_status: p.last_status,
+                    last_speed_ms: p.last_speed_ms
+                }));
+                const { error: upsertError } = await state.supabaseClient.from('proxies').upsert(proxiesToUpsert, { onConflict: 'user_id, url' });
+                if (upsertError) throw upsertError;
             }
             
             setStatus(containers.proxyStatus, 'success', 'Список прокси сохранен.');
@@ -258,7 +275,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     buttons.goToApp.addEventListener('click', () => {
         localStorage.setItem('setup_completed', 'true');
-        window.location.href = './index.html';
+        // This will trigger the listener in the main app to reload
+        window.close(); // Close the setup tab
     });
 
     document.body.addEventListener('click', e => {
@@ -271,26 +289,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- PROXY LISTS LOGIC ---
     
     function showProxyTestModal(proxyData) {
-        const modalContainer = document.getElementById('proxy-test-modal-container');
-        modalContainer.innerHTML = `
+        containers.proxyTestModal.innerHTML = `
             <div class="proxy-test-modal-overlay">
                 <div class="proxy-test-modal-content">
-                    <h3 class="step-subtitle">Тестирование прокси</h3>
+                    <div class="modal-header">
+                        <h3 class="step-subtitle">Тестирование прокси</h3>
+                    </div>
                     <div class="modal-body"></div>
                     <div class="modal-footer"></div>
                 </div>
             </div>
         `;
         
-        const modal = modalContainer.querySelector('.proxy-test-modal-overlay');
+        const modal = containers.proxyTestModal.querySelector('.proxy-test-modal-overlay');
         const body = modal.querySelector('.modal-body');
         const footer = modal.querySelector('.modal-footer');
         
-        const close = () => modalContainer.innerHTML = '';
-        
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) close();
-        });
+        const close = () => containers.proxyTestModal.innerHTML = '';
+        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
 
         const runTest = async () => {
             body.innerHTML = `<p class="status-loading">Тестирование...</p>`;
@@ -358,7 +374,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </p>
             </div>
             <div class="proxy-item-actions">
-                 ${!isSelected ? `<button class="test-btn">Тест</button>` : ''}
+                 <button class="test-btn">Тест</button>
                  ${isSelected ? `<button class="remove-btn">Удалить</button>` : ''}
             </div>
         `;
@@ -366,26 +382,26 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const updateProxyUI = (url, { status, speed }) => {
-        const item = containers.foundProxies.querySelector(`.proxy-item[data-url="${url}"]`);
-        if (!item) return;
-        const dot = item.querySelector('.proxy-status-dot');
-        dot.dataset.status = status;
-        item.dataset.lastStatus = status;
-        const speedEl = item.querySelector('.speed-info');
-        if (speed) {
-            speedEl.textContent = ` · ${speed} мс`;
-            speedEl.style.display = 'inline';
-            item.dataset.lastSpeed = speed;
-        } else {
-            speedEl.style.display = 'none';
-        }
+        document.querySelectorAll(`.proxy-item[data-url="${url}"]`).forEach(item => {
+             const dot = item.querySelector('.proxy-status-dot');
+            dot.dataset.status = status;
+            item.dataset.lastStatus = status;
+            const speedEl = item.querySelector('.speed-info');
+            if (speed) {
+                speedEl.textContent = ` · ${speed} мс`;
+                speedEl.style.display = 'inline';
+                item.dataset.lastSpeed = speed;
+            } else {
+                speedEl.style.display = 'none';
+            }
+        });
     };
     
     const renderSelectedProxies = () => {
+        containers.selectedProxies.innerHTML = '';
         if (state.selectedProxies.length === 0) {
             containers.selectedProxies.innerHTML = `<p class="text-gray-400 text-center py-4">Выбранные прокси появятся здесь.</p>`;
         } else {
-            containers.selectedProxies.innerHTML = '';
             state.selectedProxies.forEach(p => containers.selectedProxies.appendChild(renderProxyItem(p, 'selected')));
         }
     };
@@ -395,19 +411,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = target.closest('.proxy-item');
         if (!item) return;
 
-        const proxyUrl = item.dataset.url;
-        const proxyGeo = item.dataset.geo;
+        const proxyData = {
+            url: item.dataset.url,
+            geolocation: item.dataset.geo,
+        };
         
         if (target.matches('.test-btn')) {
-            showProxyTestModal({ url: proxyUrl, geolocation: proxyGeo });
+            showProxyTestModal(proxyData);
         }
     });
 
     containers.selectedProxies.addEventListener('click', (e) => {
         const item = e.target.closest('.proxy-item');
-        if (item && e.target.matches('.remove-btn')) {
-            state.selectedProxies = state.selectedProxies.filter(p => p.url !== item.dataset.url);
+        if (!item) return;
+        const proxyUrl = item.dataset.url;
+        
+        if (e.target.matches('.remove-btn')) {
+            state.selectedProxies = state.selectedProxies.filter(p => p.url !== proxyUrl);
             renderSelectedProxies();
+        }
+        if (e.target.matches('.test-btn')) {
+             showProxyTestModal({ url: proxyUrl, geolocation: item.dataset.geo });
         }
     });
     
@@ -431,16 +455,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 containers.authStatus.style.display = 'none';
             }
 
+            // Clean up URL after OAuth redirect
             if (window.location.hash.includes('access_token')) {
                 history.replaceState(null, document.title, window.location.pathname + window.location.search);
             }
         });
-
-        const { data: { session } } = await state.supabaseClient.auth.getSession();
-        if (session) {
-            state.user = session.user;
-            await renderAuthenticatedState();
-        }
     };
 
     initialize();

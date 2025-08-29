@@ -94,10 +94,9 @@
                     <div id="proxy-status-container" class="mt-4 text-sm" style="display: none;"></div>
                     <div class="step-navigation">
                          <button class="wizard-nav-button prev-button" data-nav-target="keys">Назад</button>
-                         <button id="save-proxies-button" class="wizard-nav-button next-button">Сохранить и продолжить</button>
+                         <button id="save-proxies-button" class="wizard-nav-button next-button">Завершить настройку</button>
                     </div>
                  </div>
-                 <div id="proxy-test-modal-container"></div>
             </section>
             
             <section id="step-final" class="setup-step" data-step="4" style="display: none;">
@@ -112,9 +111,12 @@
                     </button>
                 </div>
             </section>
-
         </div>
     </main>
+
+    <!-- Modal Container -->
+    <div id="proxy-test-modal-container"></div>
+    
     <script type="module" src="setup-guide.js"></script>
 </body>
 </html>

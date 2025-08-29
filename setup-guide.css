@@ -278,7 +278,7 @@ a:not(.wizard-nav-button):hover {
 .proxy-test-modal-overlay {
     position: fixed;
     inset: 0;
-    background-color: rgba(0,0,0,0.6);
+    background-color: rgba(0,0,0,0.7);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -289,14 +289,18 @@ a:not(.wizard-nav-button):hover {
     background-color: var(--background-light);
     border: 1px solid var(--border-color);
     border-radius: 0.75rem;
-    padding: 1.5rem;
     width: 100%;
     max-width: 500px;
     box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+}
+.proxy-test-modal-content .modal-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
 }
 .proxy-test-modal-content .modal-body {
-    margin-top: 1rem;
-    margin-bottom: 1.5rem;
+    padding: 1.5rem;
 }
 .proxy-test-modal-content .modal-body .proxy-item-url {
     word-break: break-all;
@@ -306,5 +310,6 @@ a:not(.wizard-nav-button):hover {
     justify-content: flex-end;
     gap: 0.75rem;
     border-top: 1px solid var(--border-color);
-    padding-top: 1.5rem;
+    padding: 1rem 1.5rem;
+    background-color: rgba(0,0,0,0.1);
 }
