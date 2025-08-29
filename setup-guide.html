@@ -21,122 +21,72 @@
     </script>
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans">
-    <div class="flex flex-col md:flex-row min-h-screen">
-        <!-- Sidebar Navigation (Desktop) -->
-        <aside class="w-64 bg-gray-800 p-6 border-r border-gray-700 hidden md:block">
-            <h1 class="text-xl font-bold text-white mb-8">Мастер Настройки</h1>
-            <nav>
-                <ul class="space-y-2" id="wizard-nav">
-                    <li><a href="#introduction" class="nav-link active" data-step="0">Введение</a></li>
-                    <li><a href="#auth-choice" class="nav-link" data-step="1">1. Выбор способа</a></li>
-                    <li><a href="#supabase-setup" class="nav-link" data-step="2">2. Настройка Supabase</a></li>
-                    <li><a href="#google-cloud-setup" class="nav-link" data-step="3">3. Настройка Google Cloud</a></li>
-                    <li><a href="#gemini-setup" class="nav-link" data-step="4">4. Настройка Gemini API</a></li>
-                    <li><a href="#proxy-setup" class="nav-link" data-step="5">5. (Опц.) Настройка Прокси</a></li>
-                    <li><a href="#final-step" class="nav-link" data-step="6">6. Завершение</a></li>
-                </ul>
-            </nav>
-        </aside>
-
-        <!-- Main Content -->
-        <main class="flex-1 p-4 sm:p-8 md:p-12 w-full">
-            <!-- Mobile Navigation -->
-            <div class="md:hidden mb-6">
-              <label for="mobile-nav-select" class="sr-only">Выберите раздел</label>
-              <select id="mobile-nav-select" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
-                <!-- Options will be populated by JS -->
-              </select>
-            </div>
-
-            <div class="max-w-4xl mx-auto">
-                
-                <!-- Introduction -->
-                <section id="introduction" class="wizard-step">
-                    <h2 class="section-title">Введение</h2>
-                    <p>Добро пожаловать в руководство по настройке «Секретарь+»! Это приложение использует несколько внешних сервисов Google для своей работы. Следуйте этой инструкции шаг за шагом, чтобы получить все необходимые ключи и настроить приложение.</p>
-                    <p>После выполнения всех шагов вы получите набор ключей, которые нужно будет ввести в самом приложении.</p>
-                     <footer class="wizard-footer">
-                        <button class="wizard-nav-button next-button" data-next="1">Начать настройку</button>
-                    </footer>
-                </section>
-                
-                 <!-- Auth Choice -->
-                <section id="auth-choice" class="wizard-step" style="display: none;">
-                    <h2 class="section-title">1. Выбор способа аутентификации</h2>
-                    <p class="mb-6">Приложение поддерживает два способа подключения к сервисам Google. Выберите один из них. <strong>Рекомендуется использовать Supabase.</strong></p>
-
-                    <div class="grid md:grid-cols-2 gap-6">
-                        <div class="choice-card" data-choice="supabase">
-                            <h3 class="choice-title">Supabase (Рекомендуется)</h3>
-                            <p class="choice-description">Использует Supabase для безопасной аутентификации и хранения данных (контакты, файлы). Это обеспечивает лучшую производительность и функциональность, включая синхронизацию.</p>
-                            <ul class="choice-features">
-                                <li>✅ Безопасный вход через Google</li>
-                                <li>✅ Синхронизация контактов и файлов</li>
-                                <li>✅ Быстрый поиск по данным</li>
-                            </ul>
-                        </div>
-                         <div class="choice-card" data-choice="direct">
-                            <h3 class="choice-title">Прямое подключение Google</h3>
-                            <p class="choice-description">Простой способ, подключающий приложение напрямую к Google API без использования базы данных. Функции синхронизации и быстрого поиска по контактам будут недоступны.</p>
-                             <ul class="choice-features">
-                                <li>✅ Простая настройка</li>
-                                <li>❌ Без синхронизации данных</li>
-                                <li>❌ Поиск только по Google Drive</li>
-                            </ul>
-                        </div>
+    <main class="flex-1 p-4 sm:p-8 md:p-12 w-full">
+        <div class="max-w-4xl mx-auto">
+            <header class="text-center mb-12">
+                 <h1 class="text-3xl font-bold text-white">Мастер Настройки Секретарь+</h1>
+                 <p class="text-gray-400 mt-2">Следуйте шагам, чтобы подключить и настроить вашего ассистента.</p>
+            </header>
+            
+            <!-- Step 1: Authentication -->
+            <section id="step-auth" class="setup-step" data-step="1">
+                <div class="step-header">
+                    <div class="step-indicator">1</div>
+                    <h2 class="step-title">Подключение к Supabase и Аутентификация</h2>
+                </div>
+                <div class="step-content">
+                    <p class="mb-6">Введите данные вашего проекта Supabase, чтобы включить облачную синхронизацию и сохранить настройки. После этого войдите через Google.</p>
+                    <div class="input-group">
+                        <label for="supabase-url">Supabase Project URL</label>
+                        <input type="text" id="supabase-url" placeholder="https://xyz.supabase.co">
                     </div>
-                     <footer class="wizard-footer">
-                        <button class="wizard-nav-button back-button" data-back="0">Назад</button>
-                    </footer>
-                </section>
+                    <div class="input-group">
+                        <label for="supabase-anon-key">Supabase Anon Key</label>
+                        <input type="password" id="supabase-anon-key" placeholder="Вставьте ваш Anon Key">
+                    </div>
+                     <div id="auth-status-container" class="mt-4 text-sm"></div>
+                    <button id="connect-login-button" class="wizard-nav-button next-button w-full text-center justify-center mt-4">
+                        Подключиться и войти через Google
+                    </button>
+                    <div id="user-profile-display" class="mt-6 p-4 bg-gray-800 border border-gray-700 rounded-lg" style="display: none;">
+                        <!-- User info will be rendered here -->
+                    </div>
+                </div>
+            </section>
 
-                <!-- Supabase Setup -->
-                <section id="supabase-setup" class="wizard-step" style="display: none;">
-                    <h2 class="section-title">2. Настройка Supabase</h2>
-                    <p class="mb-6">Supabase используется как безопасная база данных и сервис аутентификации. На этом шаге вам нужно создать таблицы и настроить политики безопасности.</p>
-                    
-                    <div class="setup-options mb-6">
+            <!-- Step 2: Database Setup -->
+            <section id="step-db-setup" class="setup-step" data-step="2" style="display: none;">
+                <div class="step-header">
+                    <div class="step-indicator">2</div>
+                    <h2 class="step-title">Настройка Базы Данных</h2>
+                </div>
+                <div class="step-content">
+                    <p class="mb-4">Теперь необходимо настроить таблицы в вашей базе данных. Рекомендуется использовать автоматический метод.</p>
+                     <div class="setup-options mb-6">
                         <button class="option-tab active" data-tab-target="#auto-setup">Вариант А: Автоматическая настройка (Рекомендуется)</button>
                         <button class="option-tab" data-tab-target="#manual-setup">Вариант Б: Ручная настройка</button>
                     </div>
 
                     <!-- Auto Setup Content -->
                     <div id="auto-setup" class="tab-content">
-                        <p class="mb-4">Этот метод использует официальный API Supabase для выполнения скрипта. Это <strong>на 100% надежный и безопасный способ</strong>, так как он обходит ограничения браузера, а ваш токен доступа не сохраняется.</p>
-                        
-                        <div class="step">
-                            <h3 class="step-title">Шаг 2.1: Сгенерируйте токен доступа</h3>
+                        <p class="mb-4">Этот метод использует официальный API Supabase. Он <strong>на 100% надежный и безопасный</strong>, так как обходит ограничения браузера.</p>
+                         <div class="step-subsection">
+                            <h3 class="step-subtitle">Шаг 2.1: Сгенерируйте токен доступа</h3>
                             <ol>
-                                <li><a href="https://supabase.com/dashboard/account/tokens" target="_blank" rel="noopener noreferrer">Откройте страницу токенов доступа</a> в вашем аккаунте Supabase.</li>
-                                <li>Нажмите "Generate New Token".</li>
-                                <li>Дайте ему имя (например, "Secretary Setup") и нажмите "Generate Token".</li>
-                                <li>Скопируйте сгенерированный токен и вставьте его в поле ниже.</li>
+                                <li><a href="https://supabase.com/dashboard/account/tokens" target="_blank" rel="noopener noreferrer">Откройте страницу токенов доступа</a>.</li>
+                                <li>Нажмите "Generate New Token", дайте имя и скопируйте его.</li>
                             </ol>
                              <div class="input-group">
                                 <label for="supabase-access-token">Токен доступа (Access Token)</label>
                                 <input type="password" id="supabase-access-token" placeholder="sbp_...">
                             </div>
                         </div>
-
-                        <div class="step">
-                            <h3 class="step-title">Шаг 2.2: Найдите ID вашего проекта</h3>
-                            <ol>
-                                <li>Перейдите в настройки вашего проекта: `Project Settings` > `General`.</li>
-                                <li>Найдите поле `Reference ID` и скопируйте его.</li>
-                            </ol>
-                            <div class="input-group">
-                                <label for="supabase-project-id">ID вашего проекта (Project Reference ID)</label>
-                                <input type="text" id="supabase-project-id" placeholder="abdcdefghijklmnopqrst">
-                            </div>
-                        </div>
-
-                        <div class="step">
-                             <h3 class="step-title">Шаг 2.3: Выполните команду</h3>
-                             <p>Скопируйте сгенерированную ниже команду и выполните её в вашем терминале (на macOS, Linux или в Windows WSL). Она безопасно отправит SQL-скрипт в ваш проект.</p>
+                        <div class="step-subsection">
+                             <h3 class="step-subtitle">Шаг 2.2: Выполните команду</h3>
+                             <p>Скопируйте сгенерированную команду и выполните её в вашем терминале. Ваш ID проекта уже подставлен автоматически.</p>
                              <div class="code-block mt-4">
-                                <pre><code id="curl-command-output">Введите токен и ID проекта выше...</code></pre>
+                                <pre><code id="curl-command-output">Введите токен доступа выше...</code></pre>
                                 <button class="copy-button" data-copy-target="curl-command-output">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
                                     <span class="copy-text">Копировать</span>
                                 </button>
                             </div>
@@ -145,466 +95,91 @@
                     
                     <!-- Manual Setup Content -->
                     <div id="manual-setup" class="tab-content" style="display: none;">
-                        <p class="mb-4">Этот метод требует ручного копирования SQL-скрипта в редактор Supabase. Используйте его, если у вас нет доступа к терминалу.</p>
-                        <div class="step">
-                            <h3 class="step-title">Инструкция по ручной настройке</h3>
-                            <ol>
-                                <li>В меню вашего нового проекта выберите <strong>SQL Editor</strong>.</li>
-                                <li>Нажмите <strong>"+ New query"</strong>.</li>
-                                <li>Скопируйте и вставьте весь SQL-скрипт ниже в редактор.</li>
-                                <li>Нажмите <strong>"RUN"</strong>.</li>
-                            </ol>
-                            <div class="code-block mt-4">
-                                <pre><code id="sql-script-content"></code></pre>
-                                <button class="copy-button" data-copy-target="sql-script-content">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
-                                    <span class="copy-text">Копировать</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- This code is needed by both methods but hidden from user view -->
-                    <pre style="display:none;"><code id="sql-script-source">-- =================================================================
---  Скрипт настройки базы данных "Секретарь+"
---  Версия: 1.8.0
---  Этот скрипт является идемпотентным. Его можно безопасно 
---  запускать несколько раз для создания или обновления схемы.
--- =================================================================
-
--- 1. Таблица контактов (contacts)
-CREATE TABLE IF NOT EXISTS public.contacts (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL;
-ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS source TEXT NOT NULL;
-ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS source_id TEXT;
-ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS display_name TEXT;
-ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS email TEXT;
-ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS phone TEXT;
-ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS avatar_url TEXT;
-DO $$ BEGIN
-  IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint 
-      WHERE conname = 'contacts_user_id_source_source_id_key' AND conrelid = 'public.contacts'::regclass
-  ) THEN
-      ALTER TABLE public.contacts ADD UNIQUE(user_id, source, source_id);
-  END IF;
-END $$;
-
-
--- 2. Таблица файлов (files)
-CREATE TABLE IF NOT EXISTS public.files (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.files ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL;
-ALTER TABLE public.files ADD COLUMN IF NOT EXISTS source TEXT NOT NULL;
-ALTER TABLE public.files ADD COLUMN IF NOT EXISTS source_id TEXT;
-ALTER TABLE public.files ADD COLUMN IF NOT EXISTS name TEXT NOT NULL;
-ALTER TABLE public.files ADD COLUMN IF NOT EXISTS mime_type TEXT;
-ALTER TABLE public.files ADD COLUMN IF NOT EXISTS url TEXT;
-ALTER TABLE public.files ADD COLUMN IF NOT EXISTS icon_link TEXT;
-ALTER TABLE public.files ADD COLUMN IF NOT EXISTS created_time TIMESTAMPTZ;
-ALTER TABLE public.files ADD COLUMN IF NOT EXISTS modified_time TIMESTAMPTZ;
-ALTER TABLE public.files ADD COLUMN IF NOT EXISTS viewed_by_me_time TIMESTAMPTZ;
-ALTER TABLE public.files ADD COLUMN IF NOT EXISTS size BIGINT;
-ALTER TABLE public.files ADD COLUMN IF NOT EXISTS owner TEXT;
-DO $$ BEGIN
-  IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint 
-      WHERE conname = 'files_user_id_source_source_id_key' AND conrelid = 'public.files'::regclass
-  ) THEN
-      ALTER TABLE public.files ADD UNIQUE(user_id, source, source_id);
-  END IF;
-END $$;
-
-
--- 3. Таблица заметок (notes)
-CREATE TABLE IF NOT EXISTS public.notes (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL;
-ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS title TEXT;
-ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS content TEXT NOT NULL;
-
-
--- 4. Таблица событий календаря (calendar_events)
-CREATE TABLE IF NOT EXISTS public.calendar_events (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    synced_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL;
-ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS source_id TEXT NOT NULL;
-ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS title TEXT;
-ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS description TEXT;
-ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS start_time TIMESTAMPTZ;
-ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS end_time TIMESTAMPTZ;
-ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS event_link TEXT;
-ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS meet_link TEXT;
-DO $$ BEGIN
-  IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint 
-      WHERE conname = 'calendar_events_user_id_source_id_key' AND conrelid = 'public.calendar_events'::regclass
-  ) THEN
-      ALTER TABLE public.calendar_events ADD UNIQUE(user_id, source_id);
-  END IF;
-END $$;
-
-
--- 5. Таблица задач (tasks)
-CREATE TABLE IF NOT EXISTS public.tasks (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    synced_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL;
-ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS source_id TEXT NOT NULL;
-ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS title TEXT;
-ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS notes TEXT;
-ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS due_date TIMESTAMPTZ;
-ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS status TEXT;
-DO $$ BEGIN
-  IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint 
-      WHERE conname = 'tasks_user_id_source_id_key' AND conrelid = 'public.tasks'::regclass
-  ) THEN
-      ALTER TABLE public.tasks ADD UNIQUE(user_id, source_id);
-  END IF;
-END $$;
-
-
--- 6. Таблица долговременной памяти (chat_memory)
-CREATE TABLE IF NOT EXISTS public.chat_memory (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.chat_memory ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL;
-ALTER TABLE public.chat_memory ADD COLUMN IF NOT EXISTS summary TEXT NOT NULL;
-ALTER TABLE public.chat_memory ADD COLUMN IF NOT EXISTS keywords TEXT[];
-
-
--- 7. Таблица метаданных почты (emails)
-CREATE TABLE IF NOT EXISTS public.emails (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    synced_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL;
-ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS source_id TEXT NOT NULL;
-ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS subject TEXT;
-ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS sender TEXT;
-ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS snippet TEXT;
-ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS received_at TIMESTAMPTZ;
-DO $$ BEGIN
-  IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint 
-      WHERE conname = 'emails_user_id_source_id_key' AND conrelid = 'public.emails'::regclass
-  ) THEN
-      ALTER TABLE public.emails ADD UNIQUE(user_id, source_id);
-  END IF;
-END $$;
-
--- 8. Таблица статистики действий (action_stats)
-CREATE TABLE IF NOT EXISTS public.action_stats (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    function_name TEXT NOT NULL,
-    call_count INT DEFAULT 1 NOT NULL
-);
-DO $$ BEGIN
-  IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint 
-      WHERE conname = 'action_stats_user_id_function_name_key' AND conrelid = 'public.action_stats'::regclass
-  ) THEN
-      ALTER TABLE public.action_stats ADD UNIQUE(user_id, function_name);
-  END IF;
-END $$;
-
--- 9. Таблица настроек пользователя (user_settings)
-CREATE TABLE IF NOT EXISTS public.user_settings (
-  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  settings JSONB NOT NULL
-);
-
--- 10. Таблица прокси-серверов (proxies)
-CREATE TABLE IF NOT EXISTS public.proxies (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    alias TEXT,
-    url TEXT NOT NULL,
-    priority INT DEFAULT 0 NOT NULL,
-    is_active BOOLEAN DEFAULT true NOT NULL,
-    last_status TEXT DEFAULT 'untested' NOT NULL, -- 'untested', 'ok', 'error'
-    last_checked_at TIMESTAMPTZ,
-    last_speed_ms INT,
-    geolocation TEXT
-);
-DO $$ BEGIN
-  IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint 
-      WHERE conname = 'proxies_user_id_url_key' AND conrelid = 'public.proxies'::regclass
-  ) THEN
-      ALTER TABLE public.proxies ADD UNIQUE(user_id, url);
-  END IF;
-END $$;
-
-
--- 11. Включение Row Level Security (RLS) для всех таблиц
-ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.files ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.calendar_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.chat_memory ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.emails ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.action_stats ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.proxies ENABLE ROW LEVEL SECURITY;
-
-
--- 12. Создание политик безопасности (удаляем старые, если они есть, чтобы избежать ошибок)
-DROP POLICY IF EXISTS "Allow users to manage their own contacts" ON public.contacts;
-CREATE POLICY "Allow users to manage their own contacts" ON public.contacts FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own files" ON public.files;
-CREATE POLICY "Allow users to manage their own files" ON public.files FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own notes" ON public.notes;
-CREATE POLICY "Allow users to manage their own notes" ON public.notes FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own calendar events" ON public.calendar_events;
-CREATE POLICY "Allow users to manage their own calendar events" ON public.calendar_events FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own tasks" ON public.tasks;
-CREATE POLICY "Allow users to manage their own tasks" ON public.tasks FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own chat memory" ON public.chat_memory;
-CREATE POLICY "Allow users to manage their own chat memory" ON public.chat_memory FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own emails" ON public.emails;
-CREATE POLICY "Allow users to manage their own emails" ON public.emails FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own stats" ON public.action_stats;
-CREATE POLICY "Allow users to manage their own stats" ON public.action_stats FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can manage their own settings" ON public.user_settings;
-CREATE POLICY "Users can manage their own settings" ON public.user_settings FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Allow users to manage their own proxies" ON public.proxies;
-CREATE POLICY "Allow users to manage their own proxies" ON public.proxies FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-
--- 13. RPC-функции
-CREATE OR REPLACE FUNCTION increment_stat(fn_name TEXT)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  INSERT INTO public.action_stats (user_id, function_name, call_count)
-  VALUES (auth.uid(), fn_name, 1)
-  ON CONFLICT (user_id, function_name)
-  DO UPDATE SET call_count = action_stats.call_count + 1;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION upsert_user_settings(new_settings JSONB)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  INSERT INTO public.user_settings (user_id, settings)
-  VALUES (auth.uid(), new_settings)
-  ON CONFLICT (user_id)
-  DO UPDATE SET settings = EXCLUDED.settings, updated_at = now();
-END;
-$$;</code></pre>
-
-                    <footer class="wizard-footer">
-                        <button class="wizard-nav-button back-button" data-back="1">Назад</button>
-                        <button class="wizard-nav-button next-button" data-next="3">Далее</button>
-                    </footer>
-                </section>
-
-                <!-- Google Cloud Setup -->
-                <section id="google-cloud-setup" class="wizard-step" style="display: none;">
-                    <h2 class="section-title">3. Настройка Google Cloud</h2>
-                    <p class="mb-6">Вам нужен проект в Google Cloud, чтобы разрешить приложению доступ к API Календаря, Диска и Контактов.</p>
-
-                    <div class="step">
-                        <h3 class="step-title">Шаг 3.1: Проект и экран согласия</h3>
                         <ol>
-                            <li><a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener noreferrer">Создайте новый проект</a> в Google Cloud Console (или выберите существующий).</li>
-                            <li>Перейдите в <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" rel="noopener noreferrer"><strong>APIs & Services &gt; OAuth consent screen</strong></a>.</li>
-                            <li>Выберите <strong>External</strong> и нажмите "Create". Заполните обязательные поля (имя приложения, email).</li>
-                            <li>На шаге "Scopes" ничего не добавляйте.</li>
-                            <li>На шаге "Test users" добавьте свой Google аккаунт, с которого будете входить в приложение.</li>
-                            <li>Вернитесь на страницу OAuth consent screen и нажмите <strong>"Publish App"</strong>, чтобы приложение стало доступно.</li>
+                            <li>В меню вашего проекта выберите <strong>SQL Editor</strong>, затем <strong>"+ New query"</strong>.</li>
+                            <li>Скопируйте и вставьте весь SQL-скрипт ниже в редактор.</li>
+                            <li>Нажмите <strong>"RUN"</strong>.</li>
                         </ol>
-                    </div>
-
-                    <div class="step">
-                        <h3 class="step-title">Шаг 3.2: Включение API</h3>
-                        <p>Перейдите в <a href="https://console.cloud.google.com/apis/library" target="_blank" rel="noopener noreferrer"><strong>библиотеку API</strong></a> и включите (Enable) следующие 8 API:</p>
-                        <ul class="list-disc list-inside mt-2 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
-                           <li><a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noopener noreferrer">Google Calendar API</a></li>
-                            <li><a href="https://console.cloud.google.com/apis/library/people.googleapis.com" target="_blank" rel="noopener noreferrer">Google People API</a></li>
-                            <li><a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener noreferrer">Google Drive API</a></li>
-                            <li><a href="https://console.cloud.google.com/apis/library/docs.googleapis.com" target="_blank" rel="noopener noreferrer">Google Docs API</a></li>
-                            <li><a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener noreferrer">Google Sheets API</a></li>
-                            <li><a href="https://console.cloud.google.com/apis/library/tasks.googleapis.com" target="_blank" rel="noopener noreferrer">Google Tasks API</a></li>
-                            <li><a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noopener noreferrer">Gmail API</a> (для отправки и чтения писем)</li>
-                            <li><a href="https://console.cloud.google.com/apis/library/cloudidentity.googleapis.com" target="_blank" rel="noopener noreferrer">Cloud Identity API</a></li>
-                        </ul>
-                    </div>
-
-                    <div class="step">
-                        <h3 class="step-title">Шаг 3.3: Создание OAuth 2.0 Client ID</h3>
-                        <ol>
-                            <li>Перейдите в <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer"><strong>Credentials</strong></a>, нажмите <strong>+ CREATE CREDENTIALS &gt; OAuth client ID</strong>.</li>
-                            <li>Выберите тип <strong>Web application</strong>.</li>
-                        </ol>
-                        
-                        <div id="google-supabase-instructions" style="display: none;">
-                            <p class="mt-4"><strong>Инструкция для Supabase:</strong></p>
-                            <ol>
-                                <li>В панели Supabase перейдите в <strong>Authentication &gt; Providers &gt; Google</strong>. Скопируйте <strong>Redirect URI</strong>.</li>
-                                <li>Вернитесь в Google Cloud. Вставьте скопированный URI в поле <strong>"Authorized redirect URIs"</strong>.</li>
-                                <li>Нажмите <strong>CREATE</strong>. Скопируйте <strong>Client ID</strong> и <strong>Client Secret</strong>.</li>
-                                <li>Вернитесь в Supabase и вставьте их в соответствующие поля, затем нажмите <strong>Save</strong>.</li>
-                            </ol>
-                        </div>
-                        
-                        <div id="google-direct-instructions" style="display: none;">
-                             <p class="mt-4"><strong>Инструкция для прямого подключения:</strong></p>
-                             <ol>
-                                <li>В поле <strong>"Authorized JavaScript origins"</strong> добавьте URL, где размещено ваше приложение (например, `https://username.github.io`).</li>
-                                 <li>В поле <strong>"Authorized redirect URIs"</strong> также добавьте этот URL.</li>
-                                <li>Нажмите <strong>CREATE</strong>. Скопируйте только <strong>Client ID</strong> и сохраните его для вставки в настройки приложения.</li>
-                            </ol>
+                        <div class="code-block mt-4">
+                            <pre><code id="sql-script-content"></code></pre>
+                            <button class="copy-button" data-copy-target="sql-script-content">
+                                <span class="copy-text">Копировать</span>
+                            </button>
                         </div>
                     </div>
-                     <footer class="wizard-footer">
-                        <button class="wizard-nav-button back-button" data-back="2">Назад</button>
-                        <button class="wizard-nav-button next-button" data-next="4">Далее</button>
-                    </footer>
-                </section>
-                
-                <!-- Gemini Setup -->
-                <section id="gemini-setup" class="wizard-step" style="display: none;">
-                    <h2 class="section-title">4. Настройка Gemini API</h2>
-                    <p class="mb-6">Gemini — это модель искусственного интеллекта от Google, которая является "мозгом" ассистента. Вам нужен API-ключ для отправки запросов.</p>
-                    <div class="step">
-                         <ol>
-                            <li><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Откройте Google AI Studio</a>.</li>
-                            <li>Нажмите <strong>"Create API key in new project"</strong>.</li>
-                            <li>Скопируйте сгенерированный ключ и вставьте его в поле ниже. Он понадобится на следующем шаге.</li>
-                        </ol>
-                         <div class="input-group mt-4">
-                            <label for="wizard-gemini-api-key">Gemini API Key</label>
-                            <input type="password" id="wizard-gemini-api-key" placeholder="Вставьте ваш Gemini API Key">
-                        </div>
-                        <p class="note">Ваш ключ будет храниться только локально в вашем браузере и никуда не передается.</p>
-                    </div>
-                     <footer class="wizard-footer">
-                        <button class="wizard-nav-button back-button" data-back="3">Назад</button>
-                        <button class="wizard-nav-button next-button" data-next="5">Далее</button>
-                    </footer>
-                </section>
+                    <pre style="display:none;" id="sql-script-source"></pre>
+                </div>
+            </section>
 
-                <!-- Proxy Setup -->
-                <section id="proxy-setup" class="wizard-step" style="display: none;">
-                    <h2 class="section-title">5. (Опционально) Настройка Прокси-серверов</h2>
-                    <p class="mb-4">Если доступ к API Gemini ограничен в вашем регионе, вы можете автоматически найти и протестировать рабочие прокси-серверы. Они будут сохранены в вашу конфигурацию для обхода ограничений.</p>
+            <!-- Step 3: API Keys -->
+            <section id="step-keys" class="setup-step" data-step="3" style="display: none;">
+                 <div class="step-header">
+                    <div class="step-indicator">3</div>
+                    <h2 class="step-title">Конфигурация API Ключей</h2>
+                </div>
+                <div class="step-content">
+                    <p class="mb-6">Введите ключи для Gemini API и Google Cloud. Они будут безопасно сохранены в вашем аккаунте.</p>
+                    <div class="input-group">
+                        <label for="gemini-api-key">Gemini API Key</label>
+                        <input type="password" id="gemini-api-key" placeholder="Вставьте ваш Gemini API Key">
+                        <p class="note-text"><a href="https://aistudio.google.com/app/apikey" target="_blank">Получить ключ в Google AI Studio</a></p>
+                    </div>
+                    <div class="input-group">
+                        <label for="google-client-id">Google Client ID</label>
+                        <input type="text" id="google-client-id" placeholder="Вставьте ваш Google Client ID (для резервного подключения)">
+                         <p class="note-text"><a href="https://console.cloud.google.com/apis/credentials" target="_blank">Получить Client ID в Google Cloud</a></p>
+                    </div>
+                    <div id="keys-status-container" class="mt-4 text-sm"></div>
+                    <button id="save-keys-button" class="wizard-nav-button next-button w-full text-center justify-center mt-4">Сохранить ключи</button>
+                </div>
+            </section>
+
+            <!-- Step 4: Proxy Setup -->
+            <section id="step-proxy" class="setup-step" data-step="4" style="display: none;">
+                <div class="step-header">
+                    <div class="step-indicator">4</div>
+                    <h2 class="step-title">Настройка Прокси-серверов</h2>
+                </div>
+                 <div class="step-content">
+                    <p class="mb-4">Если доступ к Gemini API ограничен в вашем регионе, найдите и протестируйте рабочие прокси-серверы.</p>
+                    <button id="find-proxies-ai" class="wizard-nav-button next-button mb-4">Найти прокси с помощью ИИ</button>
+                    <div id="proxy-finder-status" class="mt-2 text-sm"></div>
                     
-                    <div class="step">
-                        <h3 class="step-title">Шаг 5.1: Интеллектуальный поиск</h3>
-                        <p class="mb-4">Нажмите кнопку ниже, чтобы использовать ИИ для поиска актуальных прокси-серверов в интернете.</p>
-                        <button id="find-proxies-ai" class="wizard-nav-button next-button">Найти прокси с помощью ИИ</button>
-                        <div id="proxy-finder-status" class="mt-4 text-sm"></div>
-                    </div>
-
-                    <div class="grid md:grid-cols-2 gap-6">
-                        <div class="step">
-                            <h3 class="step-title">Шаг 5.2: Результаты поиска</h3>
+                    <div class="grid md:grid-cols-2 gap-6 mt-6">
+                        <div>
+                            <h3 class="step-subtitle">Результаты поиска</h3>
                             <div id="found-proxies-container" class="proxy-list-container">
                                 <p class="text-gray-400 text-center py-4">Здесь появятся найденные прокси...</p>
                             </div>
                         </div>
-                        <div class="step">
-                            <h3 class="step-title">Шаг 5.3: Выбранные прокси</h3>
+                        <div>
+                            <h3 class="step-subtitle">Выбранные прокси</h3>
                              <div id="selected-proxies-container" class="proxy-list-container">
-                                <p class="text-gray-400 text-center py-4">Добавьте прокси из списка слева, чтобы сохранить их.</p>
+                                <p class="text-gray-400 text-center py-4">Добавьте прокси из списка слева.</p>
                             </div>
                         </div>
                     </div>
+                    <div id="proxy-status-container" class="mt-4 text-sm"></div>
+                    <button id="save-proxies-button" class="wizard-nav-button next-button w-full text-center justify-center mt-4">Сохранить выбранные прокси</button>
+                 </div>
+            </section>
+            
+            <!-- Step 5: Final -->
+            <section id="step-final" class="setup-step" data-step="5" style="display: none;">
+                 <div class="step-header">
+                    <div class="step-indicator">✓</div>
+                    <h2 class="step-title">Настройка завершена!</h2>
+                </div>
+                <div class="step-content">
+                    <p>Поздравляем! Ваш ассистент полностью настроен и готов к работе. Все данные сохранены в вашем облачном аккаунте.</p>
+                    <a href="./index.html" class="wizard-nav-button next-button w-full text-center justify-center mt-6">
+                        Перейти в приложение
+                    </a>
+                </div>
+            </section>
 
-                    <footer class="wizard-footer">
-                        <button class="wizard-nav-button back-button" data-back="4">Назад</button>
-                        <button class="wizard-nav-button next-button" data-next="6">Далее</button>
-                    </footer>
-                </section>
-                
-                 <!-- Final -->
-                <section id="final-step" class="wizard-step" style="display: none;">
-                    <h2 class="section-title">6. Завершение и сохранение</h2>
-                    <p class="mb-4">Поздравляем! Вы прошли все шаги. Теперь введите все полученные ключи в форму ниже. После нажатия кнопки вы будете перенаправлены на страницу входа Google, а после успешной аутентификации вся ваша конфигурация будет <strong>безопасно сохранена в вашем аккаунте</strong>.</p>
-                    
-                    <div id="final-config-form" class="space-y-4 p-6 bg-gray-800 border border-gray-700 rounded-lg">
-                        <div id="final-form-inputs">
-                             <!-- Supabase Credentials -->
-                            <div class="input-group" id="final-supabase-inputs">
-                                <h3 class="step-title text-xl">Ключи Supabase</h3>
-                                <div class="space-y-3">
-                                    <div>
-                                        <label for="final-supabase-url">Supabase Project URL</label>
-                                        <input type="text" id="final-supabase-url" placeholder="https://xyz.supabase.co">
-                                    </div>
-                                    <div>
-                                        <label for="final-supabase-anon-key">Supabase Anon Key</label>
-                                        <input type="password" id="final-supabase-anon-key" placeholder="Вставьте ваш Anon Key">
-                                    </div>
-                                </div>
-                            </div>
-                             <!-- Google Client ID -->
-                            <div class="input-group" id="final-google-inputs">
-                                <h3 class="step-title text-xl">Ключи Google</h3>
-                                 <div>
-                                    <label for="final-google-client-id">Google Client ID</label>
-                                    <input type="text" id="final-google-client-id" placeholder="Вставьте ваш Google Client ID (для резервного подключения)">
-                                </div>
-                            </div>
-                             <!-- Gemini API Key -->
-                            <div class="input-group">
-                                <h3 class="step-title text-xl">Ключ Gemini API</h3>
-                                 <div>
-                                    <label for="final-gemini-api-key">Gemini API Key</label>
-                                    <input type="password" id="final-gemini-api-key" placeholder="Вставьте ваш Gemini API Key">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="final-status-container" class="mt-4 text-sm"></div>
-
-                        <button id="save-and-login-button" class="wizard-nav-button next-button w-full text-center justify-center mt-4">
-                            Войти через Google и сохранить конфигурацию
-                        </button>
-                    </div>
-
-                     <footer class="wizard-footer">
-                        <button class="wizard-nav-button back-button" data-back="5">Назад</button>
-                    </footer>
-                </section>
-
-            </div>
-        </main>
-    </div>
+        </div>
+    </main>
     <script type="module" src="setup-guide.js"></script>
 </body>
 </html>

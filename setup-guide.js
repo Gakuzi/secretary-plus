@@ -1,21 +1,64 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 document.addEventListener('DOMContentLoaded', () => {
-    const wizardSteps = document.querySelectorAll('.wizard-step');
-    const navLinks = document.querySelectorAll('#wizard-nav .nav-link');
-    const mobileNavSelect = document.getElementById('mobile-nav-select');
     const { createClient } = window.supabase;
-    const SESSION_STORAGE_KEY = 'secretary-plus-setup-keys';
-    const PROXY_STORAGE_KEY = 'secretary-plus-setup-proxies';
+    const SUPABASE_CREDS_KEY = 'secretary-plus-setup-creds';
 
-    let currentStep = 0;
-    let authChoice = null; // 'supabase' or 'direct'
-    let selectedProxies = [];
+    // --- STATE ---
+    let state = {
+        supabaseClient: null,
+        user: null,
+        settings: null, // Will hold settings loaded from DB
+        selectedProxies: [],
+    };
+    
+    // --- DOM ELEMENTS ---
+    const steps = {
+        auth: document.getElementById('step-auth'),
+        dbSetup: document.getElementById('step-db-setup'),
+        keys: document.getElementById('step-keys'),
+        proxy: document.getElementById('step-proxy'),
+        final: document.getElementById('step-final'),
+    };
+    
+    const inputs = {
+        supabaseUrl: document.getElementById('supabase-url'),
+        supabaseAnonKey: document.getElementById('supabase-anon-key'),
+        geminiApiKey: document.getElementById('gemini-api-key'),
+        googleClientId: document.getElementById('google-client-id'),
+        accessToken: document.getElementById('supabase-access-token'),
+    };
 
-    // --- UTILITY & API FUNCTIONS (SELF-CONTAINED FOR THIS PAGE) ---
-    async function findProxiesWithGemini(apiKey) {
+    const buttons = {
+        connectLogin: document.getElementById('connect-login-button'),
+        saveKeys: document.getElementById('save-keys-button'),
+        findProxies: document.getElementById('find-proxies-ai'),
+        saveProxies: document.getElementById('save-proxies-button'),
+    };
+    
+    const containers = {
+        authStatus: document.getElementById('auth-status-container'),
+        userProfile: document.getElementById('user-profile-display'),
+        keysStatus: document.getElementById('keys-status-container'),
+        proxyFinderStatus: document.getElementById('proxy-finder-status'),
+        proxyStatus: document.getElementById('proxy-status-container'),
+        foundProxies: document.getElementById('found-proxies-container'),
+        selectedProxies: document.getElementById('selected-proxies-container'),
+    };
+
+    // --- UTILITY & API FUNCTIONS ---
+    const setStatus = (container, type, message) => {
+        container.className = `status-message status-${type}`;
+        container.textContent = message;
+    };
+    
+    async function findProxiesWithGemini(apiKey, proxyUrl = null) {
         if (!apiKey) throw new Error("Ключ Gemini API не предоставлен.");
-        const ai = new GoogleGenAI({ apiKey });
+        const clientOptions = { apiKey };
+        if (proxyUrl) {
+            clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
+        }
+        const ai = new GoogleGenAI(clientOptions);
         const model = 'gemini-2.5-flash';
         const prompt = `Найди 10 общедоступных (бесплатных) прокси-серверов, которые могут работать с Google API из разных стран. Предоставь ответ в формате JSON. Каждый объект должен содержать поля "url", "country" и "city". Пример: [{"url": "https://example.com/proxy", "country": "USA", "city": "California"}]`;
         try {
@@ -63,179 +106,166 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- UI & NAVIGATION ---
-    const adjustNavForChoice = () => {
-        const supabaseNavLink = document.querySelector('a[href="#supabase-setup"]');
-        const proxyNavLink = document.querySelector('a[href="#proxy-setup"]');
+    // --- UI RENDERING & STATE MANAGEMENT ---
+    
+    const showStep = (stepElement) => {
+        Object.values(steps).forEach(s => s.style.display = 'none');
+        stepElement.style.display = 'block';
+    };
 
-        if (authChoice === 'direct') {
-            supabaseNavLink.classList.add('disabled');
-            proxyNavLink.classList.add('disabled');
-            document.querySelector('a[href="#google-cloud-setup"]').innerHTML = '2. Настройка Google Cloud';
-            document.querySelector('a[href="#gemini-setup"]').innerHTML = '3. Настройка Gemini API';
-            document.querySelector('a[href="#final-step"]').innerHTML = '4. Завершение';
-            document.getElementById('final-supabase-inputs').style.display = 'none';
-        } else { // supabase or null
-            supabaseNavLink.classList.remove('disabled');
-            proxyNavLink.classList.remove('disabled');
-            document.querySelector('a[href="#google-cloud-setup"]').innerHTML = '3. Настройка Google Cloud';
-            document.querySelector('a[href="#gemini-setup"]').innerHTML = '4. Настройка Gemini API';
-            document.querySelector('a[href="#proxy-setup"]').innerHTML = '5. (Опц.) Настройка Прокси';
-            document.querySelector('a[href="#final-step"]').innerHTML = '6. Завершение';
-            document.getElementById('final-supabase-inputs').style.display = 'block';
-        }
-        populateMobileNav(); // Repopulate mobile nav with correct steps
+    const renderAuthenticatedState = async () => {
+        setStatus(containers.authStatus, 'success', `Вы вошли как ${state.user.email}`);
+        buttons.connectLogin.style.display = 'none';
+        
+        containers.userProfile.innerHTML = `
+            <div class="flex items-center gap-3">
+                <img src="${state.user.user_metadata.avatar_url}" alt="Avatar" class="w-10 h-10 rounded-full">
+                <div>
+                    <p class="font-semibold">${state.user.user_metadata.full_name}</p>
+                    <p class="text-xs text-gray-400">${state.user.email}</p>
+                </div>
+            </div>
+        `;
+        containers.userProfile.style.display = 'block';
+        steps.auth.dataset.status = 'completed';
+
+        // Fetch and populate settings
+        const { data, error } = await state.supabaseClient.from('user_settings').select('settings').single();
+        if (error && error.code !== 'PGRST116') throw error;
+        
+        state.settings = data ? data.settings : {};
+        inputs.geminiApiKey.value = state.settings.geminiApiKey || '';
+        inputs.googleClientId.value = state.settings.googleClientId || '';
+        
+        // Fetch and populate proxies
+        const { data: proxiesData, error: proxiesError } = await state.supabaseClient.from('proxies').select('*');
+        if (proxiesError) throw proxiesError;
+        state.selectedProxies = proxiesData || [];
+        renderSelectedProxies();
+        
+        showStep(steps.dbSetup);
     };
     
-    const populateMobileNav = () => {
-        mobileNavSelect.innerHTML = '';
-        navLinks.forEach(link => {
-            if (link.classList.contains('disabled')) return;
-            const option = document.createElement('option');
-            option.value = link.dataset.step;
-            option.textContent = link.textContent;
-            mobileNavSelect.appendChild(option);
-        });
-    };
-
-    const showStep = (stepIndex) => {
-        // Skip disabled steps
-        if (authChoice === 'direct') {
-            if (stepIndex === 2 || stepIndex === 5) { // Skip supabase and proxy
-                stepIndex = currentStep < stepIndex ? stepIndex + 1 : stepIndex - 1;
-            }
-        }
-        
-        wizardSteps.forEach((step, index) => {
-            step.style.display = index === stepIndex ? 'block' : 'none';
-        });
-
-        navLinks.forEach((link, index) => {
-            link.classList.remove('active', 'completed');
-            if (index < stepIndex) {
-                link.classList.add('completed');
-            } else if (index === stepIndex) {
-                link.classList.add('active');
-            }
-        });
-        
-        mobileNavSelect.value = stepIndex;
-        document.querySelector('main').scrollTo(0, 0);
-        currentStep = stepIndex;
-        window.location.hash = wizardSteps[currentStep].id;
-    };
+    // --- EVENT HANDLERS ---
     
-    mobileNavSelect.addEventListener('change', (e) => {
-        const stepIndex = parseInt(e.target.value, 10);
-        showStep(stepIndex);
-    });
+    buttons.connectLogin.addEventListener('click', async () => {
+        const url = inputs.supabaseUrl.value.trim();
+        const key = inputs.supabaseAnonKey.value.trim();
 
-    document.body.addEventListener('click', (e) => {
-        const choiceCard = e.target.closest('.choice-card');
-        if (choiceCard) {
-            authChoice = choiceCard.dataset.choice;
-            document.getElementById('google-supabase-instructions').style.display = authChoice === 'supabase' ? 'block' : 'none';
-            document.getElementById('google-direct-instructions').style.display = authChoice === 'direct' ? 'block' : 'none';
-            adjustNavForChoice();
-            showStep(authChoice === 'supabase' ? 2 : 3);
+        if (!url || !key) {
+            setStatus(containers.authStatus, 'error', 'Пожалуйста, введите URL и ключ Supabase.');
             return;
         }
 
-        const navTarget = e.target.closest('.wizard-nav-button, .nav-link');
-        if (!navTarget || navTarget.classList.contains('disabled')) return;
-
-        e.preventDefault();
-        let nextStep = -1;
-        if (navTarget.matches('.next-button')) nextStep = parseInt(navTarget.dataset.next, 10);
-        else if (navTarget.matches('.back-button')) nextStep = parseInt(navTarget.dataset.back, 10);
-        else if (navTarget.matches('.nav-link')) nextStep = parseInt(navTarget.dataset.step, 10);
+        localStorage.setItem(SUPABASE_CREDS_KEY, JSON.stringify({ url, key }));
+        setStatus(containers.authStatus, 'loading', 'Подключаемся и перенаправляем на страницу входа Google...');
         
-        if (nextStep >= 0 && nextStep < wizardSteps.length) showStep(nextStep);
-    });
-
-    // --- COPY ---
-    document.querySelectorAll('.copy-button').forEach(button => {
-        button.addEventListener('click', () => {
-            const target = document.getElementById(button.dataset.copyTarget);
-            if (!target) return;
-            navigator.clipboard.writeText(target.textContent.trim()).then(() => {
-                const originalText = button.querySelector('.copy-text').textContent;
-                button.querySelector('.copy-text').textContent = 'Скопировано!';
-                setTimeout(() => {
-                    button.querySelector('.copy-text').textContent = originalText;
-                }, 2000);
+        try {
+            const supabase = createClient(url, key);
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: { redirectTo: window.location.href }
             });
-        });
+            if (error) throw error;
+        } catch (error) {
+             setStatus(containers.authStatus, 'error', `Ошибка: ${error.message}`);
+             localStorage.removeItem(SUPABASE_CREDS_KEY);
+        }
     });
 
-    // --- SUPABASE SETUP PAGE LOGIC ---
-    const supabaseAccessTokenInput = document.getElementById('supabase-access-token');
-    const supabaseProjectIdInput = document.getElementById('supabase-project-id');
-    const curlCommandOutput = document.getElementById('curl-command-output');
-    const sqlScriptSource = document.getElementById('sql-script-source')?.textContent.trim() || '';
-
-    // Tab switching
-    const setupOptionsContainer = document.querySelector('.setup-options');
-    if (setupOptionsContainer) {
-        setupOptionsContainer.addEventListener('click', (e) => {
-            const tab = e.target.closest('.option-tab');
-            if (!tab) return;
-            
-            document.querySelectorAll('.option-tab').forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-            
-            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-            document.querySelector(tab.dataset.tabTarget).style.display = 'block';
-        });
-    }
-
-    // cURL command generation
-    const generateCurlCommand = () => {
-        if (!supabaseAccessTokenInput || !supabaseProjectIdInput || !curlCommandOutput) return;
-
-        const token = supabaseAccessTokenInput.value.trim() || '[YOUR_ACCESS_TOKEN]';
-        const projectId = supabaseProjectIdInput.value.trim() || '[YOUR_PROJECT_ID]';
+    buttons.saveKeys.addEventListener('click', async () => {
+        const settingsUpdate = {
+            ...state.settings,
+            geminiApiKey: inputs.geminiApiKey.value.trim(),
+            googleClientId: inputs.googleClientId.value.trim(),
+            // Preserve Supabase keys if they exist, or add them from auth step
+            supabaseUrl: state.settings.supabaseUrl || inputs.supabaseUrl.value.trim(),
+            supabaseAnonKey: state.settings.supabaseAnonKey || inputs.supabaseAnonKey.value.trim(),
+        };
         
-        const escapedSql = JSON.stringify(sqlScriptSource);
+        if (!settingsUpdate.geminiApiKey) {
+            setStatus(containers.keysStatus, 'error', 'Ключ Gemini API является обязательным.');
+            return;
+        }
+        
+        setStatus(containers.keysStatus, 'loading', 'Сохранение...');
+        const { error } = await state.supabaseClient.rpc('upsert_user_settings', { new_settings: settingsUpdate });
 
-        const command = `curl -X POST 'https://api.supabase.com/v1/projects/${projectId}/sql' \\
--H "Authorization: Bearer ${token}" \\
--H "Content-Type: application/json" \\
--d '{"sql": ${escapedSql}}'`;
+        if (error) {
+            setStatus(containers.keysStatus, 'error', `Ошибка сохранения: ${error.message}`);
+        } else {
+            state.settings = settingsUpdate;
+            setStatus(containers.keysStatus, 'success', 'Ключи успешно сохранены в вашем аккаунте.');
+            steps.keys.dataset.status = 'completed';
+            showStep(steps.proxy);
+        }
+    });
 
-        curlCommandOutput.textContent = command;
-    };
+    buttons.findProxies.addEventListener('click', async () => {
+        if (!state.settings.geminiApiKey) {
+            setStatus(containers.proxyFinderStatus, 'error', 'Сначала сохраните Gemini API ключ на предыдущем шаге.');
+            return;
+        }
+        setStatus(containers.proxyFinderStatus, 'loading', 'Ищем прокси с помощью ИИ... Это может занять до минуты.');
+        buttons.findProxies.disabled = true;
 
-    if (supabaseAccessTokenInput && supabaseProjectIdInput) {
-        supabaseAccessTokenInput.addEventListener('input', generateCurlCommand);
-        supabaseProjectIdInput.addEventListener('input', generateCurlCommand);
-        generateCurlCommand(); // Initial generation
-    }
-
-    // Copy the SQL script from the hidden source to the visible block
-    const visibleSqlBlock = document.getElementById('sql-script-content');
-    if (visibleSqlBlock && sqlScriptSource) {
-        visibleSqlBlock.textContent = sqlScriptSource;
-    }
+        try {
+            const proxies = await findProxiesWithGemini(state.settings.geminiApiKey);
+            containers.foundProxies.innerHTML = '';
+            proxies.forEach(p => {
+                const proxyData = { ...p, geolocation: `${p.country}, ${p.city || ''}`.replace(/, $/, '') };
+                containers.foundProxies.appendChild(renderProxyItem(proxyData, 'found'));
+            });
+            setStatus(containers.proxyFinderStatus, 'success', `Найдено ${proxies.length} прокси. Протестируйте и добавьте лучшие.`);
+        } catch (error) {
+            setStatus(containers.proxyFinderStatus, 'error', error.message);
+        } finally {
+            buttons.findProxies.disabled = false;
+        }
+    });
     
-    // --- PROXY SETUP ---
-    const findProxiesBtn = document.getElementById('find-proxies-ai');
-    const proxyStatusEl = document.getElementById('proxy-finder-status');
-    const foundContainer = document.getElementById('found-proxies-container');
-    const selectedContainer = document.getElementById('selected-proxies-container');
+    buttons.saveProxies.addEventListener('click', async () => {
+        if (state.selectedProxies.length === 0) {
+            steps.proxy.dataset.status = 'completed';
+            showStep(steps.final);
+            return;
+        }
+        
+        setStatus(containers.proxyStatus, 'loading', 'Сохраняем прокси...');
+        const proxiesToSave = state.selectedProxies.map(p => ({
+            url: p.url,
+            alias: p.alias || p.geolocation,
+            geolocation: p.geolocation,
+            is_active: true,
+            priority: 10,
+            user_id: state.user.id
+        }));
 
+        const { error } = await state.supabaseClient.from('proxies').upsert(proxiesToSave, { onConflict: 'user_id, url' });
+        
+        if (error) {
+            setStatus(containers.proxyStatus, 'error', `Ошибка сохранения: ${error.message}`);
+        } else {
+            setStatus(containers.proxyStatus, 'success', `${proxiesToSave.length} прокси успешно сохранены.`);
+            steps.proxy.dataset.status = 'completed';
+            setTimeout(() => showStep(steps.final), 1000);
+        }
+    });
+
+    // --- PROXY LISTS LOGIC ---
+    
     const renderProxyItem = (proxy, containerType) => {
         const isSelected = containerType === 'selected';
         const item = document.createElement('div');
         item.className = 'proxy-item';
         item.dataset.url = proxy.url;
         item.innerHTML = `
-            <div class="proxy-status-dot" data-status="${proxy.status || 'untested'}"></div>
+            <div class="proxy-status-dot" data-status="${proxy.last_status || 'untested'}"></div>
             <div class="proxy-item-info">
-                <p class="proxy-item-url">${proxy.url}</p>
+                <p class="proxy-item-url" title="${proxy.url}">${proxy.alias || proxy.url}</p>
                 <p class="proxy-item-details">
-                    <span>${proxy.geolocation}</span>
-                    <span class="speed-info" style="display: ${proxy.speed ? 'inline' : 'none'};"> | ${proxy.speed} мс</span>
+                    <span>${proxy.geolocation || 'N/A'}</span>
+                    <span class="speed-info" style="display: ${proxy.last_speed_ms ? 'inline' : 'none'};"> | ${proxy.last_speed_ms} мс</span>
                 </p>
             </div>
             <div class="proxy-item-actions">
@@ -245,9 +275,9 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         return item;
     };
-    
+
     const updateProxyUI = (url, { status, speed }) => {
-        const item = foundContainer.querySelector(`.proxy-item[data-url="${url}"]`);
+        const item = containers.foundProxies.querySelector(`.proxy-item[data-url="${url}"]`);
         if (!item) return;
         item.querySelector('.proxy-status-dot').dataset.status = status;
         const speedEl = item.querySelector('.speed-info');
@@ -258,45 +288,17 @@ document.addEventListener('DOMContentLoaded', () => {
             speedEl.style.display = 'none';
         }
     };
-
+    
     const renderSelectedProxies = () => {
-        if (selectedProxies.length === 0) {
-            selectedContainer.innerHTML = `<p class="text-gray-400 text-center py-4">Добавьте прокси из списка слева, чтобы сохранить их.</p>`;
+        if (state.selectedProxies.length === 0) {
+            containers.selectedProxies.innerHTML = `<p class="text-gray-400 text-center py-4">Выбранные прокси появятся здесь.</p>`;
         } else {
-            selectedContainer.innerHTML = '';
-            selectedProxies.forEach(p => selectedContainer.appendChild(renderProxyItem(p, 'selected')));
+            containers.selectedProxies.innerHTML = '';
+            state.selectedProxies.forEach(p => containers.selectedProxies.appendChild(renderProxyItem(p, 'selected')));
         }
     };
 
-    findProxiesBtn.addEventListener('click', async () => {
-        const apiKey = document.getElementById('wizard-gemini-api-key').value.trim();
-        if (!apiKey) {
-            proxyStatusEl.className = 'status-message status-error';
-            proxyStatusEl.textContent = 'Ошибка: Введите ваш Gemini API Key на предыдущем шаге.';
-            return;
-        }
-        proxyStatusEl.className = 'status-message status-loading';
-        proxyStatusEl.textContent = 'Ищем прокси с помощью ИИ... Это может занять до минуты.';
-        findProxiesBtn.disabled = true;
-
-        try {
-            const proxies = await findProxiesWithGemini(apiKey);
-            foundContainer.innerHTML = '';
-            proxies.forEach(p => {
-                const proxyData = { ...p, geolocation: `${p.country}, ${p.city || ''}`.replace(/, $/, '') };
-                foundContainer.appendChild(renderProxyItem(proxyData, 'found'));
-            });
-            proxyStatusEl.className = 'status-message status-success';
-            proxyStatusEl.textContent = `Найдено ${proxies.length} прокси. Протестируйте и добавьте лучшие.`;
-        } catch (error) {
-            proxyStatusEl.className = 'status-message status-error';
-            proxyStatusEl.textContent = error.message;
-        } finally {
-            findProxiesBtn.disabled = false;
-        }
-    });
-
-    foundContainer.addEventListener('click', async (e) => {
+    containers.foundProxies.addEventListener('click', async (e) => {
         const target = e.target;
         const item = target.closest('.proxy-item');
         if (!item) return;
@@ -307,142 +309,117 @@ document.addEventListener('DOMContentLoaded', () => {
             target.disabled = true;
             target.textContent = '...';
             updateProxyUI(proxyUrl, { status: 'testing' });
-            const apiKey = document.getElementById('wizard-gemini-api-key').value.trim();
-            const result = await testProxyConnection(proxyUrl, apiKey);
+            const result = await testProxyConnection(proxyUrl, state.settings.geminiApiKey);
             updateProxyUI(proxyUrl, result);
             target.disabled = false;
             target.textContent = 'Тест';
         }
 
         if (target.matches('.add-btn')) {
-            if (selectedProxies.some(p => p.url === proxyUrl)) return;
+            if (state.selectedProxies.some(p => p.url === proxyUrl)) return;
             const geolocation = item.querySelector('.proxy-item-details span').textContent;
-            selectedProxies.push({ url: proxyUrl, geolocation, alias: geolocation });
+            state.selectedProxies.push({ url: proxyUrl, geolocation, alias: geolocation });
             renderSelectedProxies();
         }
     });
 
-    selectedContainer.addEventListener('click', (e) => {
+    containers.selectedProxies.addEventListener('click', (e) => {
         const item = e.target.closest('.proxy-item');
         if (item && e.target.matches('.remove-btn')) {
-            selectedProxies = selectedProxies.filter(p => p.url !== item.dataset.url);
+            state.selectedProxies = state.selectedProxies.filter(p => p.url !== item.dataset.url);
             renderSelectedProxies();
         }
     });
 
-    // --- FINAL STEP & SAVE ---
-    const saveButton = document.getElementById('save-and-login-button');
-    const finalStatusContainer = document.getElementById('final-status-container');
-    const finalFormInputs = document.getElementById('final-form-inputs');
+    // --- DB SETUP LOGIC ---
     
-    saveButton.addEventListener('click', async () => {
-        finalStatusContainer.innerHTML = '';
-        finalStatusContainer.className = '';
-
-        const settings = {
-            supabaseUrl: document.getElementById('final-supabase-url').value.trim(),
-            supabaseAnonKey: document.getElementById('final-supabase-anon-key').value.trim(),
-            googleClientId: document.getElementById('final-google-client-id').value.trim(),
-            geminiApiKey: document.getElementById('final-gemini-api-key').value.trim(),
-            isSupabaseEnabled: authChoice === 'supabase',
-        };
-
-        if ((settings.isSupabaseEnabled && (!settings.supabaseUrl || !settings.supabaseAnonKey)) || !settings.geminiApiKey) {
-            finalStatusContainer.className = 'status-message status-error';
-            finalStatusContainer.textContent = 'Ошибка: Пожалуйста, заполните обязательные поля.';
-            return;
-        }
-
-        try {
-            sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(settings));
-            sessionStorage.setItem(PROXY_STORAGE_KEY, JSON.stringify(selectedProxies));
-            finalStatusContainer.className = 'status-message status-loading';
-            finalStatusContainer.textContent = 'Сохраняем ключи и перенаправляем на страницу входа Google...';
-            
-            const supabase = createClient(settings.supabaseUrl, settings.supabaseAnonKey);
-            const { error } = await supabase.auth.signInWithOAuth({
-                provider: 'google',
-                options: { redirectTo: window.location.href }
+    const sqlScriptSourceEl = document.getElementById('sql-script-source');
+    if (sqlScriptSourceEl) {
+        // Fetch the script from the markdown file to keep it DRY
+        fetch('./SUPABASE_SETUP.md')
+            .then(res => res.text())
+            .then(text => {
+                const match = text.match(/```sql([\s\S]*?)```/);
+                if (match) {
+                    const sql = match[1].trim();
+                    sqlScriptSourceEl.textContent = sql;
+                    document.getElementById('sql-script-content').textContent = sql;
+                }
             });
-            if (error) throw error;
-        } catch (error) {
-             finalStatusContainer.className = 'status-message status-error';
-             finalStatusContainer.textContent = `Ошибка: ${error.message}`;
-             sessionStorage.removeItem(SESSION_STORAGE_KEY);
-             sessionStorage.removeItem(PROXY_STORAGE_KEY);
-        }
+    }
+    
+    const generateCurlCommand = () => {
+        const token = inputs.accessToken.value.trim() || '[YOUR_ACCESS_TOKEN]';
+        const projectId = inputs.supabaseUrl.value.match(/https?:\/\/([^.]+)\.supabase\.co/)?.[1] || '[YOUR_PROJECT_ID]';
+        const sqlScript = document.getElementById('sql-script-source').textContent;
+
+        const escapedSql = JSON.stringify(sqlScript);
+
+        const command = `curl -X POST 'https://api.supabase.com/v1/projects/${projectId}/sql' \\
+-H "Authorization: Bearer ${token}" \\
+-H "Content-Type: application/json" \\
+-d '{"sql": ${escapedSql}}'`;
+
+        document.getElementById('curl-command-output').textContent = command;
+    };
+    
+    inputs.accessToken.addEventListener('input', generateCurlCommand);
+
+    document.querySelector('.setup-options')?.addEventListener('click', (e) => {
+        const tab = e.target.closest('.option-tab');
+        if (!tab) return;
+        document.querySelectorAll('.option-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+        document.querySelector(tab.dataset.tabTarget).style.display = 'block';
+    });
+    
+    document.querySelectorAll('.copy-button').forEach(button => {
+        button.addEventListener('click', () => {
+            const target = document.getElementById(button.dataset.copyTarget);
+            navigator.clipboard.writeText(target.textContent.trim()).then(() => {
+                const textEl = button.querySelector('.copy-text');
+                textEl.textContent = 'Скопировано!';
+                setTimeout(() => { textEl.textContent = 'Копировать'; }, 2000);
+            });
+        });
     });
 
-    const handlePostAuthSave = async () => {
-        const storedKeys = sessionStorage.getItem(SESSION_STORAGE_KEY);
-        const storedProxies = sessionStorage.getItem(PROXY_STORAGE_KEY);
-        if (!storedKeys) return;
 
-        showStep(6);
-        finalFormInputs.style.display = 'none';
-        saveButton.style.display = 'none';
-        
-        finalStatusContainer.className = 'status-message status-loading';
-        finalStatusContainer.textContent = 'Аутентификация пройдена. Сохраняем настройки в вашем аккаунте...';
+    // --- INITIALIZATION ---
+    
+    const initialize = async () => {
+        showStep(steps.auth);
 
-        try {
-            const settings = JSON.parse(storedKeys);
-            const proxies = JSON.parse(storedProxies || '[]');
-            const supabase = createClient(settings.supabaseUrl, settings.supabaseAnonKey);
-            
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-            if (sessionError) throw sessionError;
-            if (!session) throw new Error("Не удалось получить сессию пользователя после аутентификации.");
+        const credsString = localStorage.getItem(SUPABASE_CREDS_KEY);
+        if (credsString) {
+            const { url, key } = JSON.parse(credsString);
+            inputs.supabaseUrl.value = url;
+            inputs.supabaseAnonKey.value = key;
+            state.supabaseClient = createClient(url, key);
+        }
 
-            const { error: rpcError } = await supabase.rpc('upsert_user_settings', { new_settings: settings });
-            if (rpcError) throw rpcError;
-            
-            if (proxies.length > 0) {
-                const proxiesToSave = proxies.map(p => ({
-                    url: p.url,
-                    alias: p.alias,
-                    geolocation: p.geolocation,
-                    is_active: true,
-                    priority: 10,
-                    user_id: session.user.id
-                }));
-                const { error: proxyError } = await supabase.from('proxies').insert(proxiesToSave);
-                if (proxyError) throw proxyError;
+        // Handle the OAuth redirect
+        state.supabaseClient?.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN' && session) {
+                state.user = session.user;
+                await renderAuthenticatedState();
+                 // Once authenticated, also update the cURL project ID
+                generateCurlCommand();
+                history.pushState("", document.title, window.location.pathname + window.location.search); // Clean URL
             }
+        });
 
-            finalStatusContainer.className = 'status-message status-success';
-            finalStatusContainer.innerHTML = `Настройки успешно сохранены! Вы можете закрыть эту вкладку и вернуться в приложение.`;
-            
-            sessionStorage.removeItem(SESSION_STORAGE_KEY);
-            sessionStorage.removeItem(PROXY_STORAGE_KEY);
-            history.pushState("", document.title, window.location.pathname + window.location.search);
-
-        } catch(error) {
-            console.error("Post-auth save failed:", error);
-            finalStatusContainer.className = 'status-message status-error';
-            finalStatusContainer.textContent = `Не удалось сохранить настройки: ${error.message}`;
+        // Check if already logged in
+        if (state.supabaseClient) {
+            const { data: { session } } = await state.supabaseClient.auth.getSession();
+            if (session) {
+                state.user = session.user;
+                await renderAuthenticatedState();
+                generateCurlCommand();
+            }
         }
     };
-    
-    // --- DEEP LINKING & INITIALIZATION ---
-    const handleDeepLink = () => {
-        if (window.location.hash.includes('access_token')) {
-            handlePostAuthSave();
-            return;
-        }
 
-        const hash = window.location.hash;
-        const link = hash ? document.querySelector(`#wizard-nav a[href="${hash}"]`) : null;
-        if (link && !link.classList.contains('disabled')) {
-            const step = parseInt(link.dataset.step, 10);
-             if (!isNaN(step)) {
-                showStep(step);
-                return;
-             }
-        }
-        showStep(0);
-    };
-    
-    adjustNavForChoice();
-    handleDeepLink();
+    initialize();
 });
