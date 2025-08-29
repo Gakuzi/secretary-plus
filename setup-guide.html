@@ -9,6 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="setup-guide.css">
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans">
     <div class="flex min-h-screen">
@@ -592,28 +594,52 @@ export default async function handler(request) {
                 
                  <!-- Final -->
                 <section id="final-step" class="wizard-step" style="display: none;">
-                    <h2 class="section-title">6. Завершение</h2>
-                    <p>Поздравляем! Вы получили все необходимые ключи. Теперь откройте настройки приложения «Секретарь+» и вставьте их в соответствующие поля.</p>
-                    <div id="final-supabase-instructions" style="display: none;">
-                        <ol class="list-decimal list-inside space-y-2 mt-4">
-                            <li>На вкладке "Подключения" включите переключатель <strong>"Использовать Supabase"</strong>.</li>
-                            <li>Вставьте <strong>Project URL</strong> и <strong>Anon Key</strong> из <a href="#supabase-setup" class="nav-link-inline" data-step="2">Шага 2</a>.</li>
-                            <li>(Опционально) Настройте прокси-серверы на вкладке "Прокси" используя URL из <a href="#proxy-setup" class="nav-link-inline" data-step="4">Шага 4</a>.</li>
-                            <li>На вкладке "API Ключи" вставьте <strong>Gemini API Key</strong> из <a href="#gemini-setup" class="nav-link-inline" data-step="5">Шага 5</a>.</li>
-                        </ol>
+                    <h2 class="section-title">6. Завершение и сохранение</h2>
+                    <p class="mb-4">Поздравляем! Вы прошли все шаги. Теперь введите все полученные ключи в форму ниже. После нажатия кнопки вы будете перенаправлены на страницу входа Google, а после успешной аутентификации вся ваша конфигурация будет <strong>безопасно сохранена в вашем аккаунте</strong>.</p>
+                    
+                    <div id="final-config-form" class="space-y-4 p-6 bg-gray-800 border border-gray-700 rounded-lg">
+                        <div id="final-form-inputs">
+                             <!-- Supabase Credentials -->
+                            <div class="input-group" id="final-supabase-inputs">
+                                <h3 class="step-title text-xl">Ключи Supabase</h3>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label for="final-supabase-url">Supabase Project URL</label>
+                                        <input type="text" id="final-supabase-url" placeholder="https://xyz.supabase.co">
+                                    </div>
+                                    <div>
+                                        <label for="final-supabase-anon-key">Supabase Anon Key</label>
+                                        <input type="password" id="final-supabase-anon-key" placeholder="Вставьте ваш Anon Key">
+                                    </div>
+                                </div>
+                            </div>
+                             <!-- Google Client ID -->
+                            <div class="input-group" id="final-google-inputs">
+                                <h3 class="step-title text-xl">Ключи Google</h3>
+                                 <div>
+                                    <label for="final-google-client-id">Google Client ID</label>
+                                    <input type="text" id="final-google-client-id" placeholder="Вставьте ваш Google Client ID (для резервного подключения)">
+                                </div>
+                            </div>
+                             <!-- Gemini API Key -->
+                            <div class="input-group">
+                                <h3 class="step-title text-xl">Ключ Gemini API</h3>
+                                 <div>
+                                    <label for="final-gemini-api-key">Gemini API Key</label>
+                                    <input type="password" id="final-gemini-api-key" placeholder="Вставьте ваш Gemini API Key">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="final-status-container" class="mt-4 text-sm"></div>
+
+                        <button id="save-and-login-button" class="wizard-nav-button next-button w-full text-center justify-center mt-4">
+                            Войти через Google и сохранить конфигурацию
+                        </button>
                     </div>
-                     <div id="final-direct-instructions" style="display: none;">
-                        <ol class="list-decimal list-inside space-y-2 mt-4">
-                            <li>На вкладке "Подключения" выключите переключатель <strong>"Использовать Supabase"</strong>.</li>
-                            <li>Вставьте <strong>Google Client ID</strong> из <a href="#google-cloud-setup" class="nav-link-inline" data-step="3">Шага 3</a>.</li>
-                            <li>(Опционально) Вставьте URL вашего прокси-сервера из <a href="#proxy-setup" class="nav-link-inline" data-step="4">Шага 4</a>.</li>
-                             <li>На вкладке "API Ключи" вставьте <strong>Gemini API Key</strong> из <a href="#gemini-setup" class="nav-link-inline" data-step="5">Шага 5</a>.</li>
-                        </ol>
-                    </div>
-                    <p class="mt-4">После сохранения настроек приложение будет полностью готово к работе. Вы можете войти в свой аккаунт Google и начать использовать ассистента.</p>
+
                      <footer class="wizard-footer">
                         <button class="wizard-nav-button back-button" data-back="5">Назад</button>
-                        <button class="wizard-nav-button next-button" onclick="window.close()">Закрыть</button>
                     </footer>
                 </section>
 

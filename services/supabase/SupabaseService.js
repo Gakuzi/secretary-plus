@@ -37,7 +37,7 @@ export class SupabaseService {
             provider: 'google',
             options: {
                 scopes: GOOGLE_SCOPES,
-                redirectTo: window.location.origin + window.location.pathname,
+                redirectTo: window.location.href, // Use full current href for reliable redirects
             },
         });
         if (error) throw error;

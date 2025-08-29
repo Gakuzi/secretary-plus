@@ -1,7 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
     const wizardSteps = document.querySelectorAll('.wizard-step');
     const navLinks = document.querySelectorAll('#wizard-nav .nav-link');
-    
+    const { createClient } = window.supabase;
+    const SESSION_STORAGE_KEY = 'secretary-plus-setup-keys';
+
     let currentStep = 0;
     let authChoice = null; // 'supabase' or 'direct'
 
@@ -14,12 +16,14 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelector('a[href="#proxy-setup"]').innerHTML = '3. (Опц.) Настройка Прокси';
             document.querySelector('a[href="#gemini-setup"]').innerHTML = '4. Настройка Gemini API';
             document.querySelector('a[href="#final-step"]').innerHTML = '5. Завершение';
+            document.getElementById('final-supabase-inputs').style.display = 'none';
         } else { // supabase or null
             supabaseNavLink.classList.remove('disabled');
             document.querySelector('a[href="#google-cloud-setup"]').innerHTML = '3. Настройка Google Cloud';
             document.querySelector('a[href="#proxy-setup"]').innerHTML = '4. (Опц.) Настройка Прокси';
             document.querySelector('a[href="#gemini-setup"]').innerHTML = '5. Настройка Gemini API';
             document.querySelector('a[href="#final-step"]').innerHTML = '6. Завершение';
+            document.getElementById('final-supabase-inputs').style.display = 'block';
         }
     };
 
@@ -58,8 +62,6 @@ document.addEventListener('DOMContentLoaded', () => {
             authChoice = choiceCard.dataset.choice;
             document.getElementById('google-supabase-instructions').style.display = authChoice === 'supabase' ? 'block' : 'none';
             document.getElementById('google-direct-instructions').style.display = authChoice === 'direct' ? 'block' : 'none';
-            document.getElementById('final-supabase-instructions').style.display = authChoice === 'supabase' ? 'block' : 'none';
-            document.getElementById('final-direct-instructions').style.display = authChoice === 'direct' ? 'block' : 'none';
             adjustNavForChoice();
             showStep(authChoice === 'supabase' ? 2 : 3);
             return;
@@ -213,9 +215,93 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- FINAL STEP & SAVE ---
+    const saveButton = document.getElementById('save-and-login-button');
+    const finalStatusContainer = document.getElementById('final-status-container');
+    const finalFormInputs = document.getElementById('final-form-inputs');
     
-    // --- DEEP LINKING ON LOAD ---
+    saveButton.addEventListener('click', async () => {
+        finalStatusContainer.innerHTML = '';
+        finalStatusContainer.className = '';
+
+        const settings = {
+            supabaseUrl: document.getElementById('final-supabase-url').value.trim(),
+            supabaseAnonKey: document.getElementById('final-supabase-anon-key').value.trim(),
+            googleClientId: document.getElementById('final-google-client-id').value.trim(),
+            geminiApiKey: document.getElementById('final-gemini-api-key').value.trim(),
+            isSupabaseEnabled: true, // This flow is only for Supabase users
+        };
+
+        if (!settings.supabaseUrl || !settings.supabaseAnonKey || !settings.geminiApiKey) {
+            finalStatusContainer.className = 'status-message status-error';
+            finalStatusContainer.textContent = 'Ошибка: Пожалуйста, заполните поля Supabase URL, Supabase Anon Key и Gemini API Key.';
+            return;
+        }
+
+        try {
+            sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(settings));
+            finalStatusContainer.className = 'status-message status-loading';
+            finalStatusContainer.textContent = 'Сохраняем ключи и перенаправляем на страницу входа Google...';
+            
+            const supabase = createClient(settings.supabaseUrl, settings.supabaseAnonKey);
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: { redirectTo: window.location.href }
+            });
+            if (error) throw error;
+        } catch (error) {
+             finalStatusContainer.className = 'status-message status-error';
+             finalStatusContainer.textContent = `Ошибка: ${error.message}`;
+             sessionStorage.removeItem(SESSION_STORAGE_KEY);
+        }
+    });
+
+    const handlePostAuthSave = async () => {
+        const storedKeys = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        if (!storedKeys) return;
+
+        showStep(6); // Ensure we are on the final step
+        finalFormInputs.style.display = 'none'; // Hide inputs, show status
+        saveButton.style.display = 'none';
+        
+        finalStatusContainer.className = 'status-message status-loading';
+        finalStatusContainer.textContent = 'Аутентификация пройдена. Сохраняем настройки в вашем аккаунте...';
+
+        try {
+            const settings = JSON.parse(storedKeys);
+            const supabase = createClient(settings.supabaseUrl, settings.supabaseAnonKey);
+            
+            // Wait for session to be available
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError) throw sessionError;
+            if (!session) throw new Error("Не удалось получить сессию пользователя после аутентификации.");
+
+            // RPC function `upsert_user_settings` is defined in the SQL script
+            const { error: rpcError } = await supabase.rpc('upsert_user_settings', { new_settings: settings });
+            if (rpcError) throw rpcError;
+
+            finalStatusContainer.className = 'status-message status-success';
+            finalStatusContainer.innerHTML = `Настройки успешно сохранены! Вы можете закрыть эту вкладку и вернуться в приложение.`;
+            
+            sessionStorage.removeItem(SESSION_STORAGE_KEY);
+            // Clear the hash from URL
+            history.pushState("", document.title, window.location.pathname + window.location.search);
+
+        } catch(error) {
+            console.error("Post-auth save failed:", error);
+            finalStatusContainer.className = 'status-message status-error';
+            finalStatusContainer.textContent = `Не удалось сохранить настройки: ${error.message}`;
+        }
+    };
+    
+    // --- DEEP LINKING & INITIALIZATION ---
     const handleDeepLink = () => {
+        // If the URL has auth tokens, it's a redirect from Google.
+        if (window.location.hash.includes('access_token')) {
+            handlePostAuthSave();
+            return;
+        }
+
         const hash = window.location.hash;
         const link = hash ? document.querySelector(`#wizard-nav a[href="${hash}"]`) : null;
         if (link && !link.classList.contains('disabled')) {
