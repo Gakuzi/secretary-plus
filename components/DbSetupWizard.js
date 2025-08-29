@@ -20,7 +20,7 @@ import postgres from 'https://deno.land/x/postgresjs@v3.4.2/mod.js';
 // Заголовки CORS для preflight и обычных запросов
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-admin-token',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -39,8 +39,10 @@ serve(async (req) => {
       throw new Error('Database URL или Admin Token не установлены в секретах функции.');
     }
 
-    // 2. Проверяем токен администратора в кастомном заголовке
-    const requestToken = req.headers.get('x-admin-token');
+    // 2. Извлекаем SQL-запрос и токен из тела запроса
+    const { sql: sqlQuery, admin_token: requestToken } = await req.json();
+
+    // 3. Проверяем токен администратора
     if (requestToken !== ADMIN_SECRET_TOKEN) {
       return new Response(JSON.stringify({ error: 'Unauthorized: Неверный токен.' }), {
         status: 401,
@@ -48,8 +50,6 @@ serve(async (req) => {
       });
     }
 
-    // 3. Извлекаем SQL-запрос из тела запроса
-    const { sql: sqlQuery } = await req.json();
     if (!sqlQuery || typeof sqlQuery !== 'string') {
       return new Response(JSON.stringify({ error: 'Bad Request: "sql" параметр отсутствует или неверен.' }), {
         status: 400,
