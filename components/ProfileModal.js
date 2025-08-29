@@ -161,7 +161,7 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
                         <div class="flex flex-col">
                             <span class="font-medium text-gray-200">${task.label}</span>
                             ${errorDetails ? 
-                                `<button data-action="analyze-error" data-task-name="${task.label}" data-error-message="${encodeURIComponent(errorDetails)}" class="text-left text-xs ${statusColor} hover:underline truncate">${statusText}</button>` :
+                                `<button data-action="analyze-error" data-task-name="${task.label}" data-error-message="${encodeURIComponent(errorDetails)}" class="text-left text-xs ${statusColor} hover:underline truncate" title="${statusText}">${statusText}</button>` :
                                 `<span class="text-xs ${statusColor}" title="${statusText}">${statusText}</span>`
                             }
                         </div>
@@ -254,7 +254,7 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
                                 <tbody>
                                     ${result.data.map(row => `
                                         <tr class="border-b border-gray-700/50">
-                                            ${headers.map(h => `<td class="p-2 align-top max-w-[200px] truncate" title="${row[h]}">${row[h] === null ? 'null' : row[h]}</td>`).join('')}
+                                            ${headers.map(h => `<td class="p-2 align-top max-w-[200px] truncate" title="${row[h]}">${row[h] === null ? 'null' : String(row[h])}</td>`).join('')}
                                         </tr>
                                     `).join('')}
                                 </tbody>

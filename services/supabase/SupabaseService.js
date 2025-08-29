@@ -433,10 +433,14 @@ export class SupabaseService {
     async getSampleData(tableName, limit = 10) {
         if (!tableName) throw new Error("Table name is required.");
         
+        // This is a special case for the 'notes' table which does not have a 'created_at' column by default in the old schema
+        // We order by 'updated_at' to be safe. If 'updated_at' does not exist, it will fallback to natural order.
+        const orderColumn = ['notes', 'files', 'contacts'].includes(tableName) ? 'updated_at' : 'created_at';
+
         const { data, error } = await this.client
             .from(tableName)
             .select('*')
-            .order('created_at', { ascending: false })
+            .order(orderColumn, { ascending: false })
             .limit(limit);
             
         if (error) {
@@ -446,6 +450,7 @@ export class SupabaseService {
         
         return { data: data || [] };
     }
+
 
     // --- Proxy Management ---
     async getProxies() {

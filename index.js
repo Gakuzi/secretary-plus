@@ -25,6 +25,8 @@ const APP_STRUCTURE_CONTEXT = `
 - services/supabase/SupabaseService.js: Все взаимодействия с Supabase.
 - components/SetupWizard.js: Мастер первоначальной настройки.
 - components/SettingsModal.js: Окно для управления настройками после входа.
+- components/ProfileModal.js: Окно профиля, где отображается статус синхронизации.
+- SUPABASE_SETUP.md: Содержит SQL-скрипт для создания/обновления схемы БД.
 `;
 
 // --- STATE MANAGEMENT ---
@@ -132,11 +134,15 @@ async function runAllSyncs() {
             console.error(`Failed to sync ${task.name}:`, error);
             state.syncStatus[task.name] = { ...(state.syncStatus[task.name] || {}), error: error.message };
         }
+        // Save status after each task to ensure progress is not lost if one fails.
         saveSyncStatus(state.syncStatus);
     }
     state.isSyncing = false;
-    // The modal component will fetch the new status from storage itself.
+    // The profile modal, if open, will need to be re-rendered or have its state updated.
+    // For simplicity, we can just re-open it or rely on its own internal refresh mechanism if it has one.
+    // The current implementation re-renders the sync section on its own.
 }
+
 
 function startAutoSync() {
     if (syncInterval) clearInterval(syncInterval);
