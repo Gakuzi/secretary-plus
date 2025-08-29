@@ -576,9 +576,9 @@ document.body.addEventListener('click', (e) => {
 
 // --- APP INITIALIZATION ---
 
-function onAppReady() {
+async function onAppReady() {
+    await initializeAppServices();
     renderMainContent();
-    initializeAppServices();
 }
 
 function showInitialScreen() {

@@ -306,7 +306,7 @@ export function createChatInterface(onSendMessage, showCameraView, onSystemError
                         <span class="font-mono font-semibold recording-timer">0:00</span>
                     </div>
 
-                    <textarea id="chat-input" class="self-end" placeholder="Сообщение..." rows="1"></textarea>
+                    <textarea id="chat-input" class="self-end flex-1" placeholder="Сообщение..." rows="1"></textarea>
                     
                     <div class="flex items-center self-end flex-shrink-0 p-1">
                         <button id="send-button" class="hidden flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700 transition-colors" aria-label="Отправить">
