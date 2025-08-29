@@ -1,5 +1,6 @@
 
 
+
 import * as Icons from './icons/Icons.js';
 import { SupabaseService } from '../services/supabase/SupabaseService.js';
 import { FULL_MIGRATION_SQL } from '../services/supabase/migrations.js';
@@ -188,9 +189,12 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
                 break;
             case 'execute-sql':
                  contentHtml = `
-                    <p class="mb-4">Соединение установлено! Теперь вы можете применить первоначальные настройки (миграции) к вашей базе данных. Этот скрипт включит защиту данных (RLS) и подготовит таблицы.</p>
-                     <div>
-                        <label for="sql-script-area" class="font-semibold text-sm">SQL-скрипт для выполнения:</label>
+                    <p class="mb-4">Соединение установлено! Нажмите кнопку ниже, чтобы применить последнюю версию схемы к вашей базе данных. Это действие **удалит и пересоздаст таблицы с данными** для обеспечения полной совместимости.</p>
+                     <div class="p-3 bg-yellow-100/50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300 rounded-md text-sm space-y-2">
+                        <p><strong>Внимание:</strong> Это безопасно для ваших данных в Google, но все локально кэшированные данные (письма, файлы, контакты) в Supabase будут удалены и загружены заново. Ваши настройки и прокси-серверы сохранятся.</p>
+                     </div>
+                     <div class="mt-4">
+                        <label for="sql-script-area" class="font-semibold text-sm">Скрипт полной миграции схемы:</label>
                         <textarea id="sql-script-area" class="w-full h-40 mt-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 font-mono text-xs" readonly>${FULL_MIGRATION_SQL}</textarea>
                     </div>
                     <div>
