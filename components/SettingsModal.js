@@ -635,7 +635,7 @@ export function createSettingsModal(currentSettings, authState, handlers) {
     fetch('./app-info.json')
         .then(response => response.ok ? response.json() : Promise.reject('File not found'))
         .then(data => {
-            const changelogHtml = data.changelog.map(log => `
+            const changelogHtml = data.changelog.slice(0, 10).map(log => `
                 <div class="py-3 border-b border-gray-700/50 last:border-b-0">
                     <div class="flex justify-between items-center">
                         <h4 class="font-bold text-lg">Версия ${log.version}</h4>
@@ -655,8 +655,11 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                     <p class="text-sm">Связаться: <a href="${data.contact}" target="_blank" class="text-blue-400 hover:underline">${data.contact}</a></p>
                 </div>
                 <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 mt-6">
-                     <h3 class="text-xl font-bold mb-3">История изменений</h3>
-                     ${changelogHtml}
+                     <h3 class="text-xl font-bold mb-3">Последние изменения</h3>
+                     <div class="space-y-4">${changelogHtml}</div>
+                     <div class="mt-6 text-center">
+                        <a href="./changelog.html" target="_blank" class="text-blue-400 hover:underline text-sm font-semibold">Смотреть полную историю изменений &rarr;</a>
+                     </div>
                 </div>
             `;
         })
