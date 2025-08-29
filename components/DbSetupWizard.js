@@ -10,11 +10,10 @@ const WIZARD_STEPS = [
 ];
 
 const MANAGEMENT_WORKER_CODE = `
-addEventListener('fetch', event => {
-    event.respondWith(handleRequest(event.request));
-});
+// Import the postgres.js library at the top level. This is supported in the ES Modules format.
+import postgres from 'https://unpkg.com/postgres@3.4.4/esm/index.js';
 
-// Standard CORS handling
+// Standard CORS handling for preflight requests
 function handleOptions(request) {
     return new Response(null, {
         headers: {
@@ -25,56 +24,59 @@ function handleOptions(request) {
     });
 }
 
+// Helper for CORS headers on actual responses
 function corsHeaders() {
     return {
         'Access-Control-Allow-Origin': '*',
     };
 }
 
-async function handleRequest(request) {
-    if (request.method === 'OPTIONS') {
-        return handleOptions(request);
-    }
-    if (request.method === 'GET') {
-        return new Response(JSON.stringify({ status: 'ok' }), { headers: { ...corsHeaders(), 'Content-Type': 'application/json' }});
-    }
-    if (request.method !== 'POST') {
-        return new Response('Method Not Allowed', { status: 405 });
-    }
-
-    try {
-        // **FIX**: Dynamically import postgres.js inside the async handler.
-        const { default: postgres } = await import('https://unpkg.com/postgres@3.4.4/esm/index.js');
-        
-        // DATABASE_URL is an Environment Variable in Cloudflare containing the full Postgres connection string.
-        if (typeof DATABASE_URL === 'undefined') {
-            throw new Error('DATABASE_URL secret is not defined in worker settings.');
+// **FIX**: Use the modern ES Modules format for Cloudflare Workers
+export default {
+    async fetch(request, env, ctx) {
+        if (request.method === 'OPTIONS') {
+            return handleOptions(request);
+        }
+        if (request.method === 'GET') {
+            return new Response(JSON.stringify({ status: 'ok' }), { headers: { ...corsHeaders(), 'Content-Type': 'application/json' }});
+        }
+        if (request.method !== 'POST') {
+            return new Response('Method Not Allowed', { status: 405 });
         }
 
-        const sql = postgres(DATABASE_URL, {
-          ssl: 'require', // Supabase requires SSL
-          max: 1,         // Use a single connection
-          connect_timeout: 10,
-        });
+        try {
+            // Secrets are available on the 'env' object in the ES Modules format.
+            if (!env.DATABASE_URL) {
+                throw new Error('DATABASE_URL secret is not defined in worker settings.');
+            }
 
-        const { query } = await request.json();
-        if (!query) {
-             return new Response(JSON.stringify({ error: '"query" parameter is missing.' }), { status: 400, headers: { ...corsHeaders(), 'Content-Type': 'application/json' } });
+            const sql = postgres(env.DATABASE_URL, {
+                ssl: 'require', // Supabase requires SSL
+                max: 1,         // Use a single connection
+                connect_timeout: 10,
+            });
+
+            const { query } = await request.json();
+            if (!query) {
+                return new Response(JSON.stringify({ error: '"query" parameter is missing.' }), { status: 400, headers: { ...corsHeaders(), 'Content-Type': 'application/json' } });
+            }
+
+            // Execute the SQL query from the request body
+            const result = await sql.unsafe(query);
+            await sql.end(); // Important: close the database connection
+
+            return new Response(JSON.stringify(result), {
+                status: 200,
+                headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+            });
+
+        } catch (error) {
+            console.error('Worker Error:', error.message);
+            // Return a more detailed error message to the client for easier debugging
+            return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders(), 'Content-Type': 'application/json' } });
         }
-
-        const result = await sql.unsafe(query);
-        await sql.end(); // Important: close the connection
-
-        return new Response(JSON.stringify(result), {
-          status: 200,
-          headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
-        });
-
-    } catch (error) {
-        console.error('Worker Error:', error);
-        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders(), 'Content-Type': 'application/json' } });
     }
-}
+};
 `.trim();
 
 const DATA_RESET_SQL = `
@@ -191,7 +193,7 @@ export function createDbSetupWizard({ settings, supabaseConfig, onClose, onSave 
             case 'deploy-code':
                 contentHtml = `
                     <p class="mb-4">Вернитесь в редактор кода вашего воркера, удалите всё содержимое и вставьте код ниже.</p>
-                     <p class="text-xs text-slate-500 mb-4">Этот код использует библиотеку \`postgres.js\` для прямого и безопасного подключения к вашей базе данных.</p>
+                     <p class="text-xs text-slate-500 mb-4">Этот код использует современный формат ES Modules и библиотеку \`postgres.js\` для прямого и безопасного подключения к вашей базе данных.</p>
                     <div class="rounded-md border border-slate-200 dark:border-slate-700">
                         <div class="flex justify-between items-center bg-slate-100 dark:bg-slate-900 px-4 py-2 text-xs text-slate-500 dark:text-slate-400 rounded-t-md">
                             <span>JAVASCRIPT (CLOUDFLARE WORKER)</span>
