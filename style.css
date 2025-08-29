@@ -267,3 +267,30 @@ body.recording-active {
     padding: 0.5rem 0.75rem;
     border-radius: 0.5rem; /* rounded-lg */
 }
+
+
+/* --- PROFILE MODAL TABS --- */
+.profile-tab-button {
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem; /* rounded-md */
+    font-weight: 500;
+    transition: background-color 0.2s, color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+}
+.profile-tab-button:hover {
+    background-color: #f1f5f9; /* slate-100 */
+}
+.dark .profile-tab-button:hover {
+     background-color: #1e293b; /* slate-800 */
+}
+.profile-tab-button.active {
+    background-color: #eef2ff; /* indigo-100 */
+    color: #4f46e5; /* indigo-600 */
+}
+.dark .profile-tab-button.active {
+    background-color: #3730a3; /* indigo-800 */
+    color: #e0e7ff; /* indigo-200 */
+}

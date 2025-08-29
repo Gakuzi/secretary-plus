@@ -1,6 +1,3 @@
-
-
-
 import { GOOGLE_SCOPES } from '../../constants.js';
 
 // Helper function to safely parse date strings from Gmail API
@@ -407,7 +404,7 @@ export class SupabaseService {
         }
     }
     
-    // --- User Settings ---
+    // --- User Settings & Profiles ---
     async getUserSettings() {
         const { data, error } = await this.client
             .from('user_settings')
@@ -441,6 +438,83 @@ export class SupabaseService {
 
         if (error) {
             console.error('Error deleting user settings:', error);
+            throw error;
+        }
+        return { success: true };
+    }
+
+    async getCurrentUserProfile() {
+        const { data: { user } } = await this.client.auth.getUser();
+        if (!user) return null;
+        
+        const { data, error } = await this.client
+            .from('profiles')
+            .select(`*`)
+            .eq('id', user.id)
+            .single();
+            
+        if (error) {
+            console.error('Error fetching current user profile:', error);
+            // Fallback to auth data if profile doesn't exist yet
+            if (error.code === 'PGRST116') {
+                return {
+                    id: user.id,
+                    email: user.email,
+                    last_sign_in_at: user.last_sign_in_at,
+                    full_name: user.user_metadata.full_name,
+                    avatar_url: user.user_metadata.avatar_url,
+                    role: 'user', // Default role
+                }
+            }
+            return null;
+        }
+        
+        // Combine auth data with profile data
+        return {
+            id: user.id,
+            email: user.email,
+            last_sign_in_at: user.last_sign_in_at,
+            full_name: data.full_name || user.user_metadata.full_name,
+            avatar_url: data.avatar_url || user.user_metadata.avatar_url,
+            role: data.role,
+        };
+    }
+
+    async getAllUserProfiles() {
+        const { data, error } = await this.client
+            .from('profiles')
+            .select(`
+                id,
+                full_name,
+                avatar_url,
+                role,
+                user_data:users(email, last_sign_in_at)
+            `)
+            .order('role', { ascending: false });
+
+        if (error) {
+            console.error("Error fetching all user profiles:", error);
+            throw error;
+        }
+        
+        // Flatten the response for easier use in the UI
+        return data.map(p => ({
+            id: p.id,
+            full_name: p.full_name || p.user_data?.email,
+            avatar_url: p.avatar_url,
+            role: p.role,
+            email: p.user_data?.email,
+            last_sign_in_at: p.user_data?.last_sign_in_at,
+        }));
+    }
+
+    async updateUserRole(targetUserId, newRole) {
+        const { error } = await this.client.rpc('update_user_role', {
+            target_user_id: targetUserId,
+            new_role: newRole,
+        });
+        if (error) {
+            console.error('Error updating user role:', error);
             throw error;
         }
         return { success: true };

@@ -112,7 +112,7 @@ function renderAuth() {
         const profileButton = document.createElement('button');
         profileButton.className = 'flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-blue-500 rounded-full';
         profileButton.setAttribute('aria-label', 'Открыть профиль пользователя');
-        profileButton.innerHTML = `<img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full">`;
+        profileButton.innerHTML = `<img src="${state.userProfile.imageUrl || state.userProfile.avatar_url}" alt="${state.userProfile.name || state.userProfile.full_name}" class="w-8 h-8 rounded-full">`;
         profileButton.addEventListener('click', showProfileModal);
         authContainer.appendChild(profileButton);
         updateProxyStatusIndicator(state.proxyStatus);
@@ -209,11 +209,18 @@ async function handleAuthentication() {
 
     if (googleProvider.token) {
         try {
-            state.userProfile = await googleProvider.getUserProfile();
+            const googleProfile = await googleProvider.getUserProfile();
             state.isGoogleConnected = true;
-            if (state.isSupabaseReady && state.supabaseUser) {
+            
+            // If using Supabase, merge Google profile with Supabase profile data (like role)
+            if (state.isSupabaseReady && supabaseService) {
+                const supabaseProfile = await supabaseService.getCurrentUserProfile();
+                state.userProfile = supabaseProfile || { ...googleProfile, role: 'user' }; // Fallback to Google profile if Supabase profile fails
                 state.actionStats = await supabaseService.getActionStats();
+            } else {
+                 state.userProfile = googleProfile;
             }
+
         } catch (error) {
             console.error("Failed to get user profile:", error);
             showSystemError(`Не удалось получить профиль Google: ${error.message}`);
@@ -534,53 +541,80 @@ function showSettingsModal() {
     modalContainer.appendChild(modal);
 }
 
-function showProfileModal() {
-    modalContainer.innerHTML = '';
-    const modal = createProfileModal(
-        state.userProfile,
-        state.settings,
-        {
-            onClose: () => { modalContainer.innerHTML = ''; },
-            onSave: async (newSettings) => {
-                state.settings = newSettings;
-                 if (supabaseService) {
-                    await supabaseService.saveUserSettings(newSettings);
+async function showProfileModal() {
+    modalContainer.innerHTML = `<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"><div class="animate-spin h-10 w-10 border-4 border-white border-t-transparent rounded-full"></div></div>`;
+
+    try {
+        const currentUserProfile = state.isSupabaseReady ? await supabaseService.getCurrentUserProfile() : state.userProfile;
+        
+        if (!currentUserProfile) {
+            throw new Error("Не удалось загрузить профиль пользователя.");
+        }
+
+        let allUsers = [];
+        if (state.isSupabaseReady && currentUserProfile.role === 'admin') {
+            allUsers = await supabaseService.getAllUserProfiles();
+        }
+        
+        modalContainer.innerHTML = ''; // Clear loading spinner
+        const modal = createProfileModal(
+            currentUserProfile,
+            allUsers,
+            state.settings,
+            {
+                onClose: () => { modalContainer.innerHTML = ''; },
+                onSave: async (newSettings) => {
+                    state.settings = newSettings;
+                    if (supabaseService) {
+                        await supabaseService.saveUserSettings(newSettings);
+                    }
+                    saveSettings(newSettings);
+                    googleProvider.setTimezone(newSettings.timezone);
+                    if(newSettings.enableAutoSync) startAutoSync(); else stopAutoSync();
+                    if(newSettings.enableEmailPolling) setupEmailPolling(); else stopEmailPolling();
+                    modalContainer.innerHTML = ''; // Close the modal after saving.
+                },
+                onLogout: handleLogout,
+                onDelete: async () => {
+                    if (confirm('Вы уверены, что хотите удалить все ваши настройки из облака? Это действие необратимо.')) {
+                        await supabaseService.deleteUserSettings();
+                        state.settings.isSupabaseEnabled = false;
+                        saveSettings(state.settings);
+                        window.location.reload();
+                    }
+                },
+                onForceSync: runAllSyncs,
+                onAnalyzeError: async ({ context, error }) => analyzeSyncErrorWithGemini({
+                    errorMessage: error,
+                    context: context,
+                    appStructure: APP_STRUCTURE_CONTEXT,
+                    apiKey: state.settings.geminiApiKey,
+                    proxyUrl: await getActiveProxy(),
+                }),
+                onViewData: async ({ tableName }) => supabaseService.getSampleData(tableName),
+                onLaunchDbWizard: () => {
+                    modalContainer.innerHTML = '';
+                    showDbSetupWizard();
+                },
+                onUpdateUserRole: async (userId, newRole) => {
+                    try {
+                        await supabaseService.updateUserRole(userId, newRole);
+                        await showProfileModal(); // Refresh modal to show changes
+                    } catch (error) {
+                        showSystemError(`Не удалось обновить роль: ${error.message}`);
+                    }
                 }
-                saveSettings(newSettings);
-                googleProvider.setTimezone(newSettings.timezone);
-                if(newSettings.enableAutoSync) startAutoSync(); else stopAutoSync();
-                if(newSettings.enableEmailPolling) setupEmailPolling(); else stopEmailPolling();
-                onClose(); // Close the modal after saving.
             },
-            onLogout: handleLogout,
-            onDelete: async () => {
-                if (confirm('Вы уверены, что хотите удалить все ваши настройки из облака? Это действие необратимо.')) {
-                    await supabaseService.deleteUserSettings();
-                    // Keep local settings but disable Supabase
-                    state.settings.isSupabaseEnabled = false;
-                    saveSettings(state.settings);
-                    window.location.reload();
-                }
-            },
-            onForceSync: runAllSyncs,
-            onAnalyzeError: async ({ context, error }) => analyzeSyncErrorWithGemini({
-                errorMessage: error,
-                context: context,
-                appStructure: APP_STRUCTURE_CONTEXT,
-                apiKey: state.settings.geminiApiKey,
-                proxyUrl: await getActiveProxy(),
-            }),
-            onViewData: async ({ tableName }) => supabaseService.getSampleData(tableName),
-            onLaunchDbWizard: () => {
-                modalContainer.innerHTML = ''; // Close profile before opening wizard
-                showDbSetupWizard();
-            },
-        },
-        state.syncStatus,
-        syncTasks,
-        SUPABASE_CONFIG.url,
-    );
-    modalContainer.appendChild(modal);
+            state.syncStatus,
+            syncTasks,
+            SUPABASE_CONFIG.url
+        );
+        modalContainer.appendChild(modal);
+
+    } catch (error) {
+        modalContainer.innerHTML = '';
+        showSystemError(`Не удалось открыть профиль: ${error.message}`);
+    }
 }
 
 function showHelpModal() {
