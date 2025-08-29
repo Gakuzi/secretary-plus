@@ -1,32 +1,28 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./constants.js";
 
 document.addEventListener('DOMContentLoaded', () => {
     const { createClient } = window.supabase;
-    const SUPABASE_CREDS_KEY = 'secretary-plus-setup-creds';
 
     // --- STATE ---
     let state = {
         supabaseClient: null,
         user: null,
-        settings: null, // Will hold settings loaded from DB
+        settings: {}, // Holds settings loaded from DB
         selectedProxies: [],
     };
     
     // --- DOM ELEMENTS ---
     const steps = {
         auth: document.getElementById('step-auth'),
-        dbSetup: document.getElementById('step-db-setup'),
         keys: document.getElementById('step-keys'),
         proxy: document.getElementById('step-proxy'),
         final: document.getElementById('step-final'),
     };
     
     const inputs = {
-        supabaseUrl: document.getElementById('supabase-url'),
-        supabaseAnonKey: document.getElementById('supabase-anon-key'),
         geminiApiKey: document.getElementById('gemini-api-key'),
         googleClientId: document.getElementById('google-client-id'),
-        accessToken: document.getElementById('supabase-access-token'),
     };
 
     const buttons = {
@@ -50,20 +46,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const setStatus = (container, type, message) => {
         container.className = `status-message status-${type}`;
         container.textContent = message;
+        container.style.display = 'block';
+    };
+
+    const hideStatus = (container) => {
+        container.style.display = 'none';
+        container.textContent = '';
     };
     
-    async function findProxiesWithGemini(apiKey, proxyUrl = null) {
+    async function findProxiesWithGemini(apiKey) {
         if (!apiKey) throw new Error("Ключ Gemini API не предоставлен.");
-        const clientOptions = { apiKey };
-        if (proxyUrl) {
-            clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
-        }
-        const ai = new GoogleGenAI(clientOptions);
-        const model = 'gemini-2.5-flash';
+        const ai = new GoogleGenAI({ apiKey });
         const prompt = `Найди 10 общедоступных (бесплатных) прокси-серверов, которые могут работать с Google API из разных стран. Предоставь ответ в формате JSON. Каждый объект должен содержать поля "url", "country" и "city". Пример: [{"url": "https://example.com/proxy", "country": "USA", "city": "California"}]`;
         try {
             const response = await ai.models.generateContent({
-                model: model,
+                model: 'gemini-2.5-flash',
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 config: {
                     responseMimeType: "application/json",
@@ -129,7 +126,6 @@ document.addEventListener('DOMContentLoaded', () => {
         containers.userProfile.style.display = 'block';
         steps.auth.dataset.status = 'completed';
 
-        // Fetch and populate settings
         const { data, error } = await state.supabaseClient.from('user_settings').select('settings').single();
         if (error && error.code !== 'PGRST116') throw error;
         
@@ -137,39 +133,24 @@ document.addEventListener('DOMContentLoaded', () => {
         inputs.geminiApiKey.value = state.settings.geminiApiKey || '';
         inputs.googleClientId.value = state.settings.googleClientId || '';
         
-        // Fetch and populate proxies
         const { data: proxiesData, error: proxiesError } = await state.supabaseClient.from('proxies').select('*');
         if (proxiesError) throw proxiesError;
         state.selectedProxies = proxiesData || [];
         renderSelectedProxies();
         
-        showStep(steps.dbSetup);
+        showStep(steps.keys);
     };
     
     // --- EVENT HANDLERS ---
     
     buttons.connectLogin.addEventListener('click', async () => {
-        const url = inputs.supabaseUrl.value.trim();
-        const key = inputs.supabaseAnonKey.value.trim();
-
-        if (!url || !key) {
-            setStatus(containers.authStatus, 'error', 'Пожалуйста, введите URL и ключ Supabase.');
-            return;
-        }
-
-        localStorage.setItem(SUPABASE_CREDS_KEY, JSON.stringify({ url, key }));
-        setStatus(containers.authStatus, 'loading', 'Подключаемся и перенаправляем на страницу входа Google...');
-        
-        try {
-            const supabase = createClient(url, key);
-            const { error } = await supabase.auth.signInWithOAuth({
-                provider: 'google',
-                options: { redirectTo: window.location.href }
-            });
-            if (error) throw error;
-        } catch (error) {
+        setStatus(containers.authStatus, 'loading', 'Перенаправляем на страницу входа Google...');
+        const { error } = await state.supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: window.location.href }
+        });
+        if (error) {
              setStatus(containers.authStatus, 'error', `Ошибка: ${error.message}`);
-             localStorage.removeItem(SUPABASE_CREDS_KEY);
         }
     });
 
@@ -178,9 +159,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ...state.settings,
             geminiApiKey: inputs.geminiApiKey.value.trim(),
             googleClientId: inputs.googleClientId.value.trim(),
-            // Preserve Supabase keys if they exist, or add them from auth step
-            supabaseUrl: state.settings.supabaseUrl || inputs.supabaseUrl.value.trim(),
-            supabaseAnonKey: state.settings.supabaseAnonKey || inputs.supabaseAnonKey.value.trim(),
         };
         
         if (!settingsUpdate.geminiApiKey) {
@@ -225,23 +203,33 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     buttons.saveProxies.addEventListener('click', async () => {
+        setStatus(containers.proxyStatus, 'loading', 'Сохраняем прокси...');
+        
+        // First delete all existing proxies for the user to ensure a clean slate
+        const { error: deleteError } = await state.supabaseClient.from('proxies').delete().match({ user_id: state.user.id });
+        if (deleteError) {
+             setStatus(containers.proxyStatus, 'error', `Ошибка очистки старых прокси: ${deleteError.message}`);
+             return;
+        }
+
         if (state.selectedProxies.length === 0) {
-            steps.proxy.dataset.status = 'completed';
-            showStep(steps.final);
-            return;
+             steps.proxy.dataset.status = 'completed';
+             showStep(steps.final);
+             return;
         }
         
-        setStatus(containers.proxyStatus, 'loading', 'Сохраняем прокси...');
-        const proxiesToSave = state.selectedProxies.map(p => ({
+        const proxiesToSave = state.selectedProxies.map((p, index) => ({
             url: p.url,
             alias: p.alias || p.geolocation,
             geolocation: p.geolocation,
             is_active: true,
-            priority: 10,
-            user_id: state.user.id
+            priority: index,
+            user_id: state.user.id,
+            last_status: p.last_status,
+            last_speed_ms: p.last_speed_ms
         }));
 
-        const { error } = await state.supabaseClient.from('proxies').upsert(proxiesToSave, { onConflict: 'user_id, url' });
+        const { error } = await state.supabaseClient.from('proxies').insert(proxiesToSave);
         
         if (error) {
             setStatus(containers.proxyStatus, 'error', `Ошибка сохранения: ${error.message}`);
@@ -259,6 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = document.createElement('div');
         item.className = 'proxy-item';
         item.dataset.url = proxy.url;
+        item.dataset.geo = proxy.geolocation;
         item.innerHTML = `
             <div class="proxy-status-dot" data-status="${proxy.last_status || 'untested'}"></div>
             <div class="proxy-item-info">
@@ -279,11 +268,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateProxyUI = (url, { status, speed }) => {
         const item = containers.foundProxies.querySelector(`.proxy-item[data-url="${url}"]`);
         if (!item) return;
-        item.querySelector('.proxy-status-dot').dataset.status = status;
+        const dot = item.querySelector('.proxy-status-dot');
+        dot.dataset.status = status;
+        // Update data attribute for adding to selected list
+        dot.dataset.lastStatus = status;
         const speedEl = item.querySelector('.speed-info');
         if (speed) {
             speedEl.textContent = ` | ${speed} мс`;
             speedEl.style.display = 'inline';
+            speedEl.dataset.lastSpeed = speed;
         } else {
             speedEl.style.display = 'none';
         }
@@ -317,8 +310,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (target.matches('.add-btn')) {
             if (state.selectedProxies.some(p => p.url === proxyUrl)) return;
-            const geolocation = item.querySelector('.proxy-item-details span').textContent;
-            state.selectedProxies.push({ url: proxyUrl, geolocation, alias: geolocation });
+            const statusDot = item.querySelector('.proxy-status-dot');
+            const speedEl = item.querySelector('.speed-info');
+            state.selectedProxies.push({ 
+                url: proxyUrl, 
+                geolocation: item.dataset.geo, 
+                alias: item.dataset.geo,
+                last_status: statusDot.dataset.lastStatus,
+                last_speed_ms: speedEl.dataset.lastSpeed
+            });
             renderSelectedProxies();
         }
     });
@@ -330,94 +330,29 @@ document.addEventListener('DOMContentLoaded', () => {
             renderSelectedProxies();
         }
     });
-
-    // --- DB SETUP LOGIC ---
     
-    const sqlScriptSourceEl = document.getElementById('sql-script-source');
-    if (sqlScriptSourceEl) {
-        // Fetch the script from the markdown file to keep it DRY
-        fetch('./SUPABASE_SETUP.md')
-            .then(res => res.text())
-            .then(text => {
-                const match = text.match(/```sql([\s\S]*?)```/);
-                if (match) {
-                    const sql = match[1].trim();
-                    sqlScriptSourceEl.textContent = sql;
-                    document.getElementById('sql-script-content').textContent = sql;
-                }
-            });
-    }
-    
-    const generateCurlCommand = () => {
-        const token = inputs.accessToken.value.trim() || '[YOUR_ACCESS_TOKEN]';
-        const projectId = inputs.supabaseUrl.value.match(/https?:\/\/([^.]+)\.supabase\.co/)?.[1] || '[YOUR_PROJECT_ID]';
-        const sqlScript = document.getElementById('sql-script-source').textContent;
-
-        const escapedSql = JSON.stringify(sqlScript);
-
-        const command = `curl -X POST 'https://api.supabase.com/v1/projects/${projectId}/sql' \\
--H "Authorization: Bearer ${token}" \\
--H "Content-Type: application/json" \\
--d '{"sql": ${escapedSql}}'`;
-
-        document.getElementById('curl-command-output').textContent = command;
-    };
-    
-    inputs.accessToken.addEventListener('input', generateCurlCommand);
-
-    document.querySelector('.setup-options')?.addEventListener('click', (e) => {
-        const tab = e.target.closest('.option-tab');
-        if (!tab) return;
-        document.querySelectorAll('.option-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-        document.querySelector(tab.dataset.tabTarget).style.display = 'block';
-    });
-    
-    document.querySelectorAll('.copy-button').forEach(button => {
-        button.addEventListener('click', () => {
-            const target = document.getElementById(button.dataset.copyTarget);
-            navigator.clipboard.writeText(target.textContent.trim()).then(() => {
-                const textEl = button.querySelector('.copy-text');
-                textEl.textContent = 'Скопировано!';
-                setTimeout(() => { textEl.textContent = 'Копировать'; }, 2000);
-            });
-        });
-    });
-
-
     // --- INITIALIZATION ---
     
     const initialize = async () => {
         showStep(steps.auth);
 
-        const credsString = localStorage.getItem(SUPABASE_CREDS_KEY);
-        if (credsString) {
-            const { url, key } = JSON.parse(credsString);
-            inputs.supabaseUrl.value = url;
-            inputs.supabaseAnonKey.value = key;
-            state.supabaseClient = createClient(url, key);
-        }
-
-        // Handle the OAuth redirect
-        state.supabaseClient?.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'SIGNED_IN' && session) {
+        state.supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        state.supabaseClient.auth.onAuthStateChange(async (event, session) => {
+            if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session) {
                 state.user = session.user;
                 await renderAuthenticatedState();
-                 // Once authenticated, also update the cURL project ID
-                generateCurlCommand();
-                history.pushState("", document.title, window.location.pathname + window.location.search); // Clean URL
+                // Clean URL from auth tokens
+                if (window.location.hash.includes('access_token')) {
+                    history.pushState("", document.title, window.location.pathname + window.location.search);
+                }
             }
         });
 
-        // Check if already logged in
-        if (state.supabaseClient) {
-            const { data: { session } } = await state.supabaseClient.auth.getSession();
-            if (session) {
-                state.user = session.user;
-                await renderAuthenticatedState();
-                generateCurlCommand();
-            }
+        const { data: { session } } = await state.supabaseClient.auth.getSession();
+        if (session) {
+            state.user = session.user;
+            await renderAuthenticatedState();
         }
     };
 

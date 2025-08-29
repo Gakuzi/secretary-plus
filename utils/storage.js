@@ -4,9 +4,6 @@ const SYNC_STATUS_KEY = 'secretary-plus-sync-status-v1';
 const defaultSettings = {
     geminiApiKey: '',
     googleClientId: '', // For direct Google auth fallback
-    isSupabaseEnabled: true, // Master switch for Supabase
-    supabaseUrl: '',
-    supabaseAnonKey: '',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     enableEmailPolling: true, // For proactive email notifications
     enableAutoSync: true, // For background data synchronization
@@ -41,9 +38,6 @@ export function saveSettings(settings) {
         const settingsToSave = {
             geminiApiKey: settings.geminiApiKey,
             googleClientId: settings.googleClientId,
-            isSupabaseEnabled: settings.isSupabaseEnabled,
-            supabaseUrl: settings.supabaseUrl,
-            supabaseAnonKey: settings.supabaseAnonKey,
             timezone: settings.timezone,
             enableEmailPolling: settings.enableEmailPolling,
             enableAutoSync: settings.enableAutoSync,

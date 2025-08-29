@@ -9,13 +9,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="setup-guide.css">
-    <!-- Supabase Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-     <!-- ES Module Import Map -->
     <script type="importmap">
     {
       "imports": {
-        "@google/genai": "https://esm.sh/@google/genai"
+        "@google/genai": "https://esm.sh/@google/genai",
+        "./constants.js": "./constants.js"
       }
     }
     </script>
@@ -28,117 +27,48 @@
                  <p class="text-gray-400 mt-2">Следуйте шагам, чтобы подключить и настроить вашего ассистента.</p>
             </header>
             
-            <!-- Step 1: Authentication -->
             <section id="step-auth" class="setup-step" data-step="1">
                 <div class="step-header">
                     <div class="step-indicator">1</div>
-                    <h2 class="step-title">Подключение к Supabase и Аутентификация</h2>
+                    <h2 class="step-title">Аутентификация</h2>
                 </div>
                 <div class="step-content">
-                    <p class="mb-6">Введите данные вашего проекта Supabase, чтобы включить облачную синхронизацию и сохранить настройки. После этого войдите через Google.</p>
-                    <div class="input-group">
-                        <label for="supabase-url">Supabase Project URL</label>
-                        <input type="text" id="supabase-url" placeholder="https://xyz.supabase.co">
-                    </div>
-                    <div class="input-group">
-                        <label for="supabase-anon-key">Supabase Anon Key</label>
-                        <input type="password" id="supabase-anon-key" placeholder="Вставьте ваш Anon Key">
-                    </div>
-                     <div id="auth-status-container" class="mt-4 text-sm"></div>
+                    <p class="mb-6">Начните с входа в ваш аккаунт Google. Это позволит безопасно сохранять ваши настройки в облаке.</p>
+                     <div id="auth-status-container" class="mt-4 text-sm mb-4"></div>
                     <button id="connect-login-button" class="wizard-nav-button next-button w-full text-center justify-center mt-4">
-                        Подключиться и войти через Google
+                        Войти через Google
                     </button>
                     <div id="user-profile-display" class="mt-6 p-4 bg-gray-800 border border-gray-700 rounded-lg" style="display: none;">
-                        <!-- User info will be rendered here -->
                     </div>
                 </div>
             </section>
 
-            <!-- Step 2: Database Setup -->
-            <section id="step-db-setup" class="setup-step" data-step="2" style="display: none;">
-                <div class="step-header">
-                    <div class="step-indicator">2</div>
-                    <h2 class="step-title">Настройка Базы Данных</h2>
-                </div>
-                <div class="step-content">
-                    <p class="mb-4">Теперь необходимо настроить таблицы в вашей базе данных. Рекомендуется использовать автоматический метод.</p>
-                     <div class="setup-options mb-6">
-                        <button class="option-tab active" data-tab-target="#auto-setup">Вариант А: Автоматическая настройка (Рекомендуется)</button>
-                        <button class="option-tab" data-tab-target="#manual-setup">Вариант Б: Ручная настройка</button>
-                    </div>
-
-                    <!-- Auto Setup Content -->
-                    <div id="auto-setup" class="tab-content">
-                        <p class="mb-4">Этот метод использует официальный API Supabase. Он <strong>на 100% надежный и безопасный</strong>, так как обходит ограничения браузера.</p>
-                         <div class="step-subsection">
-                            <h3 class="step-subtitle">Шаг 2.1: Сгенерируйте токен доступа</h3>
-                            <ol>
-                                <li><a href="https://supabase.com/dashboard/account/tokens" target="_blank" rel="noopener noreferrer">Откройте страницу токенов доступа</a>.</li>
-                                <li>Нажмите "Generate New Token", дайте имя и скопируйте его.</li>
-                            </ol>
-                             <div class="input-group">
-                                <label for="supabase-access-token">Токен доступа (Access Token)</label>
-                                <input type="password" id="supabase-access-token" placeholder="sbp_...">
-                            </div>
-                        </div>
-                        <div class="step-subsection">
-                             <h3 class="step-subtitle">Шаг 2.2: Выполните команду</h3>
-                             <p>Скопируйте сгенерированную команду и выполните её в вашем терминале. Ваш ID проекта уже подставлен автоматически.</p>
-                             <div class="code-block mt-4">
-                                <pre><code id="curl-command-output">Введите токен доступа выше...</code></pre>
-                                <button class="copy-button" data-copy-target="curl-command-output">
-                                    <span class="copy-text">Копировать</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Manual Setup Content -->
-                    <div id="manual-setup" class="tab-content" style="display: none;">
-                        <ol>
-                            <li>В меню вашего проекта выберите <strong>SQL Editor</strong>, затем <strong>"+ New query"</strong>.</li>
-                            <li>Скопируйте и вставьте весь SQL-скрипт ниже в редактор.</li>
-                            <li>Нажмите <strong>"RUN"</strong>.</li>
-                        </ol>
-                        <div class="code-block mt-4">
-                            <pre><code id="sql-script-content"></code></pre>
-                            <button class="copy-button" data-copy-target="sql-script-content">
-                                <span class="copy-text">Копировать</span>
-                            </button>
-                        </div>
-                    </div>
-                    <pre style="display:none;" id="sql-script-source"></pre>
-                </div>
-            </section>
-
-            <!-- Step 3: API Keys -->
-            <section id="step-keys" class="setup-step" data-step="3" style="display: none;">
+            <section id="step-keys" class="setup-step" data-step="2" style="display: none;">
                  <div class="step-header">
-                    <div class="step-indicator">3</div>
+                    <div class="step-indicator">2</div>
                     <h2 class="step-title">Конфигурация API Ключей</h2>
                 </div>
                 <div class="step-content">
-                    <p class="mb-6">Введите ключи для Gemini API и Google Cloud. Они будут безопасно сохранены в вашем аккаунте.</p>
+                    <p class="mb-6">Введите ключи для Gemini API. Они будут безопасно сохранены в вашем аккаунте.</p>
                     <div class="input-group">
                         <label for="gemini-api-key">Gemini API Key</label>
                         <input type="password" id="gemini-api-key" placeholder="Вставьте ваш Gemini API Key">
                         <p class="note-text"><a href="https://aistudio.google.com/app/apikey" target="_blank">Получить ключ в Google AI Studio</a></p>
                     </div>
                     <div class="input-group">
-                        <label for="google-client-id">Google Client ID</label>
+                        <label for="google-client-id">Google Client ID (опционально)</label>
                         <input type="text" id="google-client-id" placeholder="Вставьте ваш Google Client ID (для резервного подключения)">
                          <p class="note-text"><a href="https://console.cloud.google.com/apis/credentials" target="_blank">Получить Client ID в Google Cloud</a></p>
                     </div>
                     <div id="keys-status-container" class="mt-4 text-sm"></div>
-                    <button id="save-keys-button" class="wizard-nav-button next-button w-full text-center justify-center mt-4">Сохранить ключи</button>
+                    <button id="save-keys-button" class="wizard-nav-button next-button w-full text-center justify-center mt-4">Сохранить и продолжить</button>
                 </div>
             </section>
 
-            <!-- Step 4: Proxy Setup -->
-            <section id="step-proxy" class="setup-step" data-step="4" style="display: none;">
+            <section id="step-proxy" class="setup-step" data-step="3" style="display: none;">
                 <div class="step-header">
-                    <div class="step-indicator">4</div>
-                    <h2 class="step-title">Настройка Прокси-серверов</h2>
+                    <div class="step-indicator">3</div>
+                    <h2 class="step-title">Настройка Прокси (опционально)</h2>
                 </div>
                  <div class="step-content">
                     <p class="mb-4">Если доступ к Gemini API ограничен в вашем регионе, найдите и протестируйте рабочие прокси-серверы.</p>
@@ -160,12 +90,11 @@
                         </div>
                     </div>
                     <div id="proxy-status-container" class="mt-4 text-sm"></div>
-                    <button id="save-proxies-button" class="wizard-nav-button next-button w-full text-center justify-center mt-4">Сохранить выбранные прокси</button>
+                    <button id="save-proxies-button" class="wizard-nav-button next-button w-full text-center justify-center mt-4">Сохранить и продолжить</button>
                  </div>
             </section>
             
-            <!-- Step 5: Final -->
-            <section id="step-final" class="setup-step" data-step="5" style="display: none;">
+            <section id="step-final" class="setup-step" data-step="4" style="display: none;">
                  <div class="step-header">
                     <div class="step-indicator">✓</div>
                     <h2 class="step-title">Настройка завершена!</h2>
