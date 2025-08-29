@@ -333,7 +333,14 @@ async function handleSendMessage(prompt, image = null, options = { silent: false
 // Simplified card action handler
 async function handleCardAction(e) {
     const target = e.target.closest('[data-action]');
-    if (!target) return;
+    
+    // **FIX:** This check is now more robust. It ensures that the handler only
+    // proceeds if there is a non-empty `data-payload` attribute. This prevents
+    // errors from buttons in modals that use `data-action` for other purposes.
+    if (!target || !target.dataset.payload) {
+        return;
+    }
+
     e.preventDefault();
     const action = target.dataset.action;
     const payload = JSON.parse(target.dataset.payload);

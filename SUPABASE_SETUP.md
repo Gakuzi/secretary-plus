@@ -40,7 +40,6 @@ CREATE TABLE IF NOT EXISTS public.contacts (
 ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS addresses JSONB;
 ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS organizations JSONB;
 ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS birthdays JSONB;
-ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false NOT NULL;
 DO $$ BEGIN
   IF NOT EXISTS (
       SELECT 1 FROM pg_constraint 
@@ -70,7 +69,6 @@ CREATE TABLE IF NOT EXISTS public.files (
 );
 ALTER TABLE public.files ADD COLUMN IF NOT EXISTS permissions JSONB;
 ALTER TABLE public.files ADD COLUMN IF NOT EXISTS last_modifying_user TEXT;
-ALTER TABLE public.files ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false NOT NULL;
 DO $$ BEGIN
   IF NOT EXISTS (
       SELECT 1 FROM pg_constraint 
@@ -110,7 +108,6 @@ ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS attendees JSONB;
 ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS status TEXT;
 ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS creator_email TEXT;
 ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS is_all_day BOOLEAN DEFAULT false;
-ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false NOT NULL;
 DO $$ BEGIN
   IF NOT EXISTS (
       SELECT 1 FROM pg_constraint 
@@ -135,7 +132,6 @@ ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT
 ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
 ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS parent_task_id TEXT;
-ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false NOT NULL;
 DO $$ BEGIN
   IF NOT EXISTS (
       SELECT 1 FROM pg_constraint 
@@ -170,7 +166,6 @@ ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAUL
 ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS full_body TEXT;
 ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS attachments_metadata JSONB;
-ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false NOT NULL;
 DO $$ BEGIN
   IF NOT EXISTS (
       SELECT 1 FROM pg_constraint 

@@ -54,41 +54,46 @@ export class SupabaseService {
         return this.client.auth.onAuthStateChange(callback);
     }
     
-    // --- Data Sync (New logic with Soft Deletes) ---
+    // --- Data Sync (New logic with Hard Deletes) ---
 
     async #genericSync(tableName, googleItems, formatterFn, idExtractorFn = item => item.id) {
         const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
 
+        // 1. Get all relevant source IDs from the Google API response.
         const googleSourceIds = new Set(googleItems.map(idExtractorFn));
 
-        const { data: existingItems, error: fetchError } = await this.client
+        // 2. Fetch ALL corresponding source IDs from Supabase for the current user.
+        // This query is now guaranteed not to reference 'is_deleted'.
+        const { data: existingDbItems, error: fetchError } = await this.client
             .from(tableName)
             .select('source_id')
-            .eq('user_id', user.id)
-            .eq('is_deleted', false);
+            .eq('user_id', user.id);
 
         if (fetchError) {
             console.error(`Error fetching existing items from ${tableName}:`, fetchError);
             throw fetchError;
         }
-        const supabaseSourceIds = new Set(existingItems.map(item => item.source_id));
+        const supabaseSourceIds = new Set(existingDbItems.map(item => item.source_id));
 
+        // 3. Determine which items need to be deleted from Supabase (hard delete).
         const deletedSourceIds = [...supabaseSourceIds].filter(id => !googleSourceIds.has(id));
 
+        // 4. Perform the hard delete if necessary.
         if (deletedSourceIds.length > 0) {
             const { error: deleteError } = await this.client
                 .from(tableName)
-                .update({ is_deleted: true, updated_at: new Date().toISOString() })
+                .delete()
                 .eq('user_id', user.id)
                 .in('source_id', deletedSourceIds);
 
             if (deleteError) {
-                console.error(`Error marking items in ${tableName} as deleted:`, deleteError);
+                console.error(`Error deleting items from ${tableName}:`, deleteError);
                 throw deleteError;
             }
         }
 
+        // 5. Upsert all items from Google. This will insert new and update existing items.
         if (googleItems.length > 0) {
             const formattedItems = googleItems.map(item => formatterFn(item, user.id));
             const { error: upsertError } = await this.client
@@ -116,7 +121,6 @@ export class SupabaseService {
                 addresses: c.addresses,
                 organizations: c.organizations,
                 birthdays: c.birthdays,
-                is_deleted: false,
             }),
             c => c.resourceName.split('/')[1]
         );
@@ -140,7 +144,6 @@ export class SupabaseService {
                 owner: f.owners?.[0]?.displayName || null,
                 permissions: f.permissions,
                 last_modifying_user: f.lastModifyingUser?.displayName,
-                is_deleted: false,
             })
         );
     }
@@ -162,7 +165,6 @@ export class SupabaseService {
                 status: e.status,
                 creator_email: e.creator?.email,
                 is_all_day: !!e.start?.date && !e.start?.dateTime,
-                is_deleted: e.status === 'cancelled',
             })
         );
     }
@@ -180,7 +182,6 @@ export class SupabaseService {
                 status: t.status,
                 completed_at: t.completed,
                 parent_task_id: t.parent,
-                is_deleted: false,
             })
         );
     }
@@ -198,7 +199,6 @@ export class SupabaseService {
                 received_at: parseGmailDate(e.date),
                 full_body: e.body,
                 attachments_metadata: e.attachments,
-                is_deleted: false,
             })
         );
     }
@@ -209,7 +209,6 @@ export class SupabaseService {
         let query = this.client
             .from('calendar_events')
             .select('*')
-            .eq('is_deleted', false)
             .order('start_time', { ascending: true })
             .gte('start_time', time_min || new Date().toISOString())
             .limit(max_results);
@@ -237,7 +236,6 @@ export class SupabaseService {
         const { data, error } = await this.client
             .from('tasks')
             .select('*')
-            .eq('is_deleted', false)
             .neq('status', 'completed')
             .order('due_date', { ascending: true, nullsFirst: true })
             .limit(max_results);
@@ -257,7 +255,6 @@ export class SupabaseService {
         const { data, error } = await this.client
             .from('contacts')
             .select('*')
-            .eq('is_deleted', false)
             .or(`display_name.ilike.%${query}%,email.ilike.%${query}%`) // Case-insensitive search
             .limit(10);
             
@@ -269,7 +266,6 @@ export class SupabaseService {
          const { data, error } = await this.client
             .from('files')
             .select('*')
-            .eq('is_deleted', false)
             .ilike('name', `%${query}%`) // Case-insensitive search
             .order('modified_time', { ascending: false, nullsFirst: false })
             .limit(10);
@@ -282,7 +278,6 @@ export class SupabaseService {
         const { data, error } = await this.client
             .from('files')
             .select('*')
-            .eq('is_deleted', false)
             .order('modified_time', { ascending: false, nullsFirst: false })
             .limit(max_results);
 
