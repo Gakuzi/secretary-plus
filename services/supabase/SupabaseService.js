@@ -28,6 +28,7 @@ export class SupabaseService {
         }
         this.client = supabase.createClient(supabaseUrl, supabaseAnonKey);
         this.url = supabaseUrl;
+        this.anonKey = supabaseAnonKey;
     }
 
     getId() {
@@ -40,7 +41,8 @@ export class SupabaseService {
             provider: 'google',
             options: {
                 scopes: GOOGLE_SCOPES,
-                redirectTo: window.location.origin + window.location.pathname,
+                // redirectTo is removed. Supabase JS will automatically use the current URL,
+                // which is more robust for mobile authentication flows and SPAs.
             },
         });
         if (error) throw error;
@@ -450,12 +452,12 @@ export class SupabaseService {
         if (!functionUrl) throw new Error("URL функции не настроен.");
         if (!adminToken) throw new Error("Токен администратора не предоставлен.");
         
-        const response = await fetch(`${functionUrl}/sql`, { // Endpoint might be just /sql as in example
+        const response = await fetch(functionUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${adminToken}`, // Standard bearer token auth
-                'x-admin-token': adminToken, // Custom header as per example
+                'Authorization': `Bearer ${adminToken}`,
+                'apikey': this.anonKey,
             },
             body: JSON.stringify({ sql: sql }),
         });
@@ -464,7 +466,7 @@ export class SupabaseService {
 
         if (!response.ok) {
             console.error("Edge function error response:", result);
-            const errorMessage = result.error || `Edge function failed with status ${response.status}`;
+            const errorMessage = result.error || result.message || `Edge function failed with status ${response.status}`;
             throw new Error(errorMessage);
         }
 
