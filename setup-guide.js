@@ -3,6 +3,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 document.addEventListener('DOMContentLoaded', () => {
     const wizardSteps = document.querySelectorAll('.wizard-step');
     const navLinks = document.querySelectorAll('#wizard-nav .nav-link');
+    const mobileNavSelect = document.getElementById('mobile-nav-select');
     const { createClient } = window.supabase;
     const SESSION_STORAGE_KEY = 'secretary-plus-setup-keys';
     const PROXY_STORAGE_KEY = 'secretary-plus-setup-proxies';
@@ -83,6 +84,18 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelector('a[href="#final-step"]').innerHTML = '6. Завершение';
             document.getElementById('final-supabase-inputs').style.display = 'block';
         }
+        populateMobileNav(); // Repopulate mobile nav with correct steps
+    };
+    
+    const populateMobileNav = () => {
+        mobileNavSelect.innerHTML = '';
+        navLinks.forEach(link => {
+            if (link.classList.contains('disabled')) return;
+            const option = document.createElement('option');
+            option.value = link.dataset.step;
+            option.textContent = link.textContent;
+            mobileNavSelect.appendChild(option);
+        });
     };
 
     const showStep = (stepIndex) => {
@@ -106,10 +119,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
+        mobileNavSelect.value = stepIndex;
         document.querySelector('main').scrollTo(0, 0);
         currentStep = stepIndex;
         window.location.hash = wizardSteps[currentStep].id;
     };
+    
+    mobileNavSelect.addEventListener('change', (e) => {
+        const stepIndex = parseInt(e.target.value, 10);
+        showStep(stepIndex);
+    });
 
     document.body.addEventListener('click', (e) => {
         const choiceCard = e.target.closest('.choice-card');

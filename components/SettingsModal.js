@@ -104,9 +104,9 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                 <button id="close-settings" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Закрыть настройки">&times;</button>
             </header>
             
-            <main class="flex-1 flex overflow-hidden">
-                <aside class="w-52 border-r border-gray-700 p-4">
-                    <nav class="flex flex-col space-y-2">
+            <main class="flex-1 flex flex-col md:flex-row overflow-hidden">
+                <aside class="w-52 border-r border-gray-700 p-4 hidden md:block">
+                    <nav class="flex flex-col space-y-2" id="desktop-settings-nav">
                         <a href="#connections" class="settings-tab-button active text-left" data-tab="connections">Аккаунт</a>
                         <a href="#proxies" class="settings-tab-button" data-tab="proxies">Прокси</a>
                         <a href="#general" class="settings-tab-button" data-tab="general">Общие</a>
@@ -116,197 +116,204 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                         <a href="#about" class="settings-tab-button" data-tab="about">О приложении</a>
                     </nav>
                 </aside>
-                <div class="flex-1 p-6 overflow-y-auto" id="settings-tabs-content">
-                    
-                    <!-- Connections/Account Tab -->
-                    <div id="tab-connections" class="settings-tab-content space-y-6">
+                <div class="flex-1 p-4 sm:p-6 overflow-y-auto">
+                    <div class="md:hidden mb-4">
+                        <label for="mobile-settings-nav" class="sr-only">Раздел настроек</label>
+                        <select id="mobile-settings-nav" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+
+                    <div id="settings-tabs-content">
+                        <!-- Connections/Account Tab -->
+                        <div id="tab-connections" class="settings-tab-content space-y-6">
+                            
+                            <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                                 <h3 class="text-lg font-semibold text-gray-200">Подключение аккаунта Google</h3>
+                                 <p class="text-sm text-gray-400 mt-1 mb-4">
+                                    Для работы ассистента необходимо войти в аккаунт Google. Все ваши настройки будут безопасно сохранены в облаке при использовании Supabase.
+                                 </p>
+                                 <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        ${authState.isGoogleConnected && authState.userProfile ? `
+                                            <img src="${authState.userProfile.imageUrl}" alt="${authState.userProfile.name}" class="w-10 h-10 rounded-full">
+                                            <div>
+                                                <p class="font-semibold">${authState.userProfile.name}</p>
+                                                <p class="text-xs text-gray-400">${authState.userProfile.email}</p>
+                                            </div>
+                                        ` : `
+                                            <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">?</div>
+                                            <div>
+                                                <p class="font-semibold">Требуется вход</p>
+                                                <p class="text-xs text-gray-400">Войдите, чтобы начать</p>
+                                            </div>
+                                        `}
+                                    </div>
+                                    <div>
+                                    ${authState.isGoogleConnected 
+                                        ? `<button id="modal-logout-button" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md transition-colors text-sm font-semibold">Выйти</button>`
+                                        : `<button id="modal-login-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors text-sm font-semibold">Войти через Google</button>`
+                                    }
+                                    </div>
+                                </div>
+                            </div>
+
+                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                                <h3 class="text-lg font-semibold text-gray-200">Режим подключения</h3>
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <h4 class="font-semibold text-gray-200">Использовать Supabase (Рекомендуется)</h4>
+                                        <p class="text-sm text-gray-400">Включает синхронизацию данных, быстрый поиск и управление прокси.</p>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="supabase-enabled-toggle" ${currentSettings.isSupabaseEnabled ? 'checked' : ''}>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <div id="supabase-credentials-block" style="display: ${currentSettings.isSupabaseEnabled ? 'block' : 'none'};">
+                                    <div class="space-y-4 mt-4 border-t border-gray-700 pt-4">
+                                         <div class="space-y-2">
+                                            <label for="supabase-url" class="block text-sm font-medium text-gray-300">Supabase Project URL</label>
+                                            <input type="text" id="supabase-url" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="https://xyz.supabase.co" value="${currentSettings.supabaseUrl || ''}">
+                                        </div>
+                                         <div class="space-y-2">
+                                            <label for="supabase-anon-key" class="block text-sm font-medium text-gray-300">Supabase Anon Key</label>
+                                            <input type="password" id="supabase-anon-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.supabaseAnonKey || ''}">
+                                        </div>
+                                        <p class="text-xs text-gray-400 mt-1"><a href="./setup-guide.html#supabase-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как получить эти ключи?</a></p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="direct-google-settings-block" class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4" style="display: none;">
+                                <h3 class="text-lg font-semibold text-gray-200">Резервное подключение</h3>
+                                <p class="text-sm text-gray-400">Эти настройки используются, если Supabase отключен или недоступен. Синхронизация данных в этом режиме не работает.</p>
+                                <div class="space-y-2 mt-2">
+                                    <label for="google-client-id" class="block text-sm font-medium text-gray-300">Google Client ID</label>
+                                    <input type="text" id="google-client-id" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Ваш Client ID из Google Cloud" value="${currentSettings.googleClientId || ''}">
+                                    <p class="text-xs text-gray-400 mt-1"><a href="./setup-guide.html#google-cloud-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как получить Client ID?</a></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Proxies Tab -->
+                        <div id="tab-proxies" class="settings-tab-content hidden space-y-6">
+                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-200">Использовать прокси-сервер</h3>
+                                        <p class="text-sm text-gray-400">Перенаправлять запросы к Gemini через прокси для обхода ограничений.</p>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="use-proxy-toggle" ${currentSettings.useProxy ? 'checked' : ''}>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-200">Список прокси-серверов</h3>
+                                        <p class="text-sm text-gray-400">Добавьте свои прокси. Будет использован самый приоритетный рабочий сервер.</p>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button id="find-proxies-ai-button" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm font-semibold whitespace-nowrap">Найти ИИ</button>
+                                        <button id="add-proxy-button" class="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-sm font-semibold whitespace-nowrap">Добавить</button>
+                                    </div>
+                                </div>
+                                <div id="proxy-list-container" class="space-y-2">
+                                    <!-- Proxy list will be rendered here -->
+                                </div>
+                                 <div class="mt-4 pt-4 border-t border-gray-700">
+                                    <button id="cleanup-proxies-button" class="w-full px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold">Проверить все и удалить нерабочие</button>
+                                </div>
+                            </div>
+                             <div id="proxy-editor-container"></div>
+                        </div>
+
+                        <!-- General Tab -->
+                        <div id="tab-general" class="settings-tab-content hidden space-y-6">
+                            <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                                 <h3 class="text-lg font-semibold text-gray-200">Часовой пояс</h3>
+                                 <p class="text-sm text-gray-400 mt-1 mb-4">Выберите ваш основной часовой пояс. Ассистент будет использовать его для корректной интерпретации времени.</p>
+                                 <div class="flex items-center justify-between">
+                                    <label for="timezone-select" class="font-medium text-gray-300">Ваш часовой пояс</label>
+                                    <select id="timezone-select" class="bg-gray-700 border border-gray-600 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-sm w-full max-w-xs">
+                                        <!-- Options populated by JS -->
+                                    </select>
+                                 </div>
+                            </div>
+                            <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                                 <div class="flex items-center justify-between">
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-200">Проактивные уведомления</h3>
+                                        <p class="text-sm text-gray-400">Ассистент будет проверять почту и сообщать о новых письмах.</p>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="email-polling-toggle" ${currentSettings.enableEmailPolling ? 'checked' : ''}>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Service Map Tab -->
+                        <div id="tab-service-map" class="settings-tab-content hidden">
+                            <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                                 <h3 class="text-lg font-semibold text-gray-200">Назначение сервисов</h3>
+                                 <p class="text-sm text-gray-400 mt-1 mb-4">Выберите, какой сервис использовать для каждой функции. Ассистент будет следовать этим настройкам.</p>
+                                 <div id="service-map-container" class="space-y-2">
+                                    ${createServiceMappingUI(currentSettings.serviceMap)}
+                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- API Keys Tab -->
+                        <div id="tab-api-keys" class="settings-tab-content space-y-6 hidden">
+                             <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                                <h3 class="text-lg font-semibold text-gray-200">Ключ Gemini API</h3>
+                                <div class="space-y-2">
+                                    <label for="gemini-api-key" class="block text-sm font-medium text-gray-300">Gemini API Key</label>
+                                    <input type="password" id="gemini-api-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.geminiApiKey || ''}">
+                                </div>
+                                <p class="text-xs text-gray-400 mt-1">Ключ хранится локально и синхронизируется с облаком. <a href="./setup-guide.html#gemini-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как получить ключ?</a></p>
+                            </div>
+                        </div>
+
+                        <!-- Sync Tab -->
+                        <div id="tab-sync" class="settings-tab-content hidden space-y-6">
+                            <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-200">Автоматическая синхронизация</h3>
+                                        <p class="text-sm text-gray-400">Синхронизировать данные в фоновом режиме (каждые 15 минут).</p>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="auto-sync-enabled-toggle" ${currentSettings.enableAutoSync ? 'checked' : ''}>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                                <h3 class="text-lg font-semibold text-gray-200">Статус синхронизации</h3>
+                                <p class="text-sm text-gray-400">Данные из Google кэшируются для быстрого доступа ассистента.</p>
+                                <div id="sync-status-list" class="text-sm border-t border-gray-700/50 pt-3 mt-2">
+                                    <!-- Status items will be rendered here by JS -->
+                                </div>
+                                <div class="pt-2">
+                                    <button id="force-sync-button" ${!authState.isGoogleConnected || isSyncing ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">
+                                        ${isSyncing ? 'Синхронизация...' : 'Синхронизировать сейчас'}
+                                    </button>
+                                </div>
+                                ${!authState.isGoogleConnected ? '<p class="text-xs text-yellow-400 text-center">Для синхронизации необходимо войти в аккаунт Google.</p>' : ''}
+                            </div>
+                        </div>
                         
-                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                             <h3 class="text-lg font-semibold text-gray-200">Подключение аккаунта Google</h3>
-                             <p class="text-sm text-gray-400 mt-1 mb-4">
-                                Для работы ассистента необходимо войти в аккаунт Google. Все ваши настройки будут безопасно сохранены в облаке при использовании Supabase.
-                             </p>
-                             <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-3">
-                                    ${authState.isGoogleConnected && authState.userProfile ? `
-                                        <img src="${authState.userProfile.imageUrl}" alt="${authState.userProfile.name}" class="w-10 h-10 rounded-full">
-                                        <div>
-                                            <p class="font-semibold">${authState.userProfile.name}</p>
-                                            <p class="text-xs text-gray-400">${authState.userProfile.email}</p>
-                                        </div>
-                                    ` : `
-                                        <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">?</div>
-                                        <div>
-                                            <p class="font-semibold">Требуется вход</p>
-                                            <p class="text-xs text-gray-400">Войдите, чтобы начать</p>
-                                        </div>
-                                    `}
-                                </div>
-                                <div>
-                                ${authState.isGoogleConnected 
-                                    ? `<button id="modal-logout-button" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md transition-colors text-sm font-semibold">Выйти</button>`
-                                    : `<button id="modal-login-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors text-sm font-semibold">Войти через Google</button>`
-                                }
-                                </div>
-                            </div>
-                        </div>
-
-                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                            <h3 class="text-lg font-semibold text-gray-200">Режим подключения</h3>
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="font-semibold text-gray-200">Использовать Supabase (Рекомендуется)</h4>
-                                    <p class="text-sm text-gray-400">Включает синхронизацию данных, быстрый поиск и управление прокси.</p>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="supabase-enabled-toggle" ${currentSettings.isSupabaseEnabled ? 'checked' : ''}>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                            <div id="supabase-credentials-block" style="display: ${currentSettings.isSupabaseEnabled ? 'block' : 'none'};">
-                                <div class="space-y-4 mt-4 border-t border-gray-700 pt-4">
-                                     <div class="space-y-2">
-                                        <label for="supabase-url" class="block text-sm font-medium text-gray-300">Supabase Project URL</label>
-                                        <input type="text" id="supabase-url" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="https://xyz.supabase.co" value="${currentSettings.supabaseUrl || ''}">
-                                    </div>
-                                     <div class="space-y-2">
-                                        <label for="supabase-anon-key" class="block text-sm font-medium text-gray-300">Supabase Anon Key</label>
-                                        <input type="password" id="supabase-anon-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.supabaseAnonKey || ''}">
-                                    </div>
-                                    <p class="text-xs text-gray-400 mt-1"><a href="./setup-guide.html#supabase-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как получить эти ключи?</a></p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="direct-google-settings-block" class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4" style="display: none;">
-                            <h3 class="text-lg font-semibold text-gray-200">Резервное подключение</h3>
-                            <p class="text-sm text-gray-400">Эти настройки используются, если Supabase отключен или недоступен. Синхронизация данных в этом режиме не работает.</p>
-                            <div class="space-y-2 mt-2">
-                                <label for="google-client-id" class="block text-sm font-medium text-gray-300">Google Client ID</label>
-                                <input type="text" id="google-client-id" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Ваш Client ID из Google Cloud" value="${currentSettings.googleClientId || ''}">
-                                <p class="text-xs text-gray-400 mt-1"><a href="./setup-guide.html#google-cloud-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как получить Client ID?</a></p>
-                            </div>
+                        <!-- About Tab -->
+                        <div id="tab-about" class="settings-tab-content hidden space-y-6">
+                            <div class="flex items-center justify-center p-8 text-gray-400">Загрузка информации о приложении...</div>
                         </div>
                     </div>
-
-                    <!-- Proxies Tab -->
-                    <div id="tab-proxies" class="settings-tab-content hidden space-y-6">
-                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-gray-200">Использовать прокси-сервер</h3>
-                                    <p class="text-sm text-gray-400">Перенаправлять запросы к Gemini через прокси для обхода ограничений.</p>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="use-proxy-toggle" ${currentSettings.useProxy ? 'checked' : ''}>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                        </div>
-                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                            <div class="flex items-center justify-between mb-4">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-gray-200">Список прокси-серверов</h3>
-                                    <p class="text-sm text-gray-400">Добавьте свои прокси. Будет использован самый приоритетный рабочий сервер.</p>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button id="find-proxies-ai-button" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm font-semibold whitespace-nowrap">Найти ИИ</button>
-                                    <button id="add-proxy-button" class="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-sm font-semibold whitespace-nowrap">Добавить</button>
-                                </div>
-                            </div>
-                            <div id="proxy-list-container" class="space-y-2">
-                                <!-- Proxy list will be rendered here -->
-                            </div>
-                             <div class="mt-4 pt-4 border-t border-gray-700">
-                                <button id="cleanup-proxies-button" class="w-full px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold">Проверить все и удалить нерабочие</button>
-                            </div>
-                        </div>
-                         <div id="proxy-editor-container"></div>
-                    </div>
-
-                    <!-- General Tab -->
-                    <div id="tab-general" class="settings-tab-content hidden space-y-6">
-                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                             <h3 class="text-lg font-semibold text-gray-200">Часовой пояс</h3>
-                             <p class="text-sm text-gray-400 mt-1 mb-4">Выберите ваш основной часовой пояс. Ассистент будет использовать его для корректной интерпретации времени.</p>
-                             <div class="flex items-center justify-between">
-                                <label for="timezone-select" class="font-medium text-gray-300">Ваш часовой пояс</label>
-                                <select id="timezone-select" class="bg-gray-700 border border-gray-600 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-sm w-full max-w-xs">
-                                    <!-- Options populated by JS -->
-                                </select>
-                             </div>
-                        </div>
-                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                             <div class="flex items-center justify-between">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-gray-200">Проактивные уведомления</h3>
-                                    <p class="text-sm text-gray-400">Ассистент будет проверять почту и сообщать о новых письмах.</p>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="email-polling-toggle" ${currentSettings.enableEmailPolling ? 'checked' : ''}>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Service Map Tab -->
-                    <div id="tab-service-map" class="settings-tab-content hidden">
-                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                             <h3 class="text-lg font-semibold text-gray-200">Назначение сервисов</h3>
-                             <p class="text-sm text-gray-400 mt-1 mb-4">Выберите, какой сервис использовать для каждой функции. Ассистент будет следовать этим настройкам.</p>
-                             <div id="service-map-container" class="space-y-2">
-                                ${createServiceMappingUI(currentSettings.serviceMap)}
-                             </div>
-                        </div>
-                    </div>
-
-                    <!-- API Keys Tab -->
-                    <div id="tab-api-keys" class="settings-tab-content space-y-6 hidden">
-                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                            <h3 class="text-lg font-semibold text-gray-200">Ключ Gemini API</h3>
-                            <div class="space-y-2">
-                                <label for="gemini-api-key" class="block text-sm font-medium text-gray-300">Gemini API Key</label>
-                                <input type="password" id="gemini-api-key" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${currentSettings.geminiApiKey || ''}">
-                            </div>
-                            <p class="text-xs text-gray-400 mt-1">Ключ хранится локально и синхронизируется с облаком. <a href="./setup-guide.html#gemini-setup" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Как получить ключ?</a></p>
-                        </div>
-                    </div>
-
-                    <!-- Sync Tab -->
-                    <div id="tab-sync" class="settings-tab-content hidden space-y-6">
-                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-gray-200">Автоматическая синхронизация</h3>
-                                    <p class="text-sm text-gray-400">Синхронизировать данные в фоновом режиме (каждые 15 минут).</p>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="auto-sync-enabled-toggle" ${currentSettings.enableAutoSync ? 'checked' : ''}>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
-                            <h3 class="text-lg font-semibold text-gray-200">Статус синхронизации</h3>
-                            <p class="text-sm text-gray-400">Данные из Google кэшируются для быстрого доступа ассистента.</p>
-                            <div id="sync-status-list" class="text-sm border-t border-gray-700/50 pt-3 mt-2">
-                                <!-- Status items will be rendered here by JS -->
-                            </div>
-                            <div class="pt-2">
-                                <button id="force-sync-button" ${!authState.isGoogleConnected || isSyncing ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md font-semibold transition-colors">
-                                    ${isSyncing ? 'Синхронизация...' : 'Синхронизировать сейчас'}
-                                </button>
-                            </div>
-                            ${!authState.isGoogleConnected ? '<p class="text-xs text-yellow-400 text-center">Для синхронизации необходимо войти в аккаунт Google.</p>' : ''}
-                        </div>
-                    </div>
-                    
-                    <!-- About Tab -->
-                    <div id="tab-about" class="settings-tab-content hidden space-y-6">
-                        <div class="flex items-center justify-center p-8 text-gray-400">Загрузка информации о приложении...</div>
-                    </div>
-
                 </div>
             </main>
 
@@ -410,21 +417,40 @@ export function createSettingsModal(currentSettings, authState, handlers) {
         }
     });
 
-    // Main tab switching logic
+    // --- Main tab switching logic (for both desktop and mobile) ---
     const tabButtons = modalOverlay.querySelectorAll('.settings-tab-button');
     const tabContents = modalOverlay.querySelectorAll('.settings-tab-content');
+    const mobileNav = modalOverlay.querySelector('#mobile-settings-nav');
+    
+    // Populate mobile nav
     tabButtons.forEach(button => {
-        button.addEventListener('click', (e) => {
-            e.preventDefault();
-            const tabId = e.target.dataset.tab;
+        const option = document.createElement('option');
+        option.value = button.dataset.tab;
+        option.textContent = button.textContent;
+        mobileNav.appendChild(option);
+    });
 
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            e.target.classList.add('active');
-
-            tabContents.forEach(content => {
-                content.classList.toggle('hidden', content.id !== `tab-${tabId}`);
-            });
+    const switchTab = (tabId) => {
+        // Update button states
+        tabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
+        // Update select value
+        mobileNav.value = tabId;
+        // Show/hide content
+        tabContents.forEach(content => {
+            content.classList.toggle('hidden', content.id !== `tab-${tabId}`);
         });
+    };
+
+    modalOverlay.querySelector('#desktop-settings-nav').addEventListener('click', (e) => {
+        e.preventDefault();
+        const button = e.target.closest('.settings-tab-button');
+        if (button) {
+            switchTab(button.dataset.tab);
+        }
+    });
+    
+    mobileNav.addEventListener('change', (e) => {
+        switchTab(e.target.value);
     });
     
     // Populate Timezone selector
@@ -447,12 +473,16 @@ export function createSettingsModal(currentSettings, authState, handlers) {
     const directGoogleBlock = modalOverlay.querySelector('#direct-google-settings-block');
     const syncTabButton = modalOverlay.querySelector('a[href="#sync"]');
     const proxyTabButton = modalOverlay.querySelector('a[href="#proxies"]');
+    const syncTabOption = mobileNav.querySelector('option[value="sync"]');
+    const proxyTabOption = mobileNav.querySelector('option[value="proxies"]');
     
     const updateConnectionUI = (isSupabase) => {
         directGoogleBlock.style.display = isSupabase ? 'none' : 'block';
         supabaseCredentialsBlock.style.display = isSupabase ? 'block' : 'none';
         if (syncTabButton) syncTabButton.style.display = isSupabase ? 'block' : 'none';
         if (proxyTabButton) proxyTabButton.style.display = isSupabase ? 'block' : 'none';
+        if (syncTabOption) syncTabOption.style.display = isSupabase ? '' : 'none';
+        if (proxyTabOption) proxyTabOption.style.display = isSupabase ? '' : 'none';
     };
     updateConnectionUI(currentSettings.isSupabaseEnabled);
     supabaseToggle.addEventListener('change', (e) => {
