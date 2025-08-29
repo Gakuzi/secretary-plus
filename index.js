@@ -4,6 +4,8 @@
 
 
 
+
+
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
@@ -607,59 +609,54 @@ async function main() {
     const isAuthCallback = window.location.hash.includes('access_token');
     const settings = getSettings();
 
-    // If we are returning from a Supabase OAuth flow, we must handle it first.
+    // If we are returning from a Supabase OAuth flow, handle it before starting the app.
     if (isAuthCallback && settings.isSupabaseEnabled) {
-        // Display a simple loading message to the user.
+        // Display a simple loading message while the session is processed.
         document.body.innerHTML = `
             <div class="flex items-center justify-center h-screen bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300">
                 Завершение входа...
             </div>`;
 
-        // Initialize Supabase early to handle the auth event.
+        // Initialize Supabase early to handle the auth event from the URL hash.
         const tempSupabaseService = new SupabaseService(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
         
-        // Wait for the SIGNED_IN event from Supabase, which confirms the session is created from the URL hash.
-        await new Promise(resolve => {
+        // Wait for the SIGNED_IN event, which confirms Supabase has created the session.
+        await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error("Authentication timed out. Please try again."));
+            }, 15000); // 15-second timeout for safety.
+
             const { data: { subscription } } = tempSupabaseService.onAuthStateChange((event, session) => {
                 if (event === 'SIGNED_IN' && session) {
-                    subscription.unsubscribe(); // Stop listening after we're signed in.
+                    clearTimeout(timeout);
+                    subscription.unsubscribe(); // Stop listening after success.
                     resolve(session);
                 }
             });
+        }).catch(error => {
+            console.error("OAuth Callback Error:", error);
+            // Show error to the user if something goes wrong
+            document.body.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-screen bg-slate-100 dark:bg-slate-900 text-red-500 p-4 text-center">
+                    <p class="font-bold">Ошибка аутентификации</p>
+                    <p class="mt-2">${error.message}</p>
+                    <a href="${window.location.pathname}" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded">Попробовать снова</a>
+                </div>`;
+            // Stop further execution
+            return;
         });
 
-        // Clean the URL hash to prevent reprocessing.
+        // Clean the URL hash and reload the page.
+        // The reload ensures a clean application start with the new session stored in localStorage.
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
-        
-        // Now that authentication is complete, reload the original body and start the full app.
-        document.body.className = "font-sans bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-100 h-screen overflow-hidden flex flex-col";
-        document.body.innerHTML = `
-            <div id="app" class="flex flex-col h-full">
-                <header class="flex justify-between items-center p-2 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0 bg-white dark:bg-slate-800 shadow-sm">
-                    <a href="https://gakuzi.github.io/secretary-plus/" target="_blank" rel="noopener noreferrer" class="flex items-center gap-3" aria-label="Домашняя страница Секретарь+">
-                        <div id="header-logo-container" class="w-10 h-10"></div>
-                        <h1 class="text-xl font-bold text-slate-800 dark:text-slate-100">Секретарь+</h1>
-                    </a>
-                    <div class="flex items-center gap-2">
-                        <div id="auth-container" class="relative"></div>
-                        <button id="stats-button" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Статистика"></button>
-                        <button id="help-button" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Помощь"></button>
-                        <button id="settings-button" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Настройки"></button>
-                    </div>
-                </header>
-                <main id="main-content" class="flex-1 overflow-hidden relative"></main>
-            </div>
-            <div id="setup-wizard-container"></div>
-            <div id="modal-container"></div>
-            <div id="camera-view-container" class="hidden"></div>
-        `;
-        await startFullApp();
+        window.location.reload();
 
     } else {
         // This is a normal app start (not an auth callback).
         await startFullApp();
     }
 }
+
 
 main().catch(error => {
     console.error("An unhandled error occurred during app startup:", error);
