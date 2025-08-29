@@ -10,6 +10,7 @@ const defaultSettings = {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     enableEmailPolling: true, // For proactive email notifications
     enableAutoSync: true, // For background data synchronization
+    useProxy: true, // Master switch for using a proxy for Gemini
     serviceMap: {
         calendar: 'google',
         tasks: 'google',
@@ -46,6 +47,7 @@ export function saveSettings(settings) {
             timezone: settings.timezone,
             enableEmailPolling: settings.enableEmailPolling,
             enableAutoSync: settings.enableAutoSync,
+            useProxy: settings.useProxy,
             serviceMap: settings.serviceMap,
         };
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));

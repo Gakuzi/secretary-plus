@@ -191,11 +191,23 @@ export function createSettingsModal(currentSettings, authState, handlers) {
 
                     <!-- Proxies Tab -->
                     <div id="tab-proxies" class="settings-tab-content hidden space-y-6">
+                         <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-gray-200">Использовать прокси-сервер</h3>
+                                    <p class="text-sm text-gray-400">Перенаправлять запросы к Gemini через прокси для обхода ограничений.</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="use-proxy-toggle" ${currentSettings.useProxy ? 'checked' : ''}>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
                          <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
                             <div class="flex items-center justify-between mb-4">
                                 <div>
-                                    <h3 class="text-lg font-semibold text-gray-200">Управление прокси-серверами</h3>
-                                    <p class="text-sm text-gray-400">Добавьте свои прокси для обхода ограничений. Будет использован самый приоритетный рабочий сервер.</p>
+                                    <h3 class="text-lg font-semibold text-gray-200">Список прокси-серверов</h3>
+                                    <p class="text-sm text-gray-400">Добавьте свои прокси. Будет использован самый приоритетный рабочий сервер.</p>
                                 </div>
                                 <button id="add-proxy-button" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md text-sm font-semibold whitespace-nowrap">Добавить прокси</button>
                             </div>
@@ -302,7 +314,6 @@ export function createSettingsModal(currentSettings, authState, handlers) {
     
     modalOverlay.querySelector('#close-settings').addEventListener('click', onClose);
     modalOverlay.querySelector('#save-settings').addEventListener('click', () => {
-        // More robust way of getting settings to prevent crashes if an element is missing
         const newSettings = {
             geminiApiKey: modalOverlay.querySelector('#gemini-api-key')?.value.trim() ?? '',
             googleClientId: modalOverlay.querySelector('#google-client-id')?.value.trim() ?? '',
@@ -312,6 +323,7 @@ export function createSettingsModal(currentSettings, authState, handlers) {
             timezone: modalOverlay.querySelector('#timezone-select')?.value ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
             enableEmailPolling: modalOverlay.querySelector('#email-polling-toggle')?.checked ?? true,
             enableAutoSync: modalOverlay.querySelector('#auto-sync-enabled-toggle')?.checked ?? true,
+            useProxy: modalOverlay.querySelector('#use-proxy-toggle')?.checked ?? true,
             serviceMap: {
                 calendar: modalOverlay.querySelector('#calendar-provider-select')?.value ?? 'google',
                 tasks: modalOverlay.querySelector('#tasks-provider-select')?.value ?? 'google',
@@ -385,8 +397,6 @@ export function createSettingsModal(currentSettings, authState, handlers) {
                 errorMessage,
                 context: errorContext,
                 apiKey,
-                // We don't know which proxy to use for analysis, so we don't pass one.
-                // It will use the default Gemini endpoint.
                 proxyUrl: null
             });
 
@@ -527,16 +537,22 @@ export function createSettingsModal(currentSettings, authState, handlers) {
 
             return `
                 <div class="bg-gray-900/50 p-3 rounded-lg flex items-center gap-3">
-                    ${statusIndicator}
                     <div class="flex-1 min-w-0">
-                        <p class="font-semibold truncate" title="${proxy.alias || proxy.url}">${proxy.alias || proxy.url}</p>
-                        <p class="text-xs text-gray-400">
+                         <div class="flex items-center gap-3">
+                            ${statusIndicator}
+                            <p class="font-semibold truncate" title="${proxy.alias || proxy.url}">${proxy.alias || proxy.url}</p>
+                        </div>
+                        <p class="text-xs text-gray-400 pl-6">
                             Приоритет: ${proxy.priority} | 
                             Скорость: ${proxy.last_speed_ms ? `${proxy.last_speed_ms} мс` : 'N/A'} | 
                             Локация: ${proxy.geolocation || 'Не указана'}
                         </p>
                     </div>
-                    <div class="flex items-center gap-1 flex-shrink-0">
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <label class="toggle-switch-sm">
+                            <input type="checkbox" data-action="toggle-proxy" data-id="${proxy.id}" ${proxy.is_active ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
                          <button data-action="test-proxy" data-id="${proxy.id}" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 rounded-md">Тест</button>
                          <button data-action="edit-proxy" data-id="${proxy.id}" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded-md">Изм.</button>
                          <button data-action="delete-proxy" data-id="${proxy.id}" class="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 rounded-md">Удл.</button>
@@ -614,6 +630,14 @@ export function createSettingsModal(currentSettings, authState, handlers) {
         addProxyButton.addEventListener('click', () => showProxyEditor());
         proxyListContainer.addEventListener('click', (e) => {
             const button = e.target.closest('button[data-action]');
+            const toggle = e.target.closest('input[data-action="toggle-proxy"]');
+
+            if (toggle) {
+                const id = toggle.dataset.id;
+                onProxyUpdate(id, { is_active: toggle.checked });
+                return;
+            }
+
             if (!button) return;
             const id = button.dataset.id;
             const proxy = authState.proxies.find(p => p.id === id);

@@ -164,7 +164,7 @@ if (!window.isSecretaryPlusAppInitialized) {
         state.isSyncing = true;
         // Re-render the settings modal if it's open to show loading state
         if (document.getElementById('settings-content')) {
-            showSettings();
+            showSettings('sync');
         }
 
         for (const task of syncTasks) {
@@ -182,14 +182,14 @@ if (!window.isSecretaryPlusAppInitialized) {
             saveSyncStatus(state.syncStatus);
             // Re-render modal to update status line by line
             if (document.getElementById('settings-content')) {
-                showSettings();
+                showSettings('sync');
             }
         }
 
         state.isSyncing = false;
         console.log("Background sync finished.");
         if (document.getElementById('settings-content')) {
-            showSettings();
+            showSettings('sync');
         }
     }
 
@@ -502,7 +502,7 @@ if (!window.isSecretaryPlusAppInitialized) {
                 isGoogleConnected: state.isGoogleConnected,
                 image,
                 apiKey: state.settings.geminiApiKey,
-                proxyUrl: findBestProxy(), // Use the new priority logic
+                proxyUrl: state.settings.useProxy ? findBestProxy() : null,
             });
 
             if (response.functionCallName) {
@@ -580,6 +580,9 @@ if (!window.isSecretaryPlusAppInitialized) {
         let promptToSend = '';
 
         switch (action) {
+             case 'open_proxy_settings':
+                showSettings('proxies');
+                return; // Client-side action, no bot call needed
              case 'use_item_context':
                 promptToSend = payload.prompt;
                 break;
@@ -782,7 +785,7 @@ ${payload.body}`;
 
     // --- UI MODALS & VIEWS ---
 
-    function showSettings() {
+    function showSettings(initialTab = 'connections') {
         const modal = createSettingsModal(
             state.settings,
             {
@@ -808,6 +811,11 @@ ${payload.body}`;
         );
         settingsModalContainer.innerHTML = '';
         settingsModalContainer.appendChild(modal);
+        // Programmatically switch to the desired tab
+        const targetTabButton = modal.querySelector(`.settings-tab-button[data-tab="${initialTab}"]`);
+        if (targetTabButton) {
+            targetTabButton.click();
+        }
         settingsModalContainer.classList.remove('hidden');
     }
 
@@ -822,7 +830,7 @@ ${payload.body}`;
         try {
             const newProxy = await supabaseService.addProxy(proxyData);
             state.proxies.push(newProxy);
-            showSettings(); // Re-render modal with new proxy
+            showSettings('proxies'); // Re-render modal with new proxy
         } catch (error) {
             showSystemError(`Не удалось добавить прокси: ${error.message}`);
         }
@@ -834,9 +842,9 @@ ${payload.body}`;
             const updatedProxy = await supabaseService.updateProxy(id, updateData);
             const index = state.proxies.findIndex(p => p.id === id);
             if (index !== -1) {
-                state.proxies[index] = updatedProxy;
+                state.proxies[index] = { ...state.proxies[index], ...updatedProxy };
             }
-            showSettings(); // Re-render modal
+            showSettings('proxies'); // Re-render modal
         } catch (error) {
             showSystemError(`Не удалось обновить прокси: ${error.message}`);
         }
@@ -848,7 +856,7 @@ ${payload.body}`;
         try {
             await supabaseService.deleteProxy(id);
             state.proxies = state.proxies.filter(p => p.id !== id);
-            showSettings(); // Re-render modal
+            showSettings('proxies'); // Re-render modal
         } catch (error) {
             showSystemError(`Не удалось удалить прокси: ${error.message}`);
         }
@@ -863,7 +871,7 @@ ${payload.body}`;
             state.proxies[index].last_status = 'testing';
             state.proxies[index].last_checked_at = new Date().toISOString();
         }
-        showSettings();
+        showSettings('proxies');
 
         const startTime = performance.now();
         const result = await testProxyConnection({ proxyUrl: proxy.url, apiKey: state.settings.geminiApiKey });
@@ -880,6 +888,22 @@ ${payload.body}`;
 
 
     function showHelpModal() {
+        const findBestProxy = () => {
+            if (!state.isSupabaseReady || state.proxies.length === 0 || !state.settings.useProxy) {
+                return null;
+            }
+            const sorted = [...state.proxies]
+                .filter(p => p.is_active)
+                .sort((a, b) => a.priority - b.priority);
+            
+            const ok = sorted.find(p => p.last_status === 'ok');
+            if (ok) return ok.url;
+            
+            const untested = sorted.find(p => p.last_status === 'untested');
+            if (untested) return untested.url;
+            
+            return sorted.length > 0 ? sorted[0].url : null;
+        };
         const handleAnalyzeError = (errorMessage) => {
             return analyzeGenericErrorWithGemini({
                 errorMessage,
@@ -934,7 +958,7 @@ ${payload.body}`;
         helpButton.innerHTML = QuestionMarkCircleIcon;
         statsButton.innerHTML = ChartBarIcon;
 
-        settingsButton.addEventListener('click', showSettings);
+        settingsButton.addEventListener('click', () => showSettings());
         helpButton.addEventListener('click', showHelpModal);
         statsButton.addEventListener('click', showStatsModal);
         

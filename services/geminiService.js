@@ -783,6 +783,27 @@ export const callGemini = async ({
 
     } catch (error) {
         console.error("Error calling Gemini API:", error);
+
+        // Check for specific location error
+        if (error.message && error.message.includes("User location is not supported")) {
+            return {
+                id: Date.now().toString(),
+                sender: MessageSender.SYSTEM,
+                text: "К сожалению, Gemini API недоступен в вашем регионе. Это можно исправить, используя прокси-сервер.",
+                card: {
+                    type: 'system_action',
+                    icon: 'SettingsIcon',
+                    title: 'Проблема с регионом',
+                    text: 'Похоже, что ваш запрос был заблокирован из-за региональных ограничений. Настройте прокси-сервер, чтобы обойти эту проблему.',
+                    actions: [{
+                        label: 'Открыть настройки прокси',
+                        action: 'open_proxy_settings',
+                        payload: {}
+                    }]
+                }
+            };
+        }
+        
         return {
             id: Date.now().toString(),
             sender: MessageSender.SYSTEM,
