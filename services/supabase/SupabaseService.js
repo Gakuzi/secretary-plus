@@ -38,12 +38,15 @@ export class SupabaseService {
 
     // --- Auth ---
     async signInWithGoogle() {
+        // Dynamically construct the redirect URL to ensure it works correctly
+        // on different hosting environments (like GitHub Pages subdirectories).
+        const redirectUrl = `${window.location.origin}${window.location.pathname}`;
+
         const { error } = await this.client.auth.signInWithOAuth({
             provider: 'google',
             options: {
                 scopes: GOOGLE_SCOPES,
-                // redirectTo is removed. Supabase JS will automatically use the current URL,
-                // which is more robust for mobile authentication flows and SPAs.
+                redirectTo: redirectUrl,
             },
         });
         if (error) throw error;
