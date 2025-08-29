@@ -6,6 +6,8 @@ import * as Icons from './icons/Icons.js';
 export function createSetupWizard({ onComplete, onExit, googleProvider, supabaseConfig, googleClientId, resumeState = null }) {
     const wizardElement = document.createElement('div');
     wizardElement.className = 'fixed inset-0 bg-gray-900 z-50 flex items-center justify-center p-4';
+    
+    let abortController = null;
 
     let state = {
         currentStep: 0,
@@ -294,12 +296,33 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
     };
 
     const runProxyTest = async (url) => {
+        if (abortController) {
+            abortController.abort();
+        }
+        abortController = new AbortController();
+        const { signal } = abortController;
+
         state.testingProxyUrl = url;
         const modal = wizardElement.querySelector('#proxy-test-modal');
         const content = wizardElement.querySelector('#proxy-test-modal-content');
         modal.classList.remove('hidden');
-        content.innerHTML = `<p class="font-semibold mb-2">Тестирование...</p><p class="font-mono text-sm text-gray-400 break-all">${url}</p><div class="loading-dots mt-4"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
-        const result = await testProxyConnection({ proxyUrl: url });
+        content.innerHTML = `
+            <p class="font-semibold mb-2">Тестирование...</p>
+            <p class="font-mono text-sm text-gray-400 break-all">${url}</p>
+            <div class="loading-dots mt-4"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+            <button data-action="cancel-test" class="mt-6 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm">Отмена</button>
+        `;
+        const result = await testProxyConnection({ proxyUrl: url, signal });
+        
+        if (signal.aborted) {
+            return;
+        }
+        
+        if (result.status === 'cancelled') {
+            modal.classList.add('hidden');
+            abortController = null;
+            return;
+        }
 
          const testResultHtml = `
             <div class="w-full text-left text-sm mt-4 space-y-2">
@@ -328,6 +351,8 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 <button data-action="reject-proxy" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md">Отклонить</button>
                 ${result.status === 'ok' ? `<button data-action="use-proxy" data-speed="${result.speed}" data-geo="${result.geolocation || ''}" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md">Использовать</button>` : ''}
             </div>`;
+        
+        abortController = null;
     };
 
     const handleAction = async (e) => {
@@ -348,7 +373,10 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             case 'next': await handleNext(); break;
             case 'back': handleBack(); break;
             case 'login': await handleLogin(); break;
-            case 'exit': onExit(); break;
+            case 'exit': 
+                if (abortController) abortController.abort();
+                onExit(); 
+                break;
             case 'finish': 
                 collectInputs();
                 if (supabaseService) {
@@ -379,7 +407,13 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 await runProxyTest(state.testingProxyUrl);
                 break;
             }
+            case 'cancel-test':
+                if (abortController) {
+                    abortController.abort();
+                }
+                break;
             case 'reject-proxy': {
+                if (abortController) abortController.abort();
                 state.foundProxies = state.foundProxies.filter(p => p.url !== state.testingProxyUrl);
                 state.testingProxyUrl = null;
                 wizardElement.querySelector('#proxy-test-modal').classList.add('hidden');

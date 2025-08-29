@@ -6,6 +6,8 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
     const modalElement = document.createElement('div');
     modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4';
 
+    let abortController = null; // For cancelling proxy tests
+
     let state = {
         isLoading: false,
         statusMessage: '',
@@ -167,14 +169,36 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
     };
     
     const runProxyTest = async (url, id = null) => {
+        if (abortController) {
+            abortController.abort(); // Cancel previous test if any
+        }
+        abortController = new AbortController();
+        const { signal } = abortController;
+
         state.testingProxyUrl = url;
         state.testingProxyId = id; // Store ID if we are re-testing
         const modal = modalElement.querySelector('#proxy-test-modal');
         const content = modalElement.querySelector('#proxy-test-modal-content');
         modal.classList.remove('hidden');
-        content.innerHTML = `<p class="font-semibold mb-2">Тестирование...</p><p class="font-mono text-sm text-gray-400 break-all">${url}</p><div class="loading-dots mt-4"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
+        content.innerHTML = `
+            <p class="font-semibold mb-2">Тестирование...</p>
+            <p class="font-mono text-sm text-gray-400 break-all">${url}</p>
+            <div class="loading-dots mt-4"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+            <button data-action="cancel-test" class="mt-6 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm">Отмена</button>
+        `;
         
-        const result = await testProxyConnection({ proxyUrl: url });
+        const result = await testProxyConnection({ proxyUrl: url, signal });
+
+        if (signal.aborted) {
+            // The action was cancelled, so we don't need to update the UI further.
+            return;
+        }
+
+        if (result.status === 'cancelled') {
+             modal.classList.add('hidden');
+             abortController = null;
+             return;
+        }
 
         const testResultHtml = `
             <div class="w-full text-left text-sm mt-4 space-y-2">
@@ -204,6 +228,8 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 ${result.status === 'ok' ? `<button data-action="use-proxy" data-speed="${result.speed}" data-geo="${result.geolocation || ''}" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md">Использовать</button>` : ''}
             </div>
         `;
+
+        abortController = null; // Clean up
     };
     
      const showSchemaScript = async () => {
@@ -268,7 +294,10 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
         const action = target.dataset.action;
 
         switch(action) {
-            case 'close': onClose(); break;
+            case 'close':
+                if (abortController) abortController.abort();
+                onClose();
+                break;
             case 'save': {
                 const newSettings = {
                     ...settings,
@@ -305,7 +334,13 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 await runProxyTest(state.testingProxyUrl, state.testingProxyId);
                 break;
             }
+            case 'cancel-test':
+                if (abortController) {
+                    abortController.abort();
+                }
+                break;
             case 'reject-proxy': {
+                if (abortController) abortController.abort();
                 state.foundProxies = state.foundProxies.filter(p => p.url !== state.testingProxyUrl);
                 state.testingProxyUrl = null;
                 state.testingProxyId = null;

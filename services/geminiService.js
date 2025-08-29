@@ -776,7 +776,7 @@ export const callGemini = async ({
     }
 };
 
-export const testProxyConnection = async ({ proxyUrl }) => {
+export const testProxyConnection = async ({ proxyUrl, signal }) => {
     if (!proxyUrl) {
         return { status: 'error', message: 'URL прокси не указан.' };
     }
@@ -790,6 +790,7 @@ export const testProxyConnection = async ({ proxyUrl }) => {
         const response = await fetch(testUrl.toString(), {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' },
+            signal,
         });
         const endTime = performance.now();
         const speed = Math.round(endTime - startTime);
@@ -809,6 +810,11 @@ export const testProxyConnection = async ({ proxyUrl }) => {
         return { status: 'ok', message: 'Соединение успешно.', speed, geolocation: data.ip };
 
     } catch (error) {
+        if (error.name === 'AbortError') {
+            // This is a controlled cancellation, not a true error.
+            return { status: 'cancelled', message: 'Тест отменен пользователем.', speed: null, geolocation: null };
+        }
+
         console.error('Ошибка при тесте прокси:', error);
         // Provide a user-friendly error message.
         let message = `Ошибка сети. Убедитесь, что URL прокси правильный, и что на нем настроены CORS-заголовки. Проверьте инструкцию.`;
