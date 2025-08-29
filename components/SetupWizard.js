@@ -1,9 +1,9 @@
 import { getSettings, saveSettings } from '../utils/storage.js';
 import { SupabaseService } from '../services/supabase/SupabaseService.js';
-import { testProxyConnection } from '../services/geminiService.js';
+import { testProxyConnection, extractProxiesWithGemini } from '../services/geminiService.js';
 import * as Icons from './icons/Icons.js';
 
-export function createSetupWizard({ onComplete, googleProvider, resumeState = null }) {
+export function createSetupWizard({ onComplete, onExit, googleProvider, resumeState = null }) {
     const wizardElement = document.createElement('div');
     wizardElement.className = 'fixed inset-0 bg-gray-900 z-50 flex items-center justify-center';
 
@@ -15,6 +15,7 @@ export function createSetupWizard({ onComplete, googleProvider, resumeState = nu
         userProfile: null,
         proxies: [],
         isLoading: false,
+        statusMessage: '',
     };
 
     let supabaseService = null;
@@ -45,9 +46,9 @@ export function createSetupWizard({ onComplete, googleProvider, resumeState = nu
     };
 
     const renderProxyList = async () => {
-        if (!supabaseService) return;
+        if (!supabaseService || !state.isAuthenticated) return;
         state.isLoading = true;
-        render();
+        render(); // Re-render to show loading state
         try {
             state.proxies = await supabaseService.getProxies();
             const container = wizardElement.querySelector('#proxy-list-container');
@@ -61,7 +62,6 @@ export function createSetupWizard({ onComplete, googleProvider, resumeState = nu
                            <div class="flex-1 truncate" title="${p.url}">${p.alias || p.url}</div>
                            <div class="text-xs text-gray-400">P: ${p.priority}</div>
                            <button data-action="test-proxy" data-id="${p.id}" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 rounded">Тест</button>
-                           <button data-action="edit-proxy" data-id="${p.id}" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded">Изм.</button>
                            <button data-action="delete-proxy" data-id="${p.id}" class="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 rounded">Удл.</button>
                         </div>
                     `).join('');
@@ -71,13 +71,10 @@ export function createSetupWizard({ onComplete, googleProvider, resumeState = nu
             alert(`Ошибка загрузки прокси: ${e.message}`);
         } finally {
             state.isLoading = false;
+            // We don't call render() here to avoid a loop. The UI will update on the next action.
         }
     }
     
-    const showProxyEditor = (proxy = null) => {
-        // ... implementation from old SettingsModal
-    };
-
     const renderStepContent = () => {
         const contentEl = wizardElement.querySelector('#wizard-content');
         const footerEl = wizardElement.querySelector('#wizard-footer');
@@ -197,16 +194,21 @@ export function createSetupWizard({ onComplete, googleProvider, resumeState = nu
                 contentEl.innerHTML = `
                     <h2 class="text-2xl font-bold mb-4">5. Настройка Прокси (Опционально)</h2>
                     <p class="mb-6 text-gray-400">Если API Gemini недоступен в вашем регионе, настройте прокси-сервер. <a href="https://github.com/e210s/secretary-plus/blob/main/PROXY_SETUP.md" target="_blank" class="text-blue-400 hover:underline">Инструкция по настройке &rarr;</a></p>
-                    <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                        <div class="flex items-center justify-between mb-4">
-                             <h3 class="font-semibold text-lg">Список прокси-серверов</h3>
-                             <button data-action="add-proxy" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded-md text-sm font-semibold whitespace-nowrap">Добавить</button>
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                             <h3 class="font-semibold text-lg mb-3">Список прокси</h3>
+                             <div id="proxy-list-container" class="space-y-2 max-h-60 overflow-y-auto">${state.isLoading ? '<p>Загрузка...</p>' : ''}</div>
                         </div>
-                        <div id="proxy-list-container" class="space-y-2 max-h-60 overflow-y-auto"></div>
+                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700 space-y-4">
+                             <h3 class="font-semibold text-lg">Импорт с помощью ИИ</h3>
+                             <p class="text-xs text-gray-400">Вставьте скопированный список прокси в поле ниже. ИИ автоматически найдет и добавит их.</p>
+                             <textarea id="proxy-import-area" class="w-full h-24 bg-gray-900 border border-gray-600 rounded-md p-2 font-mono text-xs" placeholder="http://user:pass@host:port\nhttps://1.2.3.4:8080..."></textarea>
+                             <button data-action="analyze-proxies" class="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm font-semibold">${state.isLoading ? 'Анализ...' : 'Проанализировать и добавить'}</button>
+                             <div id="proxy-status-message" class="text-sm text-center h-5">${state.statusMessage}</div>
+                        </div>
                     </div>
-                    <div id="proxy-editor-container"></div>
                 `;
-                renderProxyList();
+                if (!state.isLoading) renderProxyList();
                 addNextButton(footerEl);
                 break;
             case 6: // Finish
@@ -233,9 +235,14 @@ export function createSetupWizard({ onComplete, googleProvider, resumeState = nu
         const stepConfig = STEPS[state.currentStep];
         wizardElement.innerHTML = `
             <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col">
-                <header class="p-4 border-b border-gray-700 flex-shrink-0">
-                    <h1 class="text-xl font-bold text-white">Мастер Настройки Секретарь+</h1>
-                    <p class="text-sm text-gray-400">Шаг ${state.currentStep + 1} из ${STEPS.length}: ${stepConfig.title}</p>
+                <header class="p-4 border-b border-gray-700 flex justify-between items-center flex-shrink-0">
+                    <div>
+                        <h1 class="text-xl font-bold text-white">Мастер Настройки Секретарь+</h1>
+                        <p class="text-sm text-gray-400">Шаг ${state.currentStep + 1} из ${STEPS.length}: ${stepConfig.title}</p>
+                    </div>
+                    <button data-action="exit" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Вернуться в приложение">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    </button>
                 </header>
                 <main class="flex-1 p-6 overflow-y-auto" id="wizard-content">
                     <!-- Step content is rendered here -->
@@ -253,7 +260,7 @@ export function createSetupWizard({ onComplete, googleProvider, resumeState = nu
         const inputs = wizardElement.querySelectorAll('input');
         inputs.forEach(input => {
             if (input.id) {
-                newConfig[input.id] = input.type === 'checkbox' ? input.checked : input.value;
+                newConfig[input.id] = input.type === 'checkbox' ? input.checked : input.value.trim();
             }
         });
         state.config = newConfig;
@@ -286,28 +293,33 @@ export function createSetupWizard({ onComplete, googleProvider, resumeState = nu
     };
 
     const handleLogin = async () => {
-        collectInputs(); // Save any credentials entered before login
+        collectInputs();
         
-        // Save current wizard state to session storage to resume after OAuth redirect
-        const resumeData = { ...state, currentStep: 3 }; // Force resume at auth step
+        const resumeData = { ...state, currentStep: 3 };
         sessionStorage.setItem('wizardState', JSON.stringify(resumeData));
 
         if (state.authChoice === 'supabase') {
-            if (!supabaseService) {
-                try {
-                    supabaseService = new SupabaseService(state.config.supabaseUrl, state.config.supabaseAnonKey);
-                } catch (e) {
-                    alert(`Ошибка подключения к Supabase: ${e.message}`);
-                    return;
-                }
+            if (!state.config.supabaseUrl || !state.config.supabaseAnonKey) {
+                alert("Пожалуйста, введите Supabase URL и Anon Key.");
+                sessionStorage.removeItem('wizardState');
+                return;
             }
-            await supabaseService.signInWithGoogle();
+            try {
+                supabaseService = new SupabaseService(state.config.supabaseUrl, state.config.supabaseAnonKey);
+                await supabaseService.signInWithGoogle();
+            } catch (e) {
+                alert(`Ошибка подключения к Supabase: ${e.message}`);
+                sessionStorage.removeItem('wizardState');
+            }
         } else {
-            googleProvider.initClient(state.config.googleClientId, async (tokenResponse) => {
+             if (!state.config.googleClientId) {
+                alert("Пожалуйста, введите Google Client ID.");
+                sessionStorage.removeItem('wizardState');
+                return;
+            }
+            googleProvider.initClient(state.config.googleClientId, (tokenResponse) => {
                 if (tokenResponse && !tokenResponse.error) {
                     googleProvider.setAuthToken(tokenResponse.access_token);
-                    // Since this is a callback, we can't easily resume the wizard state here.
-                    // The main app's resume logic will handle this. We just need to trigger a reload.
                     window.location.reload();
                 } else {
                     alert(`Ошибка входа Google: ${tokenResponse.error_description || tokenResponse.error}`);
@@ -340,11 +352,9 @@ export function createSetupWizard({ onComplete, googleProvider, resumeState = nu
                 state.userProfile = null;
             }
         }
-        render(); // Re-render to show auth status
+        render();
     };
     
-    // Attach one persistent event listener for the entire wizard lifecycle.
-    // This fixes the bug where multiple listeners were being attached.
     wizardElement.addEventListener('click', async (e) => {
         const target = e.target.closest('[data-action], [data-choice]');
         if (!target) return;
@@ -356,18 +366,65 @@ export function createSetupWizard({ onComplete, googleProvider, resumeState = nu
             state.authChoice = choice;
             state.config.isSupabaseEnabled = choice === 'supabase';
             render();
+            return;
         }
 
         switch (action) {
             case 'next': handleNext(); break;
             case 'back': handleBack(); break;
             case 'login': handleLogin(); break;
+            case 'exit': onExit(); break;
             case 'finish': 
                 collectInputs();
                 state.config.proxies = state.proxies;
                 onComplete(state.config); 
                 break;
-            // Proxy actions would be here
+            case 'test-proxy': {
+                const button = target;
+                button.textContent = '...';
+                const proxy = state.proxies.find(p => p.id === target.dataset.id);
+                const result = await testProxyConnection({ proxyUrl: proxy.url, apiKey: state.config.geminiApiKey });
+                await supabaseService.updateProxy(proxy.id, { last_status: result.status, last_checked_at: new Date().toISOString() });
+                await renderProxyList();
+                render(); // Full re-render to update the list
+                break;
+            }
+            case 'delete-proxy': {
+                if (confirm('Удалить этот прокси?')) {
+                    await supabaseService.deleteProxy(target.dataset.id);
+                    await renderProxyList();
+                    render();
+                }
+                break;
+            }
+            case 'analyze-proxies': {
+                const text = wizardElement.querySelector('#proxy-import-area').value.trim();
+                if (!text || !state.config.geminiApiKey) {
+                    alert('Пожалуйста, вставьте список прокси и убедитесь, что указан Gemini API Key.');
+                    return;
+                }
+                state.isLoading = true;
+                state.statusMessage = 'Анализ...';
+                render();
+                try {
+                    const urls = await extractProxiesWithGemini({ text, apiKey: state.config.geminiApiKey });
+                    if (urls.length === 0) {
+                        state.statusMessage = 'Прокси не найдены.';
+                    } else {
+                        for (const url of urls) {
+                            await supabaseService.addProxy({ url, alias: `Импорт ${new Date().toLocaleDateString()}` });
+                        }
+                        state.statusMessage = `✓ Добавлено ${urls.length} прокси.`;
+                        await renderProxyList();
+                    }
+                } catch (err) {
+                    state.statusMessage = `Ошибка: ${err.message}`;
+                } finally {
+                    state.isLoading = false;
+                    render();
+                }
+                break;
+            }
         }
     });
     

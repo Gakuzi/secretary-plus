@@ -52,6 +52,7 @@ const serviceProviders = {
 };
 
 // --- DOM ELEMENTS ---
+const appContainer = document.getElementById('app');
 const authContainer = document.getElementById('auth-container');
 const mainContent = document.getElementById('main-content');
 const settingsButton = document.getElementById('settings-button');
@@ -59,6 +60,7 @@ const helpButton = document.getElementById('help-button');
 const statsButton = document.getElementById('stats-button');
 const modalContainer = document.getElementById('modal-container');
 const cameraViewContainer = document.getElementById('camera-view-container');
+const wizardContainer = document.getElementById('setup-wizard-container');
 
 // --- ERROR HANDLING ---
 function showSystemError(text) {
@@ -182,6 +184,7 @@ async function handleAuthentication() {
 }
 
 async function initializeAppServices() {
+    state.settings = getSettings(); // Re-read settings
     if (state.settings.isSupabaseEnabled) {
         await initializeSupabase();
     }
@@ -386,7 +389,15 @@ function showHelpModal() {
         apiKey: state.settings.geminiApiKey,
         proxyUrl: null,
     });
-    const modal = createHelpModal({ onClose: hideModal, analyzeErrorFn: handleAnalyzeError, onRelaunchWizard: () => showSetupWizard(true) });
+    const modal = createHelpModal({ 
+        onClose: hideModal, 
+        analyzeErrorFn: handleAnalyzeError, 
+        onRelaunchWizard: () => {
+            hideModal();
+            showSetupWizard(true);
+        },
+        settings: state.settings,
+    });
     showModal(modal);
 }
 
@@ -422,9 +433,17 @@ function isConfigurationComplete(settings) {
 
 async function handleSetupComplete(newSettings) {
     saveSettings(newSettings);
-    document.body.innerHTML = `<div class="flex items-center justify-center h-screen text-lg">Настройки сохранены. Перезагрузка приложения...</div>`;
-    setTimeout(() => window.location.reload(), 1500);
+    wizardContainer.innerHTML = ''; // Remove wizard from DOM
+    appContainer.classList.remove('hidden');
+    await runApp(); // Initialize and run the main application
 }
+
+function handleWizardExit() {
+    wizardContainer.innerHTML = ''; // Remove wizard from DOM
+    appContainer.classList.remove('hidden');
+    runApp(); // Run the app with whatever settings are currently saved
+}
+
 
 function showSetupWizard(isRelaunch = false) {
     if (isRelaunch && !confirm('Это перезапустит мастер настройки и сотрет текущие ключи из локального хранилища. Настройки в облаке Supabase останутся. Продолжить?')) {
@@ -433,18 +452,20 @@ function showSetupWizard(isRelaunch = false) {
     if (isRelaunch) {
         localStorage.removeItem('secretary-plus-settings-v4');
     }
-    const wizardContainer = document.getElementById('setup-wizard-container');
+    
     wizardContainer.innerHTML = '';
+    appContainer.classList.add('hidden');
+
     wizardContainer.appendChild(createSetupWizard({
         onComplete: handleSetupComplete,
+        onExit: handleWizardExit,
         googleProvider,
     }));
-    document.getElementById('app').classList.add('hidden');
 }
 
 // --- MAIN APP ENTRY POINT ---
-async function startApp() {
-    document.getElementById('app').classList.remove('hidden');
+async function runApp() {
+    appContainer.classList.remove('hidden');
     
     settingsButton.innerHTML = SettingsIcon;
     helpButton.innerHTML = QuestionMarkCircleIcon;
@@ -454,9 +475,13 @@ async function startApp() {
     helpButton.addEventListener('click', showHelpModal);
     statsButton.addEventListener('click', showStatsModal);
 
-    document.body.addEventListener('click', handleCardAction);
-    document.body.addEventListener('click', handleQuickReply);
-    document.body.addEventListener('click', handleActionPrompt);
+    // Use a single listener on the body for better performance
+    document.body.addEventListener('click', (e) => {
+        handleCardAction(e);
+        handleQuickReply(e);
+        handleActionPrompt(e);
+    });
+    
     mainContent.addEventListener('click', (e) => {
         const promptTarget = e.target.closest('[data-action="welcome_prompt"]');
         if (promptTarget) handleSendMessage(JSON.parse(promptTarget.dataset.payload).prompt);
@@ -469,17 +494,16 @@ async function startApp() {
 
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', async () => {
-    // This handles the redirect back from Google OAuth.
+    // This handles the redirect back from Google OAuth during the wizard flow.
     const resumeStateJSON = sessionStorage.getItem('wizardState');
     if (resumeStateJSON) {
         sessionStorage.removeItem('wizardState');
-        const wizardContainer = document.getElementById('setup-wizard-container');
         wizardContainer.appendChild(createSetupWizard({
             onComplete: handleSetupComplete,
+            onExit: handleWizardExit,
             googleProvider,
             resumeState: JSON.parse(resumeStateJSON),
         }));
-        document.getElementById('app').classList.add('hidden');
         return;
     }
 
@@ -487,7 +511,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     state.settings = settings; // Set initial state
 
     if (isConfigurationComplete(settings)) {
-        await startApp();
+        await runApp();
     } else {
         showSetupWizard(false);
     }

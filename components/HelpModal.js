@@ -58,18 +58,11 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                     <!-- Setup Guide Tab -->
                     <div id="tab-setup-guide" class="settings-tab-content hidden space-y-6">
                          <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                            <h3 class="text-lg font-semibold text-gray-200">Инструкция по настройке</h3>
-                            <p class="text-sm text-gray-400 mt-1 mb-4">Для первоначальной настройки приложения и получения всех необходимых ключей (Google, Supabase, Gemini) воспользуйтесь нашим интерактивным руководством.</p>
-                             <a href="./setup-guide.html" target="_blank" rel="noopener noreferrer" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md font-semibold transition-colors">
-                                Открыть инструкцию в новой вкладке
-                             </a>
-                        </div>
-                        <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
                             <h3 class="text-lg font-semibold text-gray-200">Сброс и повторная настройка</h3>
                             <p class="text-sm text-gray-400 mt-1 mb-4">
                                 Если вы хотите начать настройку с самого начала или считаете, что допустили ошибку, вы можете перезапустить мастер.
                             </p>
-                            <div class="note warning">
+                            <div class="text-sm p-3 rounded-md bg-yellow-900/30 border border-yellow-700 text-yellow-300">
                                 <p class="font-bold">Внимание:</p>
                                 <p>Это действие удалит все ваши текущие настройки, сохраненные в браузере (включая API ключи). Настройки, синхронизированные с Supabase, останутся без изменений.</p>
                             </div>

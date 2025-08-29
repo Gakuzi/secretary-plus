@@ -904,3 +904,41 @@ ${errorMessage}
         return `### Ошибка при анализе\nНе удалось связаться с Gemini для анализа ошибки. Пожалуйста, проверьте свой API ключ и подключение к интернету.\n\n**Исходная ошибка:**\n\`\`\`\n${errorMessage}\n\`\`\``;
     }
 };
+
+export const extractProxiesWithGemini = async ({ text, apiKey, proxyUrl }) => {
+    if (!apiKey) throw new Error("Ключ Gemini API не предоставлен.");
+
+    const clientOptions = { apiKey };
+    if (proxyUrl) {
+        clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
+    }
+    const ai = new GoogleGenAI(clientOptions);
+
+    const systemInstruction = `Ты — эксперт по сетевым протоколам. Твоя задача — извлечь все валидные URL-адреса прокси-серверов из предоставленного текста. Прокси могут быть в форматах http, https, socks4, socks5. Верни результат в виде JSON-массива строк. Если прокси не найдены, верни пустой массив.`;
+    const prompt = `Извлеки все URL прокси из этого текста:\n\n${text}`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            config: {
+                systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.STRING,
+                        description: 'A valid proxy URL, e.g., http://user:pass@host:port',
+                    },
+                },
+            },
+        });
+        
+        const jsonStr = response.text.trim();
+        return JSON.parse(jsonStr);
+
+    } catch (error) {
+        console.error("Error calling Gemini for proxy extraction:", error);
+        throw new Error("Не удалось проанализировать список прокси. Проверьте ваш API ключ и формат списка.");
+    }
+};
