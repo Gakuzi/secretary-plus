@@ -74,7 +74,7 @@ function showSystemError(text) {
 
 // --- RENDER FUNCTIONS ---
 function updateProxyStatusIndicator(status) {
-    if (state.proxyStatus === status) return; // Avoid unnecessary DOM manipulation
+    if (state.proxyStatus === status && status !== 'connecting') return; 
     state.proxyStatus = status;
     const profileButton = authContainer.querySelector('button');
     if (profileButton) {
@@ -92,7 +92,6 @@ function renderAuth() {
         profileButton.innerHTML = `<img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-8 h-8 rounded-full">`;
         profileButton.addEventListener('click', showProfileModal);
         authContainer.appendChild(profileButton);
-        // Ensure indicator is updated after rendering
         updateProxyStatusIndicator(state.proxyStatus);
     }
 }
@@ -229,25 +228,18 @@ function handleNewChat() {
     }
 }
 
+// This function is now a pure data fetcher and does not update the UI.
 async function getActiveProxy() {
     if (!state.settings.useProxy || !state.isSupabaseReady || !supabaseService) {
-        updateProxyStatusIndicator('off');
         return null;
     }
     const proxies = await supabaseService.getProxies();
-    // Find the first active proxy that has a good status, ordered by priority
+    // Find the first active proxy
     const sorted = [...proxies]
-        .filter(p => p.is_active) // Don't filter by status here, try any active one
+        .filter(p => p.is_active)
         .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
     
-    if (sorted.length > 0) {
-        updateProxyStatusIndicator('connecting');
-        return sorted[0].url;
-    }
-    
-    // If useProxy is on, but no active proxies exist.
-    updateProxyStatusIndicator('error');
-    return null;
+    return sorted.length > 0 ? sorted[0].url : null;
 };
 
 async function processBotResponse(prompt, image = null) {
@@ -255,9 +247,19 @@ async function processBotResponse(prompt, image = null) {
     showLoadingIndicator();
     let proxyUrl = null;
 
-    try {
+    // Centralized logic for managing the proxy status indicator
+    if (state.settings.useProxy) {
+        updateProxyStatusIndicator('connecting'); // Set to 'connecting' while we find and use a proxy
         proxyUrl = await getActiveProxy();
-        
+        if (!proxyUrl) {
+            updateProxyStatusIndicator('error');
+            showSystemError("Режим прокси включен, но не найдено ни одного активного прокси-сервера. Проверьте настройки.");
+        }
+    } else {
+        updateProxyStatusIndicator('off');
+    }
+
+    try {
         const response = await callGemini({
             prompt,
             history: state.messages.slice(0, -1),
@@ -267,16 +269,18 @@ async function processBotResponse(prompt, image = null) {
             isGoogleConnected: state.isGoogleConnected,
             image,
             apiKey: state.settings.geminiApiKey,
-            proxyUrl: proxyUrl,
+            proxyUrl: proxyUrl, // Pass the found proxyUrl (or null)
         });
 
-        // If a proxy was used and the call was successful (not a system error), it's OK.
-        if (proxyUrl && response.sender !== MessageSender.SYSTEM) {
-             updateProxyStatusIndicator('ok');
-        } else if (proxyUrl) { // It was a system error with a proxy
-             updateProxyStatusIndicator('error');
+        // After the call, update status based on the result
+        if (proxyUrl) {
+            if (response.sender !== MessageSender.SYSTEM) {
+                updateProxyStatusIndicator('ok');
+            } else {
+                updateProxyStatusIndicator('error');
+            }
         }
-
+        
         if (response.functionCallName && supabaseService && state.isSupabaseReady) {
             state.actionStats[response.functionCallName] = (state.actionStats[response.functionCallName] || 0) + 1;
             await supabaseService.incrementActionStat(response.functionCallName);
@@ -287,7 +291,9 @@ async function processBotResponse(prompt, image = null) {
         renderContextualActions(response.contextualActions);
     } catch (error) {
         showSystemError(`Произошла ошибка: ${error.message}`);
-        if (proxyUrl) updateProxyStatusIndicator('error');
+        if (proxyUrl) { // If we were attempting to use a proxy, mark it as an error
+            updateProxyStatusIndicator('error');
+        }
     } finally {
         state.isLoading = false;
         hideLoadingIndicator();
