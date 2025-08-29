@@ -143,7 +143,7 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
 
             if (lastSyncData) {
                 if (lastSyncData.error) {
-                    statusText = 'Ошибка синхронизации';
+                    statusText = 'Ошибка: ' + lastSyncData.error;
                     statusColor = 'text-red-400';
                     errorDetails = lastSyncData.error;
                 } else if (lastSyncData.lastSync) {
@@ -160,11 +160,13 @@ export function createProfileModal(userProfile, settings, handlers, initialSyncS
                         <span class="w-5 h-5 text-gray-400">${iconSVG}</span>
                         <div class="flex flex-col">
                             <span class="font-medium text-gray-200">${task.label}</span>
-                            <span class="text-xs ${statusColor}" title="${errorDetails || statusText}">${statusText}</span>
+                            ${errorDetails ? 
+                                `<button data-action="analyze-error" data-task-name="${task.label}" data-error-message="${encodeURIComponent(errorDetails)}" class="text-left text-xs ${statusColor} hover:underline truncate">${statusText}</button>` :
+                                `<span class="text-xs ${statusColor}" title="${statusText}">${statusText}</span>`
+                            }
                         </div>
                     </div>
                     <div class="flex items-center gap-2 text-gray-400">
-                        ${errorDetails ? `<button data-action="analyze-error" data-task-name="${task.label}" data-error-message="${encodeURIComponent(errorDetails)}" class="px-2 py-1 text-xs bg-red-800 hover:bg-red-700 rounded-md text-white">Анализ</button>` : ''}
                         <button data-action="view-data" data-table-name="${task.tableName}" data-label="${task.label}" title="Посмотреть данные" class="p-1.5 hover:bg-gray-700 rounded-full">${Icons.DatabaseIcon}</button>
                         <a href="${tableLink}" target="_blank" title="Открыть в Supabase" class="p-1.5 hover:bg-gray-700 rounded-full ${!projectRef ? 'hidden' : ''}">${Icons.ExternalLinkIcon}</a>
                     </div>
