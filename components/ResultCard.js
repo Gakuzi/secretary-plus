@@ -45,9 +45,12 @@ function createStandardCard(card) {
             }
 
             if (action.url) {
-                // For links, we'll use a slightly different style to distinguish them
                 buttonClass = 'px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded-md text-sm transition-colors';
                 return `<a href="${action.url}" target="_blank" rel="noopener noreferrer" class="${buttonClass}">${action.label}</a>`;
+            }
+            if (action.clientAction) {
+                // This is a new type of action that is handled client-side
+                return `<button data-client-action="${action.clientAction}" class="${buttonClass}">${action.label}</button>`;
             }
             if (action.action) {
                  const payload = JSON.stringify(action.payload || {});
@@ -391,6 +394,7 @@ export function createResultCardElement(card) {
         case 'document_prompt':
         case 'task':
         case 'note_confirmation':
+        case 'system_action':
         default:
             cardElement.innerHTML = createStandardCard(card);
             break;

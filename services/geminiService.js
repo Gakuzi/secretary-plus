@@ -759,15 +759,50 @@ export const callGemini = async ({
     } catch (error) {
         console.error("Error calling Gemini API:", error);
         
+        // Handle specific API key/quota errors
+        if (error.message.includes('quota') || error.message.includes('billing')) {
+            return {
+                id: Date.now().toString(),
+                sender: MessageSender.SYSTEM,
+                text: 'Достигнут лимит запросов к Gemini API.',
+                card: {
+                    type: 'system_action',
+                    icon: 'AlertTriangleIcon',
+                    title: 'Проблема с доступом к Gemini',
+                    text: 'Пожалуйста, проверьте ваш тарифный план, платежные данные или обновите ключ API для продолжения работы.',
+                    actions: [{
+                        label: 'Перейти в настройки',
+                        clientAction: 'open_settings'
+                    }]
+                }
+            };
+        }
+        if (error.message.includes('API key not valid')) {
+             return {
+                id: Date.now().toString(),
+                sender: MessageSender.SYSTEM,
+                text: 'Ключ Gemini API недействителен.',
+                card: {
+                    type: 'system_action',
+                    icon: 'SettingsIcon',
+                    title: 'Неверный ключ Gemini API',
+                    text: 'Пожалуйста, проверьте и обновите ваш ключ API в настройках для продолжения работы.',
+                    actions: [{
+                        label: 'Перейти в настройки',
+                        clientAction: 'open_settings'
+                    }]
+                }
+            };
+        }
+
+        // Handle generic errors
         let friendlyMessage = "Произошла внутренняя ошибка при обращении к Gemini.";
         try {
-            // Check if the error message is a JSON string from the API
             const errorJson = JSON.parse(error.message);
             if (errorJson.error && errorJson.error.message) {
                 friendlyMessage = `Произошла ошибка при обращении к Gemini: ${errorJson.error.message}`;
             }
         } catch (e) {
-            // The error message was not JSON, use it directly
             friendlyMessage = `Произошла ошибка при обращении к Gemini: ${error.message}`;
         }
         

@@ -622,6 +622,17 @@ document.body.addEventListener('click', (e) => {
         return;
     }
 
+     // New handler for client-side actions
+    const clientAction = e.target.closest('[data-client-action]');
+    if (clientAction) {
+        e.preventDefault();
+        const action = clientAction.dataset.clientAction;
+        if (action === 'open_settings') {
+            showSettingsModal();
+        }
+        return;
+    }
+
      const welcomePrompt = e.target.closest('[data-action="welcome_prompt"]');
     if (welcomePrompt) {
         const payload = JSON.parse(welcomePrompt.dataset.payload);
