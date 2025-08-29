@@ -113,11 +113,11 @@ function renderMainContent() {
 // --- SYNC LOGIC ---
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
 const syncTasks = [
-    { name: 'Calendar', providerFn: () => googleProvider.getCalendarEvents({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncCalendarEvents(items) },
-    { name: 'Tasks', providerFn: () => googleProvider.getTasks({ max_results: 100 }), supabaseFn: (items) => supabaseService.syncTasks(items) },
-    { name: 'Contacts', providerFn: () => googleProvider.getAllContacts(), supabaseFn: (items) => supabaseService.syncContacts(items) },
-    { name: 'Files', providerFn: () => googleProvider.getAllFiles(), supabaseFn: (items) => supabaseService.syncFiles(items) },
-    { name: 'Emails', providerFn: () => googleProvider.getRecentEmails({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncEmails(items) },
+    { name: 'Calendar', label: 'Календарь', icon: 'CalendarIcon', providerFn: () => googleProvider.getCalendarEvents({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncCalendarEvents(items) },
+    { name: 'Tasks', label: 'Задачи', icon: 'CheckSquareIcon', providerFn: () => googleProvider.getTasks({ max_results: 100 }), supabaseFn: (items) => supabaseService.syncTasks(items) },
+    { name: 'Contacts', label: 'Контакты', icon: 'UsersIcon', providerFn: () => googleProvider.getAllContacts(), supabaseFn: (items) => supabaseService.syncContacts(items) },
+    { name: 'Files', label: 'Файлы', icon: 'FileIcon', providerFn: () => googleProvider.getAllFiles(), supabaseFn: (items) => supabaseService.syncFiles(items) },
+    { name: 'Emails', label: 'Почта', icon: 'EmailIcon', providerFn: () => googleProvider.getRecentEmails({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncEmails(items) },
 ];
 
 async function runAllSyncs() {
@@ -127,10 +127,10 @@ async function runAllSyncs() {
         try {
             const items = await task.providerFn();
             await task.supabaseFn(items);
-            state.syncStatus[task.name] = new Date().toISOString();
+            state.syncStatus[task.name] = { lastSync: new Date().toISOString(), error: null };
         } catch (error) {
             console.error(`Failed to sync ${task.name}:`, error);
-            state.syncStatus[task.name] = { error: error.message };
+            state.syncStatus[task.name] = { ...(state.syncStatus[task.name] || {}), error: error.message };
         }
         saveSyncStatus(state.syncStatus);
     }
@@ -416,10 +416,34 @@ function showSettingsModal() {
     showModal(modal);
 }
 
+async function handleForceSync() {
+    const syncButton = document.querySelector('#force-sync-button');
+    if (!syncButton || state.isSyncing) return;
+
+    const originalHTML = syncButton.innerHTML;
+    syncButton.innerHTML = `
+        <div class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
+        <span>Синхронизация...</span>`;
+    syncButton.disabled = true;
+
+    await runAllSyncs();
+
+    syncButton.innerHTML = originalHTML;
+    syncButton.disabled = false;
+    
+    // Re-render the modal to show updated statuses
+    if (document.querySelector('#profile-modal-content')) {
+        showProfileModal(); 
+    }
+    alert('Синхронизация завершена.');
+}
+
+
 function showProfileModal() {
     const handlers = {
         onClose: hideModal,
         onLogout: handleLogout,
+        onForceSync: handleForceSync,
         onSave: (newSettings) => {
              state.settings = newSettings;
              saveSettings(state.settings);
@@ -447,7 +471,9 @@ function showProfileModal() {
             }
         },
     };
-    const modal = createProfileModal(state.userProfile, state.settings, handlers);
+    
+    const syncTasksMeta = syncTasks.map(t => ({ name: t.name, label: t.label, icon: t.icon }));
+    const modal = createProfileModal(state.userProfile, state.settings, handlers, state.syncStatus, syncTasksMeta);
     showModal(modal);
 }
 

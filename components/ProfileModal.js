@@ -1,5 +1,6 @@
 // This file is a new addition to the project.
 // It was created to handle the user profile modal functionality.
+import * as Icons from './icons/Icons.js';
 
 // Helper to create a toggle switch element
 function createToggle(id, label, isChecked) {
@@ -26,9 +27,39 @@ function createServiceSelect(key, label, providers, selectedValue) {
     `;
 }
 
+// Helper to create a sync status item
+function createSyncStatusItem(task, status) {
+    const iconSVG = Icons[task.icon] || '';
+    const lastSyncData = status[task.name];
+    let statusText = 'Никогда не синхронизировалось';
+    let statusColor = 'text-gray-500';
 
-export function createProfileModal(userProfile, settings, handlers) {
-    const { onClose, onSave, onLogout, onDelete } = handlers;
+    if (lastSyncData) {
+        if (lastSyncData.error) {
+            statusText = `Ошибка: ${lastSyncData.error}`;
+            statusColor = 'text-red-400';
+        } else if (lastSyncData.lastSync) {
+            statusText = `Синхронизировано: ${new Date(lastSyncData.lastSync).toLocaleString()}`;
+            statusColor = 'text-green-400';
+        }
+    }
+
+    return `
+        <div class="flex items-center justify-between text-sm py-1.5">
+            <div class="flex items-center gap-2 font-medium text-gray-300">
+                <span class="w-5 h-5">${iconSVG}</span>
+                <span>${task.label}</span>
+            </div>
+            <div class="truncate ${statusColor}" title="${statusText}">
+                ${statusText}
+            </div>
+        </div>
+    `;
+}
+
+
+export function createProfileModal(userProfile, settings, handlers, syncStatus, syncTasks) {
+    const { onClose, onSave, onLogout, onDelete, onForceSync } = handlers;
     
     // Definitions for the settings form in the profile modal
     const SERVICE_DEFINITIONS = {
@@ -43,7 +74,7 @@ export function createProfileModal(userProfile, settings, handlers) {
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
 
     modalOverlay.innerHTML = `
-        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col m-4">
+        <div id="profile-modal-content" class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col m-4">
             <header class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
                 <h2 class="text-xl font-bold">Профиль пользователя</h2>
                 <button id="close-profile" class="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Закрыть профиль">&times;</button>
@@ -57,6 +88,21 @@ export function createProfileModal(userProfile, settings, handlers) {
                         <p class="text-sm text-gray-400">${userProfile.email}</p>
                     </div>
                 </div>
+
+                <!-- Sync Status -->
+                ${settings.isSupabaseEnabled ? `
+                <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">Синхронизация данных</h3>
+                        <button id="force-sync-button" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-semibold flex items-center gap-2">
+                            ${Icons.RefreshCwIcon}
+                            <span>Синхронизировать сейчас</span>
+                        </button>
+                    </div>
+                    <div id="sync-status-list" class="space-y-1">
+                        ${syncTasks.map(task => createSyncStatusItem(task, syncStatus)).join('')}
+                    </div>
+                </div>` : ''}
 
                 <!-- Cloud Settings -->
                 <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
@@ -90,6 +136,10 @@ export function createProfileModal(userProfile, settings, handlers) {
     modalOverlay.querySelector('#close-profile').addEventListener('click', onClose);
     modalOverlay.querySelector('#profile-logout-button').addEventListener('click', onLogout);
     modalOverlay.querySelector('#profile-delete-settings').addEventListener('click', onDelete);
+    const forceSyncButton = modalOverlay.querySelector('#force-sync-button');
+    if (forceSyncButton) {
+        forceSyncButton.addEventListener('click', onForceSync);
+    }
 
     modalOverlay.querySelector('#profile-save-settings').addEventListener('click', () => {
         // Gather all settings, starting with the existing ones to preserve keys not edited here

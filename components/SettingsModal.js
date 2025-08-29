@@ -13,6 +13,7 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
         foundProxies: [],
         testingProxyUrl: null,
         testingProxyId: null,
+        schemaScript: '',
     };
     
     const render = () => {
@@ -22,53 +23,86 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                     <h2 class="text-xl font-bold flex items-center gap-2">${Icons.SettingsIcon} Настройки</h2>
                     <button data-action="close" class="p-2 rounded-full hover:bg-gray-700">&times;</button>
                 </header>
-                <main class="flex-1 p-6 overflow-y-auto space-y-6">
-                    <!-- API Keys Section -->
-                    <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                        <h3 class="font-semibold text-lg">Ключи API</h3>
-                        <p class="text-xs text-gray-400 mb-4"><a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-400 hover:underline">Получить ключ Gemini API &rarr;</a></p>
-                        <div>
-                            <label class="text-sm font-medium">Gemini API Key</label>
-                            <input type="password" id="settings-gemini-api-key" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1" value="${settings.geminiApiKey || ''}">
-                        </div>
-                    </div>
-
-                    <!-- Proxy Manager Section -->
-                    ${settings.isSupabaseEnabled && supabaseService ? `
-                    <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                        <div class="flex justify-between items-center mb-4">
-                            <div>
-                                <h3 class="font-semibold text-lg">Менеджер Прокси</h3>
-                                <p class="text-xs text-gray-400">Используйте ИИ для поиска и тестирования прокси-серверов.</p>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <label for="use-proxy-toggle" class="font-medium text-sm">Использовать прокси</label>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="use-proxy-toggle" ${settings.useProxy ? 'checked' : ''}>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="grid md:grid-cols-2 gap-6">
-                            <!-- Left Panel: Saved Proxies -->
-                            <div>
-                                <h4 class="font-semibold mb-2">Ваши прокси-серверы</h4>
-                                <div id="saved-proxy-list" class="space-y-2 max-h-48 overflow-y-auto pr-2">
-                                    ${renderSavedProxies()}
+                <main class="flex-1 flex overflow-hidden">
+                    <aside class="w-52 border-r border-gray-700 p-4">
+                        <nav class="flex flex-col space-y-2">
+                             <a href="#api-keys" class="settings-tab-button active text-left" data-tab="api-keys">Ключи API</a>
+                             ${settings.isSupabaseEnabled && supabaseService ? `
+                                <a href="#proxy" class="settings-tab-button text-left" data-tab="proxy">Прокси</a>
+                                <a href="#database" class="settings-tab-button text-left" data-tab="database">База данных</a>
+                             ` : ''}
+                        </nav>
+                    </aside>
+                    <div class="flex-1 p-6 overflow-y-auto" id="settings-tabs-content">
+                        <!-- API Keys Tab -->
+                        <div id="tab-api-keys" class="settings-tab-content space-y-6">
+                            <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                                <h3 class="font-semibold text-lg">Ключи API</h3>
+                                <p class="text-xs text-gray-400 mb-4"><a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-400 hover:underline">Получить ключ Gemini API &rarr;</a></p>
+                                <div>
+                                    <label class="text-sm font-medium">Gemini API Key</label>
+                                    <input type="password" id="settings-gemini-api-key" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1" value="${settings.geminiApiKey || ''}">
                                 </div>
                             </div>
-                            <!-- Right Panel: AI Finder -->
-                            <div>
-                                 <button data-action="find-proxies" class="w-full mb-3 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm font-semibold" ${state.isLoading ? 'disabled' : ''}>
-                                    ${state.isLoading && !state.testingProxyUrl ? 'Поиск...' : 'Найти прокси с помощью ИИ'}
-                                 </button>
-                                 <h4 class="font-semibold mb-2">Найденные прокси</h4>
-                                 <div id="found-proxy-list" class="space-y-2 max-h-40 overflow-y-auto pr-2">
-                                    ${renderFoundProxies()}
-                                 </div>
-                            </div>
                         </div>
-                    </div>` : ''}
+
+                        <!-- Proxy Manager Tab -->
+                        <div id="tab-proxy" class="settings-tab-content hidden space-y-6">
+                           ${settings.isSupabaseEnabled && supabaseService ? `
+                            <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                                <div class="flex justify-between items-center mb-4">
+                                    <div>
+                                        <h3 class="font-semibold text-lg">Менеджер Прокси</h3>
+                                        <p class="text-xs text-gray-400">Используйте ИИ для поиска и тестирования прокси-серверов.</p>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <label for="use-proxy-toggle" class="font-medium text-sm">Использовать прокси</label>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="use-proxy-toggle" ${settings.useProxy ? 'checked' : ''}>
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="grid md:grid-cols-2 gap-6">
+                                    <!-- Left Panel: Saved Proxies -->
+                                    <div>
+                                        <h4 class="font-semibold mb-2">Ваши прокси-серверы</h4>
+                                        <div id="saved-proxy-list" class="space-y-2 max-h-48 overflow-y-auto pr-2">
+                                            ${renderSavedProxies()}
+                                        </div>
+                                    </div>
+                                    <!-- Right Panel: AI Finder -->
+                                    <div>
+                                         <button data-action="find-proxies" class="w-full mb-3 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm font-semibold" ${state.isLoading ? 'disabled' : ''}>
+                                            ${state.isLoading && !state.testingProxyUrl ? 'Поиск...' : 'Найти прокси с помощью ИИ'}
+                                         </button>
+                                         <h4 class="font-semibold mb-2">Найденные прокси</h4>
+                                         <div id="found-proxy-list" class="space-y-2 max-h-40 overflow-y-auto pr-2">
+                                            ${renderFoundProxies()}
+                                         </div>
+                                    </div>
+                                </div>
+                            </div>` : ''}
+                        </div>
+                        
+                         <!-- Database Tab -->
+                        <div id="tab-database" class="settings-tab-content hidden space-y-6">
+                           ${settings.isSupabaseEnabled && supabaseService ? `
+                            <div class="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                                <h3 class="text-lg font-semibold">Обновление схемы базы данных</h3>
+                                <p class="text-sm text-gray-400 mt-1 mb-4">
+                                    При выходе новых версий приложения может потребоваться обновить структуру таблиц в вашей базе данных Supabase. Нажмите кнопку ниже, чтобы получить актуальный SQL-скрипт.
+                                </p>
+                                <div class="text-sm p-3 rounded-md bg-yellow-900/30 border border-yellow-700 text-yellow-300">
+                                    <p class="font-bold">Важно:</p>
+                                    <p>Этот скрипт безопасно выполнять несколько раз. Он не удалит ваши данные, а только добавит недостающие таблицы и столбцы.</p>
+                                </div>
+                                <button data-action="show-schema-script" class="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md font-semibold transition-colors">
+                                    Показать скрипт обновления
+                                </button>
+                            </div>` : ''}
+                        </div>
+                    </div>
                 </main>
                 <footer class="p-4 border-t border-gray-700 flex justify-end">
                     <button data-action="save" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold">Сохранить и закрыть</button>
@@ -78,6 +112,11 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 <div id="proxy-test-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
                     <div id="proxy-test-modal-content" class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 flex flex-col items-center justify-center text-center">
                         <!-- Content is rendered dynamically -->
+                    </div>
+                </div>
+                 <!-- Schema Script Modal -->
+                <div id="schema-script-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                    <div id="schema-script-modal-content" class="bg-gray-900 border border-gray-700 rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[80vh]">
                     </div>
                 </div>
             </div>`;
@@ -166,6 +205,41 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
             </div>
         `;
     };
+    
+     const showSchemaScript = async () => {
+        const modal = modalElement.querySelector('#schema-script-modal');
+        const content = modalElement.querySelector('#schema-script-modal-content');
+        modal.classList.remove('hidden');
+        content.innerHTML = `<div class="p-6 text-center">Загрузка...</div>`;
+
+        if (!state.schemaScript) {
+            try {
+                const response = await fetch('./SUPABASE_SETUP.md');
+                const markdown = await response.text();
+                const sqlMatch = markdown.match(/```sql\n([\s\S]*?)\n```/);
+                state.schemaScript = sqlMatch ? sqlMatch[1].trim() : 'Не удалось извлечь SQL-скрипт.';
+            } catch (error) {
+                state.schemaScript = `Ошибка загрузки скрипта: ${error.message}`;
+            }
+        }
+
+        const projectRef = new URL(supabaseService.url).hostname.split('.')[0];
+        const editorLink = `https://supabase.com/dashboard/project/${projectRef}/sql/new`;
+
+        content.innerHTML = `
+            <header class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
+                <h3 class="text-lg font-bold">Скрипт обновления базы данных</h3>
+                <button data-action="close-sub-modal" data-modal-id="schema-script-modal" class="p-2 rounded-full hover:bg-gray-700">&times;</button>
+            </header>
+            <main class="flex-1 p-4 overflow-y-auto">
+                <pre class="bg-gray-800 p-3 rounded-md text-xs whitespace-pre-wrap font-mono"><code id="sql-script-code">${state.schemaScript}</code></pre>
+            </main>
+            <footer class="p-4 border-t border-gray-700 flex justify-between items-center flex-shrink-0">
+                <a href="${editorLink}" target="_blank" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md text-sm font-semibold">Открыть SQL Editor</a>
+                <button data-action="copy-script" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm font-semibold">Копировать скрипт</button>
+            </footer>
+        `;
+    };
 
     const handleAction = async (e) => {
         // Special case for toggle input
@@ -195,6 +269,7 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
             case 'close': onClose(); break;
             case 'save': {
                 const newSettings = {
+                    ...settings,
                     geminiApiKey: modalElement.querySelector('#settings-gemini-api-key').value.trim(),
                     useProxy: modalElement.querySelector('#use-proxy-toggle')?.checked || false,
                 };
@@ -269,11 +344,42 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 }
                 break;
             }
+            case 'show-schema-script':
+                await showSchemaScript();
+                break;
+            case 'close-sub-modal':
+                modalElement.querySelector(`#${target.dataset.modalId}`).classList.add('hidden');
+                break;
+             case 'copy-script': {
+                const code = modalElement.querySelector('#sql-script-code').textContent;
+                navigator.clipboard.writeText(code).then(() => {
+                    target.textContent = 'Скопировано!';
+                    setTimeout(() => target.textContent = 'Копировать скрипт', 2000);
+                });
+                break;
+            }
         }
     };
     
     modalElement.addEventListener('click', handleAction);
     modalElement.addEventListener('change', handleAction); // Add change listener for the toggle
+    
+     // Tab switching logic
+    modalElement.addEventListener('click', (e) => {
+        const button = e.target.closest('.settings-tab-button');
+        if (!button) return;
+
+        e.preventDefault();
+        const tabId = button.dataset.tab;
+
+        modalElement.querySelectorAll('.settings-tab-button').forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+
+        modalElement.querySelectorAll('.settings-tab-content').forEach(content => {
+            content.classList.toggle('hidden', content.id !== `tab-${tabId}`);
+        });
+    });
+
     render();
     loadSavedProxies();
     return modalElement;
