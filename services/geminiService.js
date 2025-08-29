@@ -926,7 +926,7 @@ ${errorMessage}
     }
 };
 
-export const findProxiesWithGemini = async ({ apiKey, proxyUrl, existingProxies = [] }) => {
+export const findProxiesWithGemini = async ({ apiKey, proxyUrl, existingProxies = [], customPrompt = '' }) => {
     if (!apiKey) throw new Error("Ключ Gemini API не предоставлен.");
 
     const clientOptions = { apiKey };
@@ -937,16 +937,17 @@ export const findProxiesWithGemini = async ({ apiKey, proxyUrl, existingProxies 
 
     const existingProxiesString = existingProxies.length > 0 ? existingProxies.join(', ') : 'Нет';
 
-    const systemInstruction = `Ты — "Сетевой Конфигуратор", ИИ-помощник для разработчика. Я создаю персональный ассистент "Секретарь+" с помощью Gemini API.
-Моя цель — помочь пользователям из регионов, где API недоступен, получить доступ через публичные HTTPS прокси.
+    const defaultSystemInstruction = `Ты — "Сетевой Скаут", ИИ-помощник для разработчика личного ассистента "Секретарь+". Моя цель — помочь пользователям получить доступ к Google API через публичные HTTPS прокси.
 Твоя задача:
-1.  Найти 10 **НОВЫХ** публичных HTTPS прокси, которые известны своей надежностью для доступа к сервисам Google Cloud.
-2.  Приоритет — серверы в США (USA).
-3.  **Критически важно:** Не предлагай прокси, которые уже есть в списке существующих.
-4.  Верни результат СТРОГО в виде JSON-массива объектов. Если ничего не найдено, верни пустой массив.`;
+1.  Найти 5-10 **НОВЫХ** публичных HTTPS прокси, которые известны своей надежностью и скоростью для доступа к сервисам Google Cloud.
+2.  Приоритет — серверы в США (USA) или Европе (Germany, Netherlands, France).
+3.  **Критически важно:** Не предлагай прокси, которые уже есть в списке существующих. Это бесполезно.
+4.  Верни результат СТРОГО в виде JSON-массива объектов. Если ничего не найдено, верни пустой массив. Не добавляй никаких объяснений или комментариев вне JSON.`;
     
-    const prompt = `Существующие прокси (не повторять): \`${existingProxiesString}\`.
-Предоставь 10 **НОВЫХ** URL-адресов публичных HTTPS прокси-серверов, расположенных в США.`;
+    const systemInstruction = customPrompt.trim() || defaultSystemInstruction;
+
+    const prompt = `Существующие прокси (эти повторять нельзя): \`${existingProxiesString}\`.
+Найди новые HTTPS прокси, подходящие для доступа к Google API.`;
 
     try {
         const response = await ai.models.generateContent({
@@ -969,10 +970,15 @@ export const findProxiesWithGemini = async ({ apiKey, proxyUrl, existingProxies 
         });
         
         const jsonStr = response.text.trim();
-        return JSON.parse(jsonStr);
+        // Return extra info for the "thinking" view
+        return {
+            systemPrompt: systemInstruction,
+            rawResponse: jsonStr,
+            parsedData: JSON.parse(jsonStr)
+        };
 
     } catch (error) {
         console.error("Error calling Gemini for proxy generation:", error);
-        throw new Error("Не удалось сгенерировать список прокси. Проверьте ваш API ключ.");
+        throw new Error("Не удалось сгенерировать список прокси. Проверьте ваш API ключ и системный промпт.");
     }
 };

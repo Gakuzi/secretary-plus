@@ -13,6 +13,54 @@ function markdownToHTML(text) {
         .replace(/\n/g, '<br>');
 }
 
+// Function to create a simple modal for viewing data
+function createDataViewerModal(title, data, warning, error, onClose) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-[52] p-4 animate-fadeIn';
+    
+    let contentHtml = '';
+    if (error) {
+        contentHtml = `<div class="p-4 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-200 rounded-md">${error}</div>`;
+    } else if (data.length === 0) {
+        contentHtml = `<p class="text-slate-500 dark:text-slate-400 text-center py-8">Данные еще не синхронизированы.</p>`;
+    } else {
+        const headers = Object.keys(data[0]);
+        contentHtml = `
+            ${warning ? `<p class="text-sm text-yellow-600 dark:text-yellow-400 mb-2">${warning}</p>` : ''}
+            <div class="overflow-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+                <table class="w-full text-xs text-left">
+                    <thead class="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400">
+                        <tr>${headers.map(h => `<th class="p-2 truncate">${h}</th>`).join('')}</tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                        ${data.map(row => `
+                            <tr>${headers.map(h => `<td class="p-2 truncate" title="${row[h]}">${row[h]}</td>`).join('')}</tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] flex flex-col">
+            <header class="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                <h3 class="text-lg font-bold">Просмотр данных: ${title}</h3>
+                <button data-action="close-viewer" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">&times;</button>
+            </header>
+            <main class="p-4 flex-1 overflow-auto">${contentHtml}</main>
+        </div>
+    `;
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal || e.target.closest('[data-action="close-viewer"]')) {
+            onClose();
+        }
+    });
+
+    return modal;
+}
+
 
 export function createProfileModal(currentUserProfile, allUsers, chatHistory, settings, handlers, initialSyncStatus, syncTasks, supabaseUrl) {
     const { onClose, onSave, onLogout, onDelete, onForceSync, onAnalyzeError, onViewData, onLaunchDbWizard, onUpdateUserRole } = handlers;
@@ -151,6 +199,7 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
                     <button data-action="save" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold">Сохранить и закрыть</button>
                 </footer>
             </div>
+            <div id="data-viewer-container"></div>
         `;
         
         // --- DYNAMIC CONTENT RENDERING ---
@@ -381,14 +430,39 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
                 if (syncContainer) renderSyncSection(syncContainer);
                 break;
             }
-             case 'analyze-error':
-                // This would open a sub-modal, logic can be complex
-                alert('Функция анализа ошибок в разработке.');
+            case 'analyze-error': {
+                const taskName = target.dataset.taskName;
+                const errorMessage = decodeURIComponent(target.dataset.errorMessage);
+                target.textContent = 'Анализ...';
+                target.disabled = true;
+                try {
+                    const analysis = await onAnalyzeError({ context: `Syncing ${taskName}`, error: errorMessage });
+                    const viewerContainer = modalOverlay.querySelector('#data-viewer-container');
+                    const modal = createDataViewerModal(
+                        `Анализ ошибки: ${taskName}`,
+                        [], null, `<div class="prose prose-sm dark:prose-invert max-w-none">${markdownToHTML(analysis)}</div>`,
+                        () => viewerContainer.innerHTML = ''
+                    );
+                    viewerContainer.appendChild(modal);
+                } catch (e) {
+                    alert(`Не удалось проанализировать ошибку: ${e.message}`);
+                } finally {
+                    target.textContent = 'Ошибка: ' + errorMessage;
+                    target.disabled = false;
+                }
                 break;
-            case 'view-data':
-                // This would open a sub-modal, logic can be complex
-                alert('Функция просмотра данных в разработке.');
+            }
+            case 'view-data': {
+                const tableName = target.dataset.tableName;
+                const label = target.dataset.label;
+                const viewerContainer = modalOverlay.querySelector('#data-viewer-container');
+                viewerContainer.innerHTML = `<div class="fixed inset-0 bg-black/10 flex items-center justify-center z-[53]"><div class="animate-spin h-8 w-8 border-4 border-white border-t-transparent rounded-full"></div></div>`;
+                const { data, warning, error } = await onViewData({ tableName });
+                const modal = createDataViewerModal(label, data, warning, error, () => viewerContainer.innerHTML = '');
+                viewerContainer.innerHTML = '';
+                viewerContainer.appendChild(modal);
                 break;
+            }
         }
     };
     

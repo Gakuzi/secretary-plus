@@ -1,4 +1,5 @@
 
+
 const SETTINGS_KEY = 'secretary-plus-settings-v4';
 const SYNC_STATUS_KEY = 'secretary-plus-sync-status-v1';
 
@@ -21,6 +22,7 @@ const defaultSettings = {
         notes: 'supabase',
     },
     useProxy: false,
+    customProxyPrompt: '', // For user-editable proxy search prompt
 };
 
 export function getSettings() {
@@ -54,6 +56,7 @@ export function saveSettings(settings) {
             enableAutoSync: settings.enableAutoSync,
             serviceMap: settings.serviceMap,
             useProxy: settings.useProxy,
+            customProxyPrompt: settings.customProxyPrompt,
         };
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
     } catch (error)

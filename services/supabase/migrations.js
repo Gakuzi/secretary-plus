@@ -11,10 +11,10 @@ DROP TABLE IF EXISTS public.notes CASCADE;
 DROP TABLE IF EXISTS public.chat_memory CASCADE;
 DROP TABLE IF EXISTS public.chat_history CASCADE;
 DROP TABLE IF EXISTS public.sessions CASCADE;
-DROP TABLE IF EXISTS public.profiles CASCADE;
-DROP TABLE IF EXISTS public.user_settings CASCADE;
 DROP TABLE IF EXISTS public.action_stats CASCADE;
 DROP TABLE IF EXISTS public.proxies CASCADE;
+DROP TABLE IF EXISTS public.user_settings CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
 
 
 -- Создаем или обновляем типы ENUM для ролей и отправителей
@@ -59,7 +59,7 @@ COMMENT ON TABLE public.sessions IS 'Отслеживает отдельные �
 
 -- Таблица для истории чата
 CREATE TABLE public.chat_history (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     session_id UUID NOT NULL REFERENCES public.sessions(id) ON DELETE CASCADE,
     sender public.chat_sender NOT NULL,
@@ -74,7 +74,7 @@ COMMENT ON TABLE public.chat_history IS 'Полный лог всех взаим
 
 -- Таблица для событий календаря
 CREATE TABLE public.calendar_events (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     source_id TEXT NOT NULL,
     title TEXT,
@@ -95,7 +95,7 @@ COMMENT ON TABLE public.calendar_events IS 'Кэшированные событ�
 
 -- Таблица для контактов
 CREATE TABLE public.contacts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     source_id TEXT NOT NULL,
     display_name TEXT,
@@ -113,7 +113,7 @@ COMMENT ON TABLE public.contacts IS 'Кэшированные контакты �
 
 -- Таблица для файлов
 CREATE TABLE public.files (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     source_id TEXT NOT NULL,
     name TEXT,
@@ -135,7 +135,7 @@ COMMENT ON TABLE public.files IS 'Кэшированная мета-информ
 
 -- Таблица для задач
 CREATE TABLE public.tasks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     source_id TEXT NOT NULL,
     title TEXT,
@@ -152,7 +152,7 @@ COMMENT ON TABLE public.tasks IS 'Кэшированные задачи из Goo
 
 -- Таблица для электронной почты
 CREATE TABLE public.emails (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     source_id TEXT NOT NULL,
     subject TEXT,
@@ -169,7 +169,7 @@ COMMENT ON TABLE public.emails IS 'Кэшированные письма из Gm
 
 -- Таблица для заметок
 CREATE TABLE public.notes (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     title TEXT,
     content TEXT,
@@ -180,7 +180,7 @@ COMMENT ON TABLE public.notes IS 'Заметки, созданные польз�
 
 -- Таблица для долговременной памяти чата
 CREATE TABLE public.chat_memory (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     summary TEXT,
     keywords TEXT[],
@@ -251,8 +251,29 @@ DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.prox
 DROP POLICY IF EXISTS "Пользователи могут видеть все профили." ON public.profiles;
 DROP POLICY IF EXISTS "Пользователи могут обновлять свой профиль." ON public.profiles;
 DROP POLICY IF EXISTS "Администраторы могут делать все." ON public.profiles;
-DROP POLICY IF EXISTS "Enable read access for all users" ON public.sessions;
-DROP POLICY IF EXISTS "Enable read access for all users" ON public.chat_history;
+DROP POLICY IF EXISTS "Пользователи могут управлять своими сессиями и историей." ON public.sessions;
+DROP POLICY IF EXISTS "Пользователи могут управлять своей историей чата." ON public.chat_history;
+DROP POLICY IF EXISTS "Администраторы могут просматривать все сессии и историю." ON public.sessions;
+DROP POLICY IF EXISTS "Администраторы могут просматривать всю историю чата." ON public.chat_history;
+
+-- Функция-триггер для автоматического обновления поля 'updated_at'
+CREATE OR REPLACE FUNCTION public.handle_updated_at() 
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW; 
+END;
+$$ LANGUAGE plpgsql;
+
+-- Применяем триггер к таблицам, где он нужен
+CREATE TRIGGER on_profiles_update BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+CREATE TRIGGER on_calendar_events_update BEFORE UPDATE ON public.calendar_events FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+CREATE TRIGGER on_contacts_update BEFORE UPDATE ON public.contacts FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+CREATE TRIGGER on_files_update BEFORE UPDATE ON public.files FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+CREATE TRIGGER on_tasks_update BEFORE UPDATE ON public.tasks FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+CREATE TRIGGER on_emails_update BEFORE UPDATE ON public.emails FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+CREATE TRIGGER on_notes_update BEFORE UPDATE ON public.notes FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+CREATE TRIGGER on_user_settings_update BEFORE UPDATE ON public.user_settings FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 
 -- Функция для проверки, является ли пользователь администратором (или владельцем)

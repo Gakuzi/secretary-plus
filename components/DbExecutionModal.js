@@ -1,6 +1,7 @@
 import * as Icons from './icons/Icons.js';
+import { FULL_MIGRATION_SQL } from '../services/supabase/migrations.js';
 
-export function createDbExecutionModal({ sqlScript, onExecute, onClose }) {
+export function createDbExecutionModal({ onExecute, onClose }) {
     const modalElement = document.createElement('div');
     modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-[51] p-4 animate-fadeIn';
 
@@ -8,6 +9,7 @@ export function createDbExecutionModal({ sqlScript, onExecute, onClose }) {
         isLoading: false,
         logOutput: 'Ожидание выполнения...',
         executionSuccess: false,
+        currentSql: FULL_MIGRATION_SQL,
     };
 
     const render = () => {
@@ -18,15 +20,15 @@ export function createDbExecutionModal({ sqlScript, onExecute, onClose }) {
             footerHtml = `
                 <button data-action="close" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md text-sm font-semibold">Отмена</button>
                 <button data-action="execute" class="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold disabled:bg-slate-500" ${state.isLoading ? 'disabled' : ''}>
-                    ${state.isLoading ? 'Выполнение...' : 'Выполнить и обновить'}
+                    ${state.isLoading ? 'Выполнение...' : 'Выполнить'}
                 </button>
             `;
         }
 
         modalElement.innerHTML = `
-            <div class="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg shadow-2xl w-full max-w-2xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col relative">
+            <div class="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg shadow-2xl w-full max-w-3xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col relative">
                 <header class="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                    <h2 class="text-xl font-bold flex items-center gap-2">${Icons.DatabaseIcon} Выполнение миграции БД</h2>
+                    <h2 class="text-xl font-bold flex items-center gap-2">${Icons.DatabaseIcon} Редактор и Миграция БД</h2>
                     <button data-action="close" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">&times;</button>
                 </header>
                 <main class="flex-1 p-6 overflow-y-auto bg-slate-50 dark:bg-slate-900/50 space-y-4">
@@ -34,12 +36,15 @@ export function createDbExecutionModal({ sqlScript, onExecute, onClose }) {
                         <div class="w-5 h-5 flex-shrink-0 mt-0.5">${Icons.AlertTriangleIcon}</div>
                         <div>
                             <p class="font-bold">Внимание:</p>
-                            <p>Это действие применит скрипт к вашей базе данных. Это может привести к удалению существующих данных в таблицах, которые затрагивает скрипт. Убедитесь, что у вас есть резервная копия, если это необходимо.</p>
+                            <p>Выполнение некорректного SQL-скрипта может повредить вашу базу данных. Это действие может быть необратимо. Убедитесь, что у вас есть резервная копия.</p>
                         </div>
                     </div>
                     <div>
-                        <label for="sql-script-area" class="font-semibold text-sm">Скрипт полной миграции схемы:</label>
-                        <textarea id="sql-script-area" class="w-full h-40 mt-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 font-mono text-xs" readonly>${sqlScript}</textarea>
+                        <div class="flex justify-between items-center mb-1">
+                            <label for="sql-script-area" class="font-semibold text-sm">SQL-скрипт для выполнения:</label>
+                            <button data-action="reset-sql" class="text-xs font-semibold bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 px-2 py-1 rounded-md transition-colors">Сбросить до стандартного</button>
+                        </div>
+                        <textarea id="sql-script-area" class="w-full h-48 mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 font-mono text-xs focus:ring-2 focus:ring-blue-500 outline-none">${state.currentSql}</textarea>
                     </div>
                     <div>
                         <label class="font-semibold text-sm">Лог выполнения:</label>
@@ -59,12 +64,24 @@ export function createDbExecutionModal({ sqlScript, onExecute, onClose }) {
         }
 
         const action = target.dataset.action;
+        const sqlTextarea = modalElement.querySelector('#sql-script-area');
 
         switch (action) {
             case 'close':
                 onClose();
                 break;
+            case 'reset-sql':
+                if (confirm('Вы уверены, что хотите сбросить скрипт до стандартной полной миграции? Все ваши изменения будут утеряны.')) {
+                    state.currentSql = FULL_MIGRATION_SQL;
+                    if(sqlTextarea) sqlTextarea.value = state.currentSql;
+                }
+                break;
             case 'execute':
+                const sqlToExecute = sqlTextarea.value.trim();
+                if (!sqlToExecute) {
+                    alert('SQL-скрипт не может быть пустым.');
+                    return;
+                }
                 if (!confirm('Вы уверены, что хотите выполнить этот скрипт? Это действие может быть необратимым.')) {
                     return;
                 }
@@ -73,7 +90,7 @@ export function createDbExecutionModal({ sqlScript, onExecute, onClose }) {
                 state.logOutput = 'Выполнение миграции...';
                 render();
                 try {
-                    const result = await onExecute();
+                    const result = await onExecute(sqlToExecute); // Pass the current SQL to the handler
                     state.logOutput = `УСПЕШНО! База данных настроена.\n\nОтвет сервера:\n${JSON.stringify(result, null, 2)}`;
                     state.executionSuccess = true;
                 } catch (error) {
@@ -87,6 +104,12 @@ export function createDbExecutionModal({ sqlScript, onExecute, onClose }) {
     };
 
     modalElement.addEventListener('click', handleAction);
+    modalElement.addEventListener('input', (e) => {
+        if (e.target.id === 'sql-script-area') {
+            state.currentSql = e.target.value;
+        }
+    });
+
     render();
     return modalElement;
 }

@@ -4,13 +4,13 @@ import { GOOGLE_SCOPES } from '../../constants.js';
 function parseGmailDate(dateString) {
     if (!dateString) return null;
     try {
-        const date = new Date(dateString);
-        // Check if the parsed date is valid
-        if (isNaN(date.getTime())) {
+        // Gmail date format can be inconsistent, Date.parse is more robust.
+        const timestamp = Date.parse(dateString);
+        if (isNaN(timestamp)) {
             console.warn(`Could not parse invalid date string: ${dateString}`);
             return null;
         }
-        return date.toISOString();
+        return new Date(timestamp).toISOString();
     } catch (e) {
         console.error(`Error parsing date string: ${dateString}`, e);
         return null;
@@ -411,9 +411,9 @@ export class SupabaseService {
             .select('settings')
             .single();
         
-        if (error && error.code !== 'PGRST116') {
+        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found, which is ok
             console.error('Error fetching user settings:', error);
-            throw error;
+            return null; // Return null instead of throwing, so app can proceed with defaults
         }
 
         return data ? data.settings : null;
@@ -524,34 +524,26 @@ export class SupabaseService {
     async getSampleData(tableName, limit = 10) {
         if (!tableName) throw new Error("Table name is required.");
 
-        const orderColumn = ['notes', 'files', 'contacts'].includes(tableName) ? 'updated_at' : 'created_at';
+        // Define a list of common timestamp columns to try for ordering
+        const orderColumns = ['updated_at', 'created_at', 'modified_time', 'received_at'];
 
+        let query = this.client.from(tableName).select('*').limit(limit);
+
+        // Try to order by the first available timestamp column
+        for (const col of orderColumns) {
+            const { error } = await this.client.from(tableName).select(col).limit(1);
+            if (!error) {
+                query = query.order(col, { ascending: false, nullsFirst: true });
+                break; // Stop after finding a valid column
+            }
+        }
+        
         try {
-            const { data, error } = await this.client
-                .from(tableName)
-                .select('*')
-                .order(orderColumn, { ascending: false, nullsFirst: true })
-                .limit(limit);
-
+            const { data, error } = await query;
             if (error) throw error; // Re-throw to be caught below
             return { data: data || [] };
         } catch (error) {
             console.error(`Error fetching sample data from ${tableName}:`, error);
-            // If it's a "column does not exist" error, retry without ordering
-            if (error.message && error.message.includes('column') && error.message.includes('does not exist')) {
-                console.warn(`Column for ordering not found in ${tableName}. Retrying without order.`);
-                const { data, error: retryError } = await this.client
-                    .from(tableName)
-                    .select('*')
-                    .limit(limit);
-
-                if (retryError) {
-                    // If retry also fails, return the original error message
-                    return { error: retryError.message };
-                }
-                return { data: data || [], warning: 'Could not sort by date.' };
-            }
-            // For other errors, return them
             return { error: error.message };
         }
     }
@@ -619,16 +611,8 @@ export class SupabaseService {
             .single();
 
         if (error) {
-            if (error.code === '23505') {
-                 const { data: updateData, error: updateError } = await this.client
-                    .from('proxies')
-                    .update({ ...proxyData, last_checked_at: new Date().toISOString() })
-                    .eq('user_id', user.id)
-                    .eq('url', proxyData.url)
-                    .select()
-                    .single();
-                 if (updateError) throw updateError;
-                 return updateData;
+            if (error.code === '23505') { // uniqueness violation
+                 throw new Error("Этот URL прокси уже существует в вашем хранилище.");
             }
             throw error;
         }
@@ -674,7 +658,7 @@ export class SupabaseService {
 
     async logChatMessage(message, sessionId) {
         const { data: { user } } = await this.client.auth.getUser();
-        if (!user) return; // Don't throw, just fail silently.
+        if (!user || !sessionId) return; // Don't throw, just fail silently.
 
         const payload = {
             user_id: user.id,
