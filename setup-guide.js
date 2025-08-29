@@ -110,6 +110,58 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
         });
     });
+
+    // --- SUPABASE AUTO-SETUP ---
+    const runSqlButton = document.getElementById('run-sql-auto');
+    const tokenInput = document.getElementById('supabase-token-input');
+    const projectIdInput = document.getElementById('supabase-project-id');
+    const statusContainer = document.getElementById('auto-setup-status');
+
+    runSqlButton.addEventListener('click', async () => {
+        const accessToken = tokenInput.value.trim();
+        const projectId = projectIdInput.value.trim();
+        const sqlContent = document.getElementById('sql-script-content').textContent.trim();
+
+        if (!accessToken || !projectId) {
+            statusContainer.className = 'status-message status-error';
+            statusContainer.textContent = 'Ошибка: Пожалуйста, введите токен доступа и ID проекта.';
+            return;
+        }
+
+        statusContainer.className = 'status-message status-loading';
+        statusContainer.textContent = 'Выполнение скрипта... Это может занять до 30 секунд.';
+        runSqlButton.disabled = true;
+        runSqlButton.textContent = 'Выполняется...';
+
+        try {
+            const response = await fetch(`https://api.supabase.com/v1/projects/${projectId}/sql`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ "query": sqlContent })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+            }
+
+            // The API returns an empty response on success (200 OK)
+            statusContainer.className = 'status-message status-success';
+            statusContainer.textContent = 'Успешно! Схема базы данных настроена. Можете переходить к следующему шагу.';
+
+        } catch (error) {
+            console.error('Auto-setup failed:', error);
+            statusContainer.className = 'status-message status-error';
+            statusContainer.textContent = `Ошибка выполнения: ${error.message}. Проверьте правильность токена и ID проекта. Вы можете попробовать ручной метод ниже.`;
+        } finally {
+            runSqlButton.disabled = false;
+            runSqlButton.textContent = 'Запустить автоматическую настройку';
+        }
+    });
+
     
     // --- DEEP LINKING ON LOAD ---
     const handleDeepLink = () => {

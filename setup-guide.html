@@ -87,13 +87,46 @@
                     </div>
 
                     <div class="step">
-                        <h3 class="step-title">Шаг 2.2: Выполнение SQL-скрипта</h3>
-                        <ol>
-                            <li>В меню проекта выберите <strong>SQL Editor</strong>, затем <strong>"+ New query"</strong>.</li>
-                            <li>Скопируйте и вставьте весь SQL-скрипт ниже, затем нажмите <strong>"RUN"</strong>. Этот скрипт можно безопасно выполнять повторно для обновления схемы.</li>
-                        </ol>
-                        <div class="code-block">
-                            <pre><code id="sql-script-content">-- =================================================================
+                        <h3 class="step-title">Шаг 2.2: Настройка базы данных</h3>
+                        <div class="note">
+                            <p><strong>Мы добавили автоматическую настройку!</strong> Вместо ручного копирования SQL-кода вы можете использовать наш новый инструмент, который сделает все за вас.</p>
+                        </div>
+                        
+                        <div id="auto-setup-block" class="bg-gray-800 border border-gray-700 rounded-lg p-6 mt-4">
+                            <h4 class="text-xl font-semibold text-white mb-4">Вариант А: Автоматическая настройка (Рекомендуется)</h4>
+                            <ol class="space-y-3">
+                                <li>
+                                    <strong>Сгенерируйте токен доступа:</strong>
+                                    <ul class="list-disc list-inside text-gray-400 mt-1 pl-4">
+                                        <li><a href="https://supabase.com/dashboard/account/tokens" target="_blank">Откройте страницу токенов доступа</a> в вашем аккаунте Supabase.</li>
+                                        <li>Нажмите "Generate New Token".</li>
+                                        <li>Дайте ему имя (например, "Secretary Setup") и нажмите "Generate Token".</li>
+                                        <li>Скопируйте сгенерированный токен и вставьте его в поле ниже.</li>
+                                    </ul>
+                                </li>
+                                 <li>
+                                    <strong>Найдите ID вашего проекта:</strong>
+                                     <ul class="list-disc list-inside text-gray-400 mt-1 pl-4">
+                                         <li>Перейдите в настройки вашего проекта: `Project Settings` > `General`.</li>
+                                         <li>Найдите поле `Reference ID` и скопируйте его.</li>
+                                     </ul>
+                                </li>
+                                <li>
+                                    <strong>Запустите настройку:</strong>
+                                    <div class="space-y-4 my-4">
+                                        <input type="password" id="supabase-token-input" placeholder="Вставьте ваш токен доступа (вида sup-..." class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 font-mono">
+                                        <input type="text" id="supabase-project-id" placeholder="Вставьте ваш Project Reference ID" class="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 font-mono">
+                                    </div>
+                                    <button id="run-sql-auto" class="wizard-nav-button next-button w-full text-center justify-center">Запустить автоматическую настройку</button>
+                                </li>
+                            </ol>
+                            <div id="auto-setup-status" class="mt-4 text-sm"></div>
+                        </div>
+
+                        <details class="mt-6">
+                            <summary class="cursor-pointer text-gray-400 hover:text-white transition">Вариант Б: Ручная настройка</summary>
+                             <div class="mt-4 code-block">
+                                <pre><code id="sql-script-content">-- =================================================================
 --  Скрипт настройки базы данных "Секретарь+"
 --  Версия: 1.8.0
 --  Этот скрипт является идемпотентным. Его можно безопасно 
@@ -354,16 +387,12 @@ BEGIN
 END;
 $$;
 </code></pre>
-                            <button class="copy-button" data-copy-target="sql-script-content">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
-                                <span class="copy-text">Копировать</span>
-                            </button>
-                        </div>
-                        <div class="note warning">
-                            <h4 class="font-bold text-lg mb-2">Устранение неполадок с базой данных</h4>
-                           <p>Если приложение не работает, а в чате появляются ошибки, связанные с базой данных (например, `column "..." does not exist`, `relation "..." does not exist` или ошибки синхронизации), это почти всегда означает, что структура вашей базы данных устарела.</p>
-                           <p><strong>Решение:</strong> Скопируйте и выполните обновленный скрипт выше еще раз. Он специально разработан для безопасного обновления вашей базы данных до последней версии без удаления существующих данных.</p>
-                        </div>
+                                <button class="copy-button" data-copy-target="sql-script-content">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                                    <span class="copy-text">Копировать</span>
+                                </button>
+                            </div>
+                        </details>
                     </div>
 
                     <div class="step">

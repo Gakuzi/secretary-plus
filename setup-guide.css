@@ -289,3 +289,25 @@ a:not(.nav-link):hover {
 .choice-features li {
     margin-bottom: 0.25rem;
 }
+
+/* Status Messages for Auto Setup */
+.status-message {
+    padding: 0.75rem 1rem;
+    border-radius: 0.375rem;
+    font-weight: 500;
+}
+.status-success {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #34d399; /* emerald-400 */
+    border: 1px solid #10b981;
+}
+.status-error {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #f87171; /* red-400 */
+    border: 1px solid #ef4444;
+}
+.status-loading {
+    background-color: rgba(59, 130, 246, 0.1);
+    color: #93c5fd; /* blue-300 */
+    border: 1px solid var(--accent-blue);
+}
