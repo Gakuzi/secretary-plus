@@ -7,8 +7,6 @@ import { createSetupWizard } from './components/SetupWizard.js';
 import { createSettingsModal } from './components/SettingsModal.js';
 import { createProfileModal } from './components/ProfileModal.js';
 import { createHelpModal } from './components/HelpModal.js';
-import { createDbSetupWizard } from './components/DbSetupWizard.js';
-import { createProxySetupWizard } from './components/ProxySetupWizard.js';
 import { createProxyManagerModal } from './components/ProxyManagerModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
@@ -589,6 +587,24 @@ async function handleGlobalClick(event) {
 
 
 // --- MODAL & WIZARD MANAGEMENT ---
+
+/**
+ * Clears local settings and reloads the page to force the setup wizard to show.
+ * This is used for re-configuration from the Settings or Help modals.
+ */
+function relaunchWizard() {
+    if (confirm('Это действие перезапустит мастер настройки и сбросит все текущие ключи, сохраненные в браузере. Продолжить?')) {
+        const promptResponse = prompt('Это действие необратимо. Для подтверждения введите "СБРОСИТЬ".');
+        if (promptResponse === "СБРОСИТЬ") {
+            localStorage.removeItem('secretary-plus-settings-v4');
+            sessionStorage.removeItem('wizardState');
+            window.location.reload();
+        } else {
+            alert("Сброс отменен.");
+        }
+    }
+}
+
 function showSettingsModal() {
     modalContainer.innerHTML = '';
     const modal = createSettingsModal({
@@ -611,10 +627,7 @@ function showSettingsModal() {
             startAutoProxyTesting(); // Restart proxy testing based on new settings
             modalContainer.innerHTML = '';
         },
-        onLaunchDbWizard: () => {
-             modalContainer.innerHTML = ''; // Close settings before opening wizard
-             showDbSetupWizard();
-        },
+        onLaunchDbWizard: relaunchWizard,
         onLaunchProxyManager: () => {
             modalContainer.innerHTML = ''; // Close settings before opening manager
             showProxyManagerModal();
@@ -658,7 +671,6 @@ function showHelpModal() {
     const modal = createHelpModal({
         onClose: () => { modalContainer.innerHTML = ''; },
         settings: state.settings,
-        // FIX: Make arrow function async to allow await
         analyzeErrorFn: async (errorText) => analyzeSyncErrorWithGemini({
             errorMessage: errorText,
             context: 'User is analyzing a pasted error in the Help Center.',
@@ -677,11 +689,8 @@ function showHelpModal() {
                  }
             }
         },
-        onLaunchDbWizard: showDbSetupWizard,
-        onLaunchProxyWizard: () => showProxySetupWizard({
-            supabaseService: supabaseService,
-            onClose: () => { wizardContainer.innerHTML = ''; }
-        })
+        onLaunchDbWizard: relaunchWizard,
+        onLaunchProxyWizard: relaunchWizard
     });
     modalContainer.appendChild(modal);
 }
@@ -697,34 +706,6 @@ function showCameraView() {
         }
     );
     cameraViewContainer.appendChild(cameraView);
-}
-
-function showDbSetupWizard() {
-     wizardContainer.innerHTML = '';
-     const wizard = createDbSetupWizard({
-        settings: state.settings,
-        supabaseConfig: SUPABASE_CONFIG,
-        onClose: () => { wizardContainer.innerHTML = ''; },
-        onSave: async (newSettings) => {
-            state.settings = newSettings;
-             if (supabaseService) {
-                await supabaseService.saveUserSettings(newSettings);
-            }
-            saveSettings(newSettings);
-            // DO NOT close the wizard or show an alert here.
-            // The wizard manages its own lifecycle and provides feedback internally.
-        }
-     });
-     wizardContainer.appendChild(wizard);
-}
-
-function showProxySetupWizard({ supabaseService, onClose }) {
-     wizardContainer.innerHTML = '';
-     const wizard = createProxySetupWizard({
-        supabaseService: supabaseService,
-        onClose: onClose,
-     });
-     wizardContainer.appendChild(wizard);
 }
 
 function showProxyManagerModal() {
@@ -880,7 +861,9 @@ async function startFullApp() {
     state.settings = settings; // Update global state
 
     // Condition to show the initial setup wizard
-    if (!settings.geminiApiKey) {
+    const shouldShowWizard = !settings.geminiApiKey;
+
+    if (shouldShowWizard || savedWizardState) {
         wizardContainer.innerHTML = '';
         const wizard = createSetupWizard({
             onComplete: async (newSettings) => {
@@ -890,12 +873,6 @@ async function startFullApp() {
                 // Instead of reloading, re-initialize services and render main content
                 await initializeAppServices();
                 renderMainContent();
-            },
-            onExit: () => {
-                wizardContainer.innerHTML = '';
-                // Do nothing on exit, as settings are not complete.
-                // The welcome screen will guide the user back.
-                renderMainContent(); 
             },
             googleProvider,
             supabaseService: supabaseService, // Pass the single global instance
@@ -921,7 +898,7 @@ async function startFullApp() {
                     await runMigration();
                 } else if (action === 'open-wizard') {
                     element.remove();
-                    showDbSetupWizard();
+                    relaunchWizard(); // Relaunch the main wizard to configure the DB worker
                 }
             });
         } else {

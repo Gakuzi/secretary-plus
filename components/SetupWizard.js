@@ -1,8 +1,81 @@
 import { getSettings, saveGoogleToken, getGoogleToken, clearGoogleToken } from '../utils/storage.js';
 import * as Icons from './icons/Icons.js';
 import { createProxyManagerModal } from './ProxyManagerModal.js';
+import { FULL_MIGRATION_SQL } from '../services/supabase/migrations.js';
 
-export function createSetupWizard({ onComplete, onExit, googleProvider, supabaseService, googleClientId, resumeState = null }) {
+
+const EDGE_FUNCTION_CODE = `
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import postgres from 'https://deno.land/x/postgresjs@v3.4.2/mod.js';
+
+// Заголовки CORS для preflight и обычных запросов
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+serve(async (req) => {
+  // Обработка CORS preflight запросов
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: CORS_HEADERS });
+  }
+
+  const sql = postgres(Deno.env.get('DATABASE_URL'));
+
+  try {
+    // 1. Получаем секреты из переменных окружения
+    const ADMIN_SECRET_TOKEN = Deno.env.get('ADMIN_SECRET_TOKEN');
+
+    if (!Deno.env.get('DATABASE_URL') || !ADMIN_SECRET_TOKEN) {
+      throw new Error('Database URL или Admin Token не установлены в секретах функции.');
+    }
+
+    // 2. Извлекаем SQL-запрос и токен из тела запроса
+    const { sql: sqlQuery, admin_token: requestToken } = await req.json();
+
+    // 3. Проверяем токен администратора
+    if (requestToken !== ADMIN_SECRET_TOKEN) {
+      return new Response(JSON.stringify({ error: 'Unauthorized: Неверный токен.' }), {
+        status: 401,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!sqlQuery || typeof sqlQuery !== 'string') {
+      return new Response(JSON.stringify({ error: 'Bad Request: "sql" параметр отсутствует или неверен.' }), {
+        status: 400,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // 4. Выполняем SQL-запрос внутри транзакции
+    const result = await sql.begin(async (sql) => {
+        // sql.unsafe() внутри транзакции позволяет выполнять несколько операторов
+        const transactionResult = await sql.unsafe(sqlQuery);
+        return transactionResult;
+    });
+
+    // 5. Возвращаем результат
+    return new Response(JSON.stringify({ ok: true, result }), {
+      status: 200,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    });
+
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message, stack: err.stack }), {
+      status: 500,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    });
+  } finally {
+      // Гарантируем закрытие соединения
+      await sql.end();
+  }
+});
+`.trim();
+
+
+export function createSetupWizard({ onComplete, googleProvider, supabaseService, googleClientId, resumeState = null }) {
     const wizardElement = document.createElement('div');
     wizardElement.className = 'fixed inset-0 bg-slate-900 z-50 flex items-center justify-center p-4';
     
@@ -13,6 +86,10 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         isAuthenticated: false,
         userProfile: null,
         isLoading: false,
+        // For DB Worker Step
+        dbTestStatus: 'idle',
+        dbLogOutput: 'Ожидание...',
+        dbSqlSuccess: false,
     };
 
     if (resumeState) {
@@ -23,33 +100,20 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         { id: 'welcome', title: 'Добро пожаловать' },
         { id: 'connection', title: 'Способ подключения' },
         { id: 'auth', title: 'Аутентификация' },
-        { id: 'gemini', title: 'Gemini API' },
-        { id: 'proxies', title: 'Прокси' },
+        { id: 'gemini', title: 'Ключ Gemini API' },
+        { id: 'database', title: 'Управляющий воркер' },
         { id: 'finish', title: 'Завершение' },
     ];
     
-    let render; // Forward-declare
-    let handleNext; // Forward-declare
-
-    const showProxyManagerModal = () => {
-        if (!supabaseService) {
-             alert("Ошибка: Сервис Supabase не инициализирован. Невозможно открыть менеджер прокси.");
-             return;
-        }
-
-        const manager = createProxyManagerModal({
-            supabaseService: supabaseService,
-            apiKey: state.config.geminiApiKey,
-            onClose: () => {
-                manager.remove();
-            },
-        });
-        wizardElement.appendChild(manager);
+    const saveStateToSession = () => {
+        sessionStorage.setItem('wizardState', JSON.stringify(state));
     };
 
     const renderStepContent = () => {
         const contentEl = wizardElement.querySelector('#wizard-content');
         const footerEl = wizardElement.querySelector('#wizard-footer');
+        if(!contentEl || !footerEl) return;
+        
         contentEl.innerHTML = '';
         footerEl.innerHTML = '';
 
@@ -60,14 +124,19 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             backBtn.dataset.action = 'back';
             footerEl.appendChild(backBtn);
         } else {
-            footerEl.appendChild(document.createElement('div'));
+            const exitBtn = document.createElement('button');
+            exitBtn.className = 'px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md text-sm font-semibold';
+            exitBtn.textContent = 'Выйти';
+            exitBtn.dataset.action = 'exit';
+            footerEl.appendChild(exitBtn);
         }
-
-        const addNextButton = (text = 'Далее', isSkip = false) => {
+        
+        const addNextButton = (text = 'Далее', isSkip = false, disabled = false) => {
             const nextBtn = document.createElement('button');
-            nextBtn.className = `px-6 py-2 rounded-md font-semibold text-white ${isSkip ? 'bg-slate-500 hover:bg-slate-600' : 'bg-blue-600 hover:bg-blue-700'}`;
+            nextBtn.className = `px-6 py-2 rounded-md font-semibold text-white ${isSkip ? 'bg-slate-500 hover:bg-slate-600' : 'bg-blue-600 hover:bg-blue-700'} disabled:bg-slate-400 dark:disabled:bg-slate-500`;
             nextBtn.textContent = text;
             nextBtn.dataset.action = 'next';
+            nextBtn.disabled = disabled;
             footerEl.appendChild(nextBtn);
         };
 
@@ -81,11 +150,11 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             case 'connection':
                 contentEl.innerHTML = `
                     <h2 class="text-2xl font-bold mb-4">Выбор способа подключения</h2>
-                    <p class="mb-6 text-slate-500 dark:text-slate-400"><strong>Рекомендуется использовать Supabase</strong> для синхронизации и расширенных функций.</p>
+                    <p class="mb-6 text-slate-500 dark:text-slate-400"><strong>Рекомендуется использовать Supabase</strong> для синхронизации, управления прокси и других расширенных функций.</p>
                     <div class="grid md:grid-cols-2 gap-6">
                         <div class="choice-card p-4 border-2 border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:border-blue-500 dark:hover:border-blue-500 ${state.authChoice === 'supabase' ? 'border-blue-500 bg-blue-500/5 dark:bg-blue-500/10 shadow-md' : ''}" data-choice="supabase">
                             <h3 class="font-bold text-lg">Supabase (Рекомендуется)</h3>
-                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Синхронизация настроек и данных, управление прокси.</p>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Синхронизация, управление прокси, роли пользователей.</p>
                         </div>
                         <div class="choice-card p-4 border-2 border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:border-blue-500 dark:hover:border-blue-500 ${state.authChoice === 'direct' ? 'border-blue-500 bg-blue-500/5 dark:bg-blue-500/10 shadow-md' : ''}" data-choice="direct">
                             <h3 class="font-bold text-lg">Прямое подключение Google</h3>
@@ -112,15 +181,15 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
 
                 contentEl.innerHTML = `
                      <h2 class="text-2xl font-bold mb-4">Аутентификация</h2>
-                     <p class="mb-6 text-slate-500 dark:text-slate-400">Войдите в свой аккаунт Google, чтобы предоставить приложению разрешения.</p>
+                     <p class="mb-6 text-slate-500 dark:text-slate-400">Войдите в свой аккаунт Google, чтобы предоставить приложению необходимые разрешения.</p>
                      <div class="p-6 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center min-h-[200px]">
                         ${authContent}
                      </div>`;
-                addNextButton('Далее', !state.isAuthenticated);
+                addNextButton('Далее', false, !state.isAuthenticated);
                 break;
              case 'gemini':
                 contentEl.innerHTML = `
-                    <h2 class="text-2xl font-bold mb-4">Gemini API</h2>
+                    <h2 class="text-2xl font-bold mb-4">Ключ Gemini API</h2>
                     <p class="mb-6 text-slate-500 dark:text-slate-400">Получите ключ Gemini API из Google AI Studio. Он необходим для работы ассистента.</p>
                      <div class="p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
                         <p class="text-xs text-slate-500 dark:text-slate-400 mb-4"><a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">Получить ключ здесь &rarr;</a></p>
@@ -131,25 +200,36 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                     </div>`;
                 addNextButton();
                 break;
-            case 'proxies':
-                 contentEl.innerHTML = `
-                    <h2 class="text-2xl font-bold mb-4">Настройка Прокси (Опционально)</h2>
-                    <p class="mb-6 text-slate-500 dark:text-slate-400">Если API Gemini недоступен в вашем регионе, вы можете настроить прокси-серверы для обхода ограничений.</p>
-                    <div class="p-6 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-4">
-                        <div class="flex items-center gap-4">
-                            <label for="use-proxy-toggle-wizard" class="font-medium">Использовать прокси</label>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="use-proxy-toggle-wizard" ${state.config.useProxy ? 'checked' : ''}>
-                                <span class="toggle-slider"></span>
-                            </label>
+            case 'database':
+                let dbTestStatusHtml;
+                switch(state.dbTestStatus) {
+                    case 'testing': dbTestStatusHtml = `<span class="text-yellow-500">Тестирование...</span>`; break;
+                    case 'ok': dbTestStatusHtml = `<span class="text-green-500">✓ Соединение успешно!</span>`; break;
+                    case 'error': dbTestStatusHtml = `<span class="text-red-500">✗ Ошибка соединения.</span>`; break;
+                    default: dbTestStatusHtml = `<span>Ожидание теста...</span>`;
+                }
+
+                contentEl.innerHTML = `
+                     <h2 class="text-2xl font-bold mb-4">Управляющий воркер</h2>
+                     <p class="mb-2 text-slate-500 dark:text-slate-400">Этот воркер нужен для безопасного обновления схемы вашей базы данных. Следуйте <a href="#" data-action="open-db-guide" class="text-blue-500 hover:underline">инструкции</a>, чтобы создать его.</p>
+                     <p class="mb-6 text-xs text-slate-500 dark:text-slate-400">(Если вы не хотите настраивать воркер сейчас, этот шаг можно пропустить и вернуться к нему позже из настроек).</p>
+
+                     <div class="p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 space-y-4">
+                        <div>
+                            <label for="function-url-input" class="font-semibold text-sm">URL функции (db-admin):</label>
+                            <input type="url" id="function-url-input" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 font-mono text-sm" placeholder="https://....supabase.co/functions/v1/db-admin" value="${state.config.managementWorkerUrl}">
                         </div>
-                        <button data-action="manage-proxies" class="w-full max-w-sm flex items-center justify-center gap-2 px-4 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md font-semibold transition-colors">
-                            ${Icons.SettingsIcon}
-                            <span>Открыть менеджер прокси</span>
-                        </button>
-                    </div>
+                        <div>
+                            <label for="admin-token-input" class="font-semibold text-sm">Секретный токен (ADMIN_SECRET_TOKEN):</label>
+                            <input type="password" id="admin-token-input" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 font-mono text-sm" value="${state.config.adminSecretToken}">
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <button data-action="test-db" class="px-4 py-2 bg-slate-500 hover:bg-slate-600 text-white rounded-md font-semibold">${state.isLoading ? '...' : 'Проверить'}</button>
+                            <div class="text-sm font-semibold">${dbTestStatusHtml}</div>
+                        </div>
+                     </div>
                 `;
-                addNextButton('Далее');
+                addNextButton('Пропустить', true);
                 break;
             case 'finish':
                 contentEl.innerHTML = `
@@ -159,6 +239,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                         <p><strong>Режим:</strong> ${state.authChoice === 'supabase' ? 'Supabase' : 'Прямое подключение'}</p>
                         <p><strong>Google Аккаунт:</strong> ${state.userProfile?.email || 'Не выполнен вход'}</p>
                         <p><strong>Gemini API Ключ:</strong> ${state.config.geminiApiKey ? '✓ Указан' : '✗ Не указан'}</p>
+                         <p><strong>Управляющий воркер:</strong> ${state.config.managementWorkerUrl ? '✓ Настроен' : '✗ не настроен'}</p>
                     </div>`;
                 const finishBtn = document.createElement('button');
                 finishBtn.className = 'px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold';
@@ -169,7 +250,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         }
     };
     
-    render = () => {
+    const render = () => {
         const stepIndex = state.currentStep;
         const stepConfig = STEPS[stepIndex];
 
@@ -195,7 +276,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                             <p class="text-sm text-slate-500 dark:text-slate-400">Шаг ${stepIndex + 1} из ${STEPS.length}: ${stepConfig.title}</p>
                         </div>
                     </div>
-                    <button data-action="exit" class="ml-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></button>
+                    <button data-action="exit" class="ml-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400">&times;</button>
                 </header>
                 <main class="flex-1 p-6 overflow-y-auto bg-slate-50 dark:bg-slate-900/70" id="wizard-content"></main>
                 <footer class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center" id="wizard-footer"></footer>
@@ -204,25 +285,23 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
     };
 
     const collectInputs = () => {
-        const newConfig = { ...state.config };
         const geminiInput = wizardElement.querySelector('#geminiApiKey');
-        const useProxyToggle = wizardElement.querySelector('#use-proxy-toggle-wizard');
-        if (geminiInput) newConfig.geminiApiKey = geminiInput.value.trim();
-        if (useProxyToggle) newConfig.useProxy = useProxyToggle.checked;
-        state.config = newConfig;
+        if (geminiInput) state.config.geminiApiKey = geminiInput.value.trim();
+        
+        const urlInput = wizardElement.querySelector('#function-url-input');
+        if (urlInput) state.config.managementWorkerUrl = urlInput.value.trim();
+
+        const tokenInput = wizardElement.querySelector('#admin-token-input');
+        if (tokenInput) state.config.adminSecretToken = tokenInput.value.trim();
     };
     
-    handleNext = async () => {
+    const handleNext = async () => {
         collectInputs();
         
         let nextStepIndex = state.currentStep + 1;
         
-        // Skip Gemini step if key already exists from previous session/cloud
-        if (nextStepIndex < STEPS.length && STEPS[nextStepIndex].id === 'gemini' && state.config.geminiApiKey) {
-            nextStepIndex++;
-        }
-        // Skip Proxies step if not using Supabase
-        if (nextStepIndex < STEPS.length && STEPS[nextStepIndex].id === 'proxies' && state.authChoice !== 'supabase') {
+        // Skip DB worker step if not using Supabase
+        if (nextStepIndex < STEPS.length && STEPS[nextStepIndex].id === 'database' && state.authChoice !== 'supabase') {
             nextStepIndex++;
         }
         
@@ -236,7 +315,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         collectInputs();
         let prevStepIndex = state.currentStep - 1;
         
-        if (prevStepIndex >= 0 && STEPS[prevStepIndex].id === 'proxies' && state.authChoice !== 'supabase') {
+        if (prevStepIndex >= 0 && STEPS[prevStepIndex].id === 'database' && state.authChoice !== 'supabase') {
             prevStepIndex--;
         }
 
@@ -248,7 +327,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
 
     const handleDirectGoogleAuthSuccess = async (tokenResponse) => {
         state.isLoading = true;
-        render(); // Show loading indicator
+        render();
 
         if (tokenResponse && !tokenResponse.error) {
             saveGoogleToken(tokenResponse.access_token);
@@ -258,43 +337,29 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 const profile = await googleProvider.getUserProfile();
                 state.isAuthenticated = true;
                 state.userProfile = profile;
-                state.isLoading = false;
-                
-                // Persist the wizard state in case of an accidental refresh later
-                sessionStorage.setItem('wizardState', JSON.stringify({ ...state }));
-
-                render(); // Render with user profile
-                setTimeout(handleNext, 500); // Automatically move to the next step
             } catch (error) {
                 console.error("Failed to get Google profile after login:", error);
                 alert("Не удалось получить профиль Google после входа. Пожалуйста, попробуйте еще раз.");
-                state.isLoading = false;
-                state.isAuthenticated = false;
-                clearGoogleToken(); // Clean up failed token
-                render();
+                clearGoogleToken();
             }
         } else {
             alert(`Ошибка входа Google: ${tokenResponse.error_description || tokenResponse.error}`);
-            state.isLoading = false;
-            render();
+        }
+        
+        state.isLoading = false;
+        saveStateToSession();
+        render(); // Re-render with profile or cleared state
+        if (state.isAuthenticated) {
+            setTimeout(handleNext, 500);
         }
     };
 
     const handleLogin = async () => {
         state.isLoading = true;
-        render(); // Show loading indicator
+        render();
+        saveStateToSession();
         
-        const authStepIndex = STEPS.findIndex(s => s.id === 'auth');
-        const resumeData = { ...state, currentStep: authStepIndex };
-        sessionStorage.setItem('wizardState', JSON.stringify(resumeData));
-
         if (state.authChoice === 'supabase') {
-            if (!supabaseService) {
-                alert("Ошибка: сервис Supabase не инициализирован. Пожалуйста, вернитесь на шаг назад и выберите способ подключения.");
-                state.isLoading = false;
-                render();
-                return;
-            }
             await supabaseService.signInWithGoogle();
         } else {
             googleProvider.initClient(googleClientId, handleDirectGoogleAuthSuccess);
@@ -302,22 +367,13 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         }
     };
 
-    const checkAuthStatus = async () => {
+    const checkAuthStatusOnResume = async () => {
         state.isLoading = true;
         render();
 
-        if (state.authChoice === 'supabase') {
-             if (!supabaseService) { // Ensure service is available
-                state.isLoading = false; render(); return;
-            }
+        if (state.authChoice === 'supabase' && supabaseService) {
             const { data: { session } } = await supabaseService.client.auth.getSession();
-            if (session) {
-                googleProvider.setAuthToken(session.provider_token);
-                const cloudSettings = await supabaseService.getUserSettings();
-                if (cloudSettings) {
-                    state.config = { ...state.config, ...cloudSettings };
-                }
-            }
+            if (session) googleProvider.setAuthToken(session.provider_token);
         } else {
              const directToken = getGoogleToken();
              if (directToken) googleProvider.setAuthToken(directToken);
@@ -328,21 +384,23 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 const profile = await googleProvider.getUserProfile();
                 state.isAuthenticated = true;
                 state.userProfile = profile;
+                 if (state.authChoice === 'supabase') {
+                    const cloudSettings = await supabaseService.getUserSettings();
+                    if (cloudSettings) state.config = { ...state.config, ...cloudSettings };
+                }
             } catch {
-                state.isAuthenticated = false;
-                state.userProfile = null;
+                state.isAuthenticated = false; state.userProfile = null;
                 if(state.authChoice === 'direct') clearGoogleToken();
             }
         }
         
         state.isLoading = false;
+        render();
 
+        // If auth succeeded, automatically move to the next step.
         const authStepIndex = STEPS.findIndex(s => s.id === 'auth');
         if (state.isAuthenticated && state.currentStep === authStepIndex) {
-            render();
             setTimeout(handleNext, 500);
-        } else {
-            render();
         }
     };
 
@@ -364,36 +422,40 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             case 'next': await handleNext(); break;
             case 'back': handleBack(); break;
             case 'login': await handleLogin(); break;
-            case 'exit': onExit(); break;
+            case 'exit': 
+                sessionStorage.removeItem('wizardState');
+                onComplete(getSettings()); // Exit with old settings
+                break;
             case 'finish': 
                 collectInputs();
                 if (state.authChoice === 'supabase' && supabaseService) {
-                    // We only save if Supabase was used during the wizard.
-                    try {
-                        await supabaseService.saveUserSettings(state.config);
-                    } catch (err) {
-                        console.warn("Could not save settings during wizard completion:", err.message);
-                    }
+                    try { await supabaseService.saveUserSettings(state.config); } catch (err) { console.warn("Could not save settings during wizard completion:", err.message); }
                 }
                 sessionStorage.removeItem('wizardState');
                 onComplete(state.config); 
                 break;
-            case 'manage-proxies':
-                showProxyManagerModal();
+            case 'test-db':
+                collectInputs();
+                state.isLoading = true; state.dbTestStatus = 'testing'; render();
+                try {
+                    const result = await supabaseService.executeSqlViaFunction(state.config.managementWorkerUrl, state.config.adminSecretToken, 'SELECT 1;');
+                    state.dbLogOutput = `Успешно! Ответ сервера:\n${JSON.stringify(result, null, 2)}`;
+                    state.dbTestStatus = 'ok';
+                } catch(error) {
+                    state.dbLogOutput = `Ошибка соединения:\n\n${error.message}`;
+                    state.dbTestStatus = 'error';
+                } finally {
+                    state.isLoading = false; render();
+                }
                 break;
         }
     };
     
     wizardElement.addEventListener('click', handleAction);
-    wizardElement.addEventListener('change', (e) => {
-        const useProxyToggle = e.target.closest('#use-proxy-toggle-wizard');
-        if (useProxyToggle) {
-            state.config.useProxy = useProxyToggle.checked;
-        }
-    });
 
+    // Initial render / resume
     if (resumeState) {
-        checkAuthStatus();
+        checkAuthStatusOnResume();
     } else {
         render();
     }

@@ -245,7 +245,7 @@ RETURNS TABLE (
 BEGIN
   IF NOT is_admin() THEN RAISE EXCEPTION 'У вас нет прав для выполнения этой операции.'; END IF;
   RETURN QUERY SELECT h.id, h.user_id, h.session_id, h.sender, h.text_content, h.image_metadata, h.card_data, h.contextual_actions,
-    h.created_at, p.full_name, p.avatar_url, u.email
+    h.created_at, p.full_name, p.avatar_url, u.email::text
   FROM public.chat_history h
   LEFT JOIN public.profiles p ON h.user_id = p.id
   LEFT JOIN auth.users u ON h.user_id = u.id

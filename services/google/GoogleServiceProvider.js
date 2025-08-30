@@ -582,6 +582,10 @@ export class GoogleServiceProvider {
                     console.error(`Error processing an individual email (ID: ${res?.result?.id}) during sync. Skipping it.`, e);
                 }
             });
+            // Add a small delay between batches to avoid hitting rate limits too quickly
+            if (i + CHUNK_SIZE < messages.length) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
         }
         
         return allEmails;

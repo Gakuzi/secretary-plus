@@ -79,18 +79,18 @@ export function createHelpModal({ onClose, analyzeErrorFn, onRelaunchWizard, onL
                     <div id="tab-instructions" class="settings-tab-content hidden space-y-6">
                         <div class="p-4 bg-white dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
                              <h3 class="text-lg font-semibold">Настройка базы данных и синхронизации</h3>
-                             <p class="text-sm text-slate-600 dark:text-slate-400 mt-1 mb-4">Для работы облачной синхронизации и автоматического обновления схемы БД необходим "Управляющий воркер". Этот мастер поможет вам его настроить.</p>
-                             <button data-action="launch-db-wizard" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold transition-colors">
+                             <p class="text-sm text-slate-600 dark:text-slate-400 mt-1 mb-4">Для работы облачной синхронизации и автоматического обновления схемы БД необходим "Управляющий воркер". Запустите Мастер Настройки, чтобы сконфигурировать его.</p>
+                             <button data-action="relaunch-wizard" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold transition-colors">
                                 ${Icons.DatabaseIcon}
-                                <span>Запустить мастер настройки БД</span>
+                                <span>Перезапустить Мастер Настройки</span>
                             </button>
                         </div>
                         <div class="p-4 bg-white dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
                              <h3 class="text-lg font-semibold">Настройка Прокси-воркера</h3>
-                             <p class="text-sm text-slate-600 dark:text-slate-400 mt-1 mb-4">Прокси-воркер нужен для обхода региональных ограничений Gemini API. Этот мастер поможет вам создать и настроить его в Cloudflare.</p>
-                             <button data-action="launch-proxy-wizard" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold transition-colors">
-                                ${Icons.CodeIcon}
-                                <span>Запустить мастер настройки Прокси</span>
+                             <p class="text-sm text-slate-600 dark:text-slate-400 mt-1 mb-4">Прокси-воркер нужен для обхода региональных ограничений Gemini API. Вы можете настроить его на соответствующем шаге в Мастере Настройки.</p>
+                              <button data-action="relaunch-wizard" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold transition-colors">
+                                ${Icons.WandIcon}
+                                <span>Перезапустить Мастер Настройки</span>
                             </button>
                         </div>
                     </div>
@@ -109,7 +109,7 @@ export function createHelpModal({ onClose, analyzeErrorFn, onRelaunchWizard, onL
                                     <p>Это действие удалит все ваши текущие настройки, сохраненные в браузере (включая API ключи). Настройки, синхронизированные с Supabase, останутся без изменений.</p>
                                 </div>
                             </div>
-                            <button id="relaunch-wizard-button" class="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold transition-colors">
+                            <button data-action="relaunch-wizard" class="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold transition-colors">
                                 Перезапустить Мастер Настройки
                             </button>
                         </div>
@@ -120,49 +120,39 @@ export function createHelpModal({ onClose, analyzeErrorFn, onRelaunchWizard, onL
     `;
 
     const handleAction = (e) => {
-        const relaunchButton = e.target.closest('#relaunch-wizard-button');
-         if (relaunchButton) {
-            onRelaunchWizard();
-            return;
-         }
-
-        const launchDbWizardButton = e.target.closest('[data-action="launch-db-wizard"]');
-        if (launchDbWizardButton) {
-            onLaunchDbWizard();
-            return;
-        }
-
-        const launchProxyWizardButton = e.target.closest('[data-action="launch-proxy-wizard"]');
-        if (launchProxyWizardButton) {
-            onLaunchProxyWizard();
-            return;
-        }
-
-        const analyzeButton = e.target.closest('#analyze-error-button');
-        if (analyzeButton) {
-            const textarea = modalOverlay.querySelector('#error-input-area');
-            const validationMsg = modalOverlay.querySelector('#error-validation-message');
-            const resultContainer = modalOverlay.querySelector('#error-analysis-result');
-            const errorText = textarea.value.trim();
-
-            if (!errorText) {
-                validationMsg.textContent = 'Пожалуйста, вставьте сообщение об ошибке.';
+        const target = e.target.closest('[data-action]');
+        if (target) {
+            const action = target.dataset.action;
+            if (action === 'relaunch-wizard') {
+                onRelaunchWizard();
                 return;
             }
-            validationMsg.textContent = '';
-            analyzeButton.disabled = true;
-            analyzeButton.innerHTML = `<div class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div> <span>Анализ...</span>`;
-            resultContainer.style.display = 'block';
-            resultContainer.innerHTML = `<div class="flex items-center justify-center h-48"><div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;
-            
-            analyzeErrorFn(errorText).then(analysis => {
-                resultContainer.innerHTML = `<div class="prose prose-invert max-w-none text-slate-700 dark:text-slate-300">${markdownToHTML(analysis)}</div>`;
-            }).catch(err => {
-                resultContainer.innerHTML = `<p class="text-red-400">Не удалось выполнить анализ: ${err.message}</p>`;
-            }).finally(() => {
-                analyzeButton.disabled = false;
-                analyzeButton.textContent = 'Проанализировать';
-            });
+
+            if (action === 'analyze-error') {
+                const textarea = modalOverlay.querySelector('#error-input-area');
+                const validationMsg = modalOverlay.querySelector('#error-validation-message');
+                const resultContainer = modalOverlay.querySelector('#error-analysis-result');
+                const errorText = textarea.value.trim();
+
+                if (!errorText) {
+                    validationMsg.textContent = 'Пожалуйста, вставьте сообщение об ошибке.';
+                    return;
+                }
+                validationMsg.textContent = '';
+                target.disabled = true;
+                target.innerHTML = `<div class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div> <span>Анализ...</span>`;
+                resultContainer.style.display = 'block';
+                resultContainer.innerHTML = `<div class="flex items-center justify-center h-48"><div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;
+                
+                analyzeErrorFn(errorText).then(analysis => {
+                    resultContainer.innerHTML = `<div class="prose prose-invert max-w-none text-slate-700 dark:text-slate-300">${markdownToHTML(analysis)}</div>`;
+                }).catch(err => {
+                    resultContainer.innerHTML = `<p class="text-red-400">Не удалось выполнить анализ: ${err.message}</p>`;
+                }).finally(() => {
+                    target.disabled = false;
+                    target.textContent = 'Проанализировать';
+                });
+            }
         }
     };
     
