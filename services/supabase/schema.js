@@ -202,7 +202,7 @@ BEGIN
     END IF;
     RETURN QUERY SELECT p.id, p.full_name, p.avatar_url, p.role FROM public.profiles p WHERE p.id = auth.uid();
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
 
 -- RPC функция для обновления роли пользователя (только для владельцев)
 CREATE OR REPLACE FUNCTION public.update_user_role(target_user_id UUID, new_role public.user_role)
@@ -241,7 +241,7 @@ CREATE OR REPLACE FUNCTION public.get_chat_history_with_user_info()
 RETURNS TABLE (
     id BIGINT, user_id UUID, session_id UUID, sender public.chat_sender, text_content TEXT, image_metadata JSONB, card_data JSONB,
     contextual_actions JSONB, created_at TIMESTAMPTZ, full_name TEXT, avatar_url TEXT, email TEXT
-) LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth AS $$
 BEGIN
   IF NOT is_admin() THEN RAISE EXCEPTION 'У вас нет прав для выполнения этой операции.'; END IF;
   RETURN QUERY SELECT h.id, h.user_id, h.session_id, h.sender, h.text_content, h.image_metadata, h.card_data, h.contextual_actions,
@@ -257,7 +257,7 @@ $$;
 CREATE OR REPLACE FUNCTION public.get_all_user_profiles_with_email()
 RETURNS TABLE (
     id UUID, full_name TEXT, avatar_url TEXT, role public.user_role, email TEXT, last_sign_in_at TIMESTAMPTZ
-) LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth AS $$
 BEGIN
     IF NOT is_admin() THEN
         RAISE EXCEPTION 'У вас нет прав для выполнения этой операции.';

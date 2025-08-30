@@ -157,6 +157,7 @@ const ALL_SYNC_TASKS = [
     { name: 'Emails', serviceKey: 'emails', label: 'Почта', icon: 'EmailIcon', tableName: 'emails', providerFn: () => googleProvider.getRecentEmails({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncEmails(items) },
     { name: 'Notes', serviceKey: 'notes', label: 'Заметки', icon: 'FileIcon', tableName: 'notes', providerFn: null, supabaseFn: null }, // Placeholder for UI
 ];
+const SYNCABLE_SERVICE_KEYS = ALL_SYNC_TASKS.filter(t => t.providerFn).map(t => t.serviceKey);
 
 function getEnabledSyncTasks() {
     return ALL_SYNC_TASKS.filter(task => state.settings.enabledServices[task.serviceKey]);
@@ -720,9 +721,29 @@ function showProxyManagerModal() {
 
 function showDataManagerModal() {
     modalContainer.innerHTML = '';
+
+    const isAdminOrOwner = state.userProfile && (state.userProfile.role === 'admin' || state.userProfile.role === 'owner');
+    let tasksForManager;
+
+    if (isAdminOrOwner) {
+        // For admins, show ALL tables from the schema
+        tasksForManager = Object.entries(DB_SCHEMAS).map(([key, schema]) => ({
+            name: schema.label,
+            serviceKey: key,
+            label: schema.label,
+            icon: schema.icon,
+            tableName: schema.tableName,
+            // Check if it's a syncable task to conditionally show sync buttons later
+            isSyncable: SYNCABLE_SERVICE_KEYS.includes(key)
+        }));
+    } else {
+        // For regular users, only show enabled sync tasks
+        tasksForManager = getEnabledSyncTasks().map(task => ({ ...task, isSyncable: true }));
+    }
+
     const manager = createDataManagerModal({
         supabaseService: supabaseService,
-        syncTasks: getEnabledSyncTasks(),
+        tasks: tasksForManager,
         settings: state.settings,
         onClose: () => { modalContainer.innerHTML = ''; },
         onRunSingleSync: runSingleSync,

@@ -55,8 +55,8 @@ function createDataViewerModal(title, data, error, onClose) {
     return modal;
 }
 
-function renderSyncTab(syncTasks, state) {
-     const syncItemsHtml = syncTasks.map(task => {
+function renderSyncTab(tasks, state) {
+     const syncItemsHtml = tasks.map(task => {
         const lastSyncData = state.syncStatus[task.name];
         let statusText = 'Никогда';
         let statusColor = 'text-slate-400 dark:text-slate-500';
@@ -75,6 +75,14 @@ function renderSyncTab(syncTasks, state) {
         
         const isSyncing = state.syncingSingle === task.name;
 
+        const syncButtonHtml = task.isSyncable ? `
+            <button data-action="run-single-sync" data-task-name="${task.name}" class="flex-1 px-3 py-2 text-sm bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-md font-semibold flex items-center justify-center gap-1" ${isSyncing ? 'disabled' : ''}>
+               ${isSyncing ? `<div class="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>` : Icons.RefreshCwIcon.replace('width="24"', 'width="16"')}
+               <span>Синхр.</span>
+            </button>
+        ` : `<div class="flex-1"></div>`;
+
+
         return `
             <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-4 flex flex-col justify-between border-l-4 ${errorDetails ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'}">
                 <div>
@@ -88,10 +96,7 @@ function renderSyncTab(syncTasks, state) {
                     </div>
                 </div>
                 <div class="mt-4 flex gap-2">
-                    <button data-action="run-single-sync" data-task-name="${task.name}" class="flex-1 px-3 py-2 text-sm bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-md font-semibold flex items-center justify-center gap-1" ${isSyncing ? 'disabled' : ''}>
-                       ${isSyncing ? `<div class="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>` : Icons.RefreshCwIcon.replace('width="24"', 'width="16"')}
-                       <span>Синхр.</span>
-                    </button>
+                    ${syncButtonHtml}
                     <button data-action="view-data" data-table-name="${task.tableName}" data-label="${task.label}" class="flex-1 px-3 py-2 text-sm bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-md font-semibold flex items-center justify-center gap-1">
                         ${Icons.DatabaseIcon.replace('width="24"', 'width="16"')}
                         <span>Данные</span>
@@ -127,7 +132,7 @@ function renderSyncTab(syncTasks, state) {
         </section>
         <section class="mt-6">
              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                ${syncTasks.length > 0 ? syncItemsHtml : `<div class="col-span-full text-center p-8 text-slate-500 dark:text-slate-400">Нет включенных служб для синхронизации. Включите их в Настройках.</div>`}
+                ${tasks.length > 0 ? syncItemsHtml : `<div class="col-span-full text-center p-8 text-slate-500 dark:text-slate-400">Нет включенных служб для синхронизации. Включите их в Настройках.</div>`}
             </div>
         </section>
     `;
@@ -216,7 +221,7 @@ function renderSchemaTab(state) {
     `;
 }
 
-export function createDataManagerModal({ supabaseService, syncTasks, settings, onClose, onRunSingleSync, onRunAllSyncs }) {
+export function createDataManagerModal({ supabaseService, tasks, settings, onClose, onRunSingleSync, onRunAllSyncs }) {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fadeIn';
 
@@ -254,7 +259,7 @@ export function createDataManagerModal({ supabaseService, syncTasks, settings, o
                 </nav>
 
                 <main class="flex-1 p-6 overflow-y-auto">
-                    <div id="tab-content-sync" class="${state.currentTab === 'sync' ? '' : 'hidden'}">${renderSyncTab(syncTasks, state)}</div>
+                    <div id="tab-content-sync" class="${state.currentTab === 'sync' ? '' : 'hidden'}">${renderSyncTab(tasks, state)}</div>
                     <div id="tab-content-schema" class="${state.currentTab === 'schema' ? '' : 'hidden'}">${renderSchemaTab(state)}</div>
                 </main>
                  <div id="sub-modal-container"></div>

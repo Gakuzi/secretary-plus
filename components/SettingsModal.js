@@ -8,18 +8,23 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
     modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
     
     const render = () => {
-        const servicesHtml = Object.entries(DB_SCHEMAS).filter(([key, schema]) => 'source_id' in (schema.fields.find(f => f.name === 'source_id') || {})).map(([key, schema]) => `
-            <div class="flex items-center justify-between py-2 border-b border-slate-200 dark:border-slate-700 last:border-b-0">
-                <label for="service-toggle-${key}" class="font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                    <span class="w-5 h-5">${Icons[schema.icon] || ''}</span>
-                    <span>${schema.label}</span>
-                </label>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="service-toggle-${key}" data-service-key="${key}" ${settings.enabledServices[key] ? 'checked' : ''} ${!settings.isSupabaseEnabled ? 'disabled' : ''}>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-        `).join('');
+        const syncableServices = ['calendar', 'tasks', 'contacts', 'files', 'emails', 'notes'];
+        const servicesHtml = syncableServices.map(key => {
+            const schema = DB_SCHEMAS[key];
+            if (!schema) return '';
+            return `
+                <div class="flex items-center justify-between py-2 border-b border-slate-200 dark:border-slate-700 last:border-b-0">
+                    <label for="service-toggle-${key}" class="font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                        <span class="w-5 h-5">${Icons[schema.icon] || ''}</span>
+                        <span>${schema.label}</span>
+                    </label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="service-toggle-${key}" data-service-key="${key}" ${settings.enabledServices[key] ? 'checked' : ''} ${!settings.isSupabaseEnabled ? 'disabled' : ''}>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            `;
+        }).join('');
 
         modalElement.innerHTML = `
             <div id="settings-content" class="bg-white dark:bg-slate-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-lg shadow-xl">
