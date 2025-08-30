@@ -979,36 +979,51 @@ function waitForExternalLibs() {
  */
 async function main() {
     const isAuthCallback = window.location.hash.includes('access_token');
-    
     let session = null;
 
-    // If we are returning from a Supabase OAuth flow, handle it using the single global client.
-    if (isAuthCallback && supabaseService) {
+    // If we are returning from an OAuth flow, handle it robustly.
+    if (isAuthCallback) {
         const loadingOverlay = document.createElement('div');
         loadingOverlay.className = 'fixed inset-0 bg-slate-900/80 flex items-center justify-center z-50 text-white';
         loadingOverlay.innerHTML = '<span>Завершение входа...</span>';
         document.body.appendChild(loadingOverlay);
 
         try {
-            session = await new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    reject(new Error("Аутентификация заняла слишком много времени. Пожалуйста, попробуйте снова."));
-                }, 15000);
+            // Check session storage to see which flow we're in, defaulting based on initial settings
+            const savedWizardState = sessionStorage.getItem('wizardState');
+            const authChoice = savedWizardState ? JSON.parse(savedWizardState).authChoice : (getSettings().isSupabaseEnabled ? 'supabase' : 'direct');
 
-                const { data: { subscription } } = supabaseService.onAuthStateChange((event, session) => {
-                    // We wait for the SIGNED_IN event which confirms the session is established.
-                    if (event === 'SIGNED_IN' && session) {
-                        clearTimeout(timeout);
-                        subscription.unsubscribe();
-                        resolve(session);
-                    }
+            if (authChoice === 'supabase' && supabaseService) {
+                session = await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        reject(new Error("Аутентификация заняла слишком много времени. Пожалуйста, попробуйте снова."));
+                    }, 15000);
+
+                    const { data: { subscription } } = supabaseService.onAuthStateChange((event, session) => {
+                        // We wait for the SIGNED_IN event which confirms the session is established.
+                        if (event === 'SIGNED_IN' && session) {
+                            clearTimeout(timeout);
+                            subscription.unsubscribe();
+                            resolve(session);
+                        }
+                    });
                 });
-            });
+            } else { // Handle direct Google auth redirect
+                const params = new URLSearchParams(window.location.hash.substring(1));
+                const accessToken = params.get('access_token');
+                if (accessToken) {
+                    saveGoogleToken(accessToken);
+                } else {
+                    console.warn("OAuth callback detected, but no access token found for direct Google auth.");
+                }
+            }
 
             // Clean the URL from auth tokens after successful sign-in
             window.history.replaceState(null, '', window.location.pathname + window.location.search);
-            // Clear the wizard state to prevent it from re-opening
-            sessionStorage.removeItem('wizardState');
+            
+            // CRITICAL FIX: DO NOT remove wizard state here. The wizard will handle it upon completion.
+            // This was the primary cause of the wizard restarting.
+
         } catch (error) {
             console.error("OAuth Callback Error:", error);
              loadingOverlay.innerHTML = `
@@ -1027,6 +1042,7 @@ async function main() {
     // Whether it was a callback or a normal load, start the full app logic.
     await startFullApp(session);
 }
+
 
 // Wait for external libraries to load, then run the main application logic.
 waitForExternalLibs()
