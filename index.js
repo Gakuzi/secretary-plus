@@ -838,7 +838,7 @@ async function checkDatabaseSchema() {
  * Renders the main application UI, hooks up event listeners, and decides
  * whether to show the setup wizard or the main chat interface.
  */
-async function startFullApp() {
+async function startFullApp(initialSession = null) {
     // Populate global DOM element variables
     appContainer = document.getElementById('app');
     authContainer = document.getElementById('auth-container');
@@ -862,8 +862,13 @@ async function startFullApp() {
     const savedWizardState = sessionStorage.getItem('wizardState');
 
     // **Cloud-first settings & session check**
+    let session = initialSession;
     if (settings.isSupabaseEnabled && supabaseService) {
-        const { data: { session } } = await supabaseService.client.auth.getSession();
+        if (!session) {
+            const { data } = await supabaseService.client.auth.getSession();
+            session = data.session;
+        }
+
         if (session) {
             state.supabaseUser = session.user;
             googleProvider.setAuthToken(session.provider_token);
@@ -967,6 +972,8 @@ function waitForExternalLibs() {
 async function main() {
     const isAuthCallback = window.location.hash.includes('access_token');
     
+    let session = null;
+
     // If we are returning from a Supabase OAuth flow, handle it using the single global client.
     if (isAuthCallback && supabaseService) {
         const loadingOverlay = document.createElement('div');
@@ -975,7 +982,7 @@ async function main() {
         document.body.appendChild(loadingOverlay);
 
         try {
-            await new Promise((resolve, reject) => {
+            session = await new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
                     reject(new Error("Аутентификация заняла слишком много времени. Пожалуйста, попробуйте снова."));
                 }, 15000);
@@ -992,6 +999,8 @@ async function main() {
 
             // Clean the URL from auth tokens after successful sign-in
             window.history.replaceState(null, '', window.location.pathname + window.location.search);
+            // Clear the wizard state to prevent it from re-opening
+            sessionStorage.removeItem('wizardState');
         } catch (error) {
             console.error("OAuth Callback Error:", error);
              loadingOverlay.innerHTML = `
@@ -1008,7 +1017,7 @@ async function main() {
         }
     }
     // Whether it was a callback or a normal load, start the full app logic.
-    await startFullApp();
+    await startFullApp(session);
 }
 
 // Wait for external libraries to load, then run the main application logic.
