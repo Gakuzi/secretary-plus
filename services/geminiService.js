@@ -469,516 +469,392 @@ export const callGemini = async ({
                         const result = await provider.createEvent(args);
 
                         if (provider.getId() === 'apple') {
-                            resultMessage.text = `Событие «${args.title}» готово для вашего Apple Календаря. Нажмите кнопку ниже, чтобы скачать файл (.ics) и добавить его.`;
-                            resultMessage.card = {
-                                type: 'event',
+                            resultMessage.text = "Событие для календаря Apple готово. Нажмите, чтобы скачать .ics файл и добавить его в свой календарь.";
+                             resultMessage.card = {
+                                type: 'system_action',
                                 icon: 'CalendarIcon',
-                                title: `Событие для Apple: ${args.title}`,
-                                details: {
-                                    'Время': new Date(args.startTime).toLocaleString('ru-RU'),
-                                    'Метод': 'Экспорт в .ics файл',
-                                },
+                                title: 'Скачать событие (.ics)',
                                 actions: [{
-                                    label: 'Скачать .ics файл',
+                                    label: 'Скачать файл',
                                     action: 'download_ics',
-                                    payload: { data: result.icsData, filename: result.filename }
+                                    payload: {
+                                        data: result.icsData,
+                                        filename: result.filename
+                                    }
                                 }]
                             };
                         } else {
-                            const attendeesEmails = result.attendees?.map(a => a.email) || [];
-                            let eventActions = [
-                                { label: 'Открыть в Календаре', url: result.htmlLink },
-                                { label: 'Удалить', action: 'request_delete', payload: { id: result.id, type: 'event' }, style: 'danger' }
-                            ];
-                            if (attendeesEmails.length > 0 && result.hangoutLink) {
-                                eventActions.push({
-                                    label: 'Отправить ссылку участникам',
-                                    action: 'send_meeting_link',
-                                    payload: { to: attendeesEmails, subject: `Приглашение на встречу: ${result.summary}`, body: `Присоединяйтесь к встрече "${result.summary}": <a href="${result.hangoutLink}">${result.hangoutLink}</a>` }
-                                });
-                            }
-                            eventActions.push({
-                                label: 'Создать задачу "Подготовиться"',
-                                action: 'create_prep_task',
-                                payload: { title: `Подготовиться к встрече: "${result.summary}"`, notes: `Встреча запланирована на ${new Date(result.start.dateTime).toLocaleString('ru-RU')}.` }
-                            });
-                            resultMessage.text = `Событие "${result.summary}" успешно создано! Что дальше?`;
-                            resultMessage.card = { type: 'event', icon: 'CalendarIcon', title: result.summary, details: { 'Время': new Date(result.start.dateTime).toLocaleString('ru-RU'), 'Участники': attendeesEmails.join(', ') || 'Нет', 'Видеовстреча': result.hangoutLink ? `<a href="${result.hangoutLink}" target="_blank" class="text-blue-400 hover:underline">Присоединиться</a>` : 'Нет', }, actions: eventActions, shareableLink: result.hangoutLink, shareText: `Присоединяйтесь к встрече "${result.summary}": ${result.hangoutLink}`};
-                             resultMessage.contextualActions = [
-                                { label: 'Создать еще событие', prompt: 'Создай еще одно событие в календаре', icon: 'CalendarIcon' },
-                                { label: 'Показать мое расписание', prompt: 'Покажи мое расписание на сегодня', icon: 'CalendarIcon' }
-                            ];
+                            resultMessage.text = `Встреча "${result.summary}" успешно создана.`;
+                            resultMessage.card = {
+                                type: 'event',
+                                icon: 'CalendarIcon',
+                                title: result.summary,
+                                details: {
+                                    'Время': `${new Date(result.start.dateTime).toLocaleString('ru-RU')} - ${new Date(result.end.dateTime).toLocaleString('ru-RU')}`,
+                                    'Видеовстреча': 'Да',
+                                },
+                                actions: [
+                                    { label: 'Открыть в календаре', url: result.htmlLink },
+                                    { label: 'Присоединиться', url: result.hangoutLink }
+                                ],
+                                shareableLink: result.hangoutLink,
+                                shareText: `Присоединяйтесь к видеовстрече: ${result.hangoutLink}`,
+                            };
                         }
                         break;
                     }
-                    case 'find_contacts':
-                    case 'perform_contact_action': {
-                        const provider = getProvider('contacts');
-                        const results = await provider.findContacts(args.query);
-
-                        if (results.length === 1) {
-                            const person = results[0];
-                            if (name === 'perform_contact_action') {
-                                const actionText = args.action === 'call' ? 'позвонить' : 'написать';
-                                resultMessage.text = `Готовы ${actionText} контакту ${person.display_name}.`;
-                                resultMessage.card = { type: 'direct_action_card', icon: args.action === 'call' ? 'PhoneIcon' : 'EmailIcon', title: `Выполнить действие: ${actionText}`, person: person, action: args.action };
-                            } else {
-                                resultMessage.text = `Найден контакт: ${person.display_name}. Что вы хотите сделать?`;
-                                resultMessage.card = { type: 'contact', icon: 'UsersIcon', title: 'Карточка контакта', person: person };
-                            }
-                        } else if (results.length > 1) {
-                            const actionText = name === 'perform_contact_action' ? (args.action === 'call' ? 'позвонить' : 'написать') : null;
-                            resultMessage.text = `Я нашел несколько контактов. ${actionText ? `Кому вы хотите ${actionText}?` : 'Пожалуйста, выберите нужный:'}`;
-                            resultMessage.card = { type: 'contact_choice', icon: 'UsersIcon', title: `${actionText ? `Кому ${actionText}?` : 'Выберите контакт'}`, options: results };
-                        } else {
-                            resultMessage.text = `К сожалению, я не нашел контактов по запросу "${args.query}".`;
-                        }
+                     case 'create_task': {
+                        const provider = getProvider('tasks');
+                        const result = await provider.createTask(args);
+                        resultMessage.text = `Задача "${result.title}" успешно создана.`;
+                        resultMessage.card = {
+                            type: 'task',
+                            icon: 'CheckSquareIcon',
+                            title: 'Задача создана',
+                            text: result.title,
+                            details: result.notes ? { 'Детали': result.notes } : {},
+                        };
                         break;
                     }
                     case 'find_documents':
+                    case 'find_notes':
                     case 'get_recent_files': {
-                        const provider = getProvider('files');
-                        let results = [];
-                        
-                        if (name === 'get_recent_files') {
-                             results = await provider.getRecentFiles(args);
-                             if (results.length === 0 && provider.getId() === 'supabase') {
-                                const googleProvider = serviceProviders.google;
-                                if (googleProvider && await googleProvider.isAuthenticated()) {
-                                     results = await googleProvider.getRecentFiles(args);
-                                }
+                         const provider = (name === 'find_notes') ? getProvider('notes') : getProvider('files');
+                         const results = (name === 'find_documents') ? await provider.findDocuments(args.query) : 
+                                         (name === 'find_notes') ? await provider.findNotes(args.query) :
+                                         await provider.getRecentFiles(args);
+                         
+                         if (results && results.length > 0) {
+                            if (results.length === 1) {
+                                const doc = results[0];
+                                const url = doc.webViewLink || doc.url; // Support both Google Drive and Supabase notes
+                                resultMessage.text = `Найден документ: "${doc.name || doc.title}".`;
+                                resultMessage.card = {
+                                    type: 'document',
+                                    icon: 'FileIcon',
+                                    title: doc.name || doc.title,
+                                    actions: [{ label: 'Открыть', url: url }]
+                                };
+                            } else {
+                                 resultMessage.text = 'Я нашел несколько подходящих документов. Какой из них вам нужен?';
+                                 resultMessage.card = {
+                                     type: 'document_choice',
+                                     icon: 'FileIcon',
+                                     title: 'Выберите документ',
+                                     options: results.map(doc => ({
+                                         name: doc.name || doc.title,
+                                         url: doc.webViewLink || doc.url,
+                                         icon_link: doc.iconLink || 'https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_document_x16.png',
+                                         source_id: doc.id,
+                                         modified_time: doc.modifiedTime || doc.updated_at,
+                                     }))
+                                 };
                             }
-                        } else { // find_documents
-                            results = await provider.findDocuments(args.query);
-                             if (results.length === 0 && provider.getId() === 'supabase') {
-                                const googleProvider = serviceProviders.google;
-                                if (googleProvider && await googleProvider.isAuthenticated()) {
-                                     results = await googleProvider.findDocuments(args.query);
-                                }
-                            }
-                        }
+                         } else {
+                            resultMessage.text = "К сожалению, документы по вашему запросу не найдены.";
+                         }
+                         break;
+                    }
+                     case 'find_contacts':
+                     case 'perform_contact_action': {
+                        const provider = getProvider('contacts');
+                        const results = await provider.findContacts(args.query);
 
-                        const normalizedResults = results.map(doc => ({
-                            name: doc.name,
-                            url: doc.url || doc.webViewLink,
-                            icon_link: doc.icon_link || doc.iconLink,
-                            source_id: doc.source_id || doc.id,
-                            modified_time: doc.modified_time || doc.modifiedTime,
-                        }));
-                        
-                        if (normalizedResults.length > 0) {
-                            resultMessage.text = `Вот документы, которые я нашел. Нажмите на любой для анализа и действий.`;
-                            resultMessage.card = { type: 'document_choice', icon: 'FileIcon', title: 'Выберите документ', options: normalizedResults };
+                        if (results && results.length > 0) {
+                            if (results.length === 1) {
+                                const person = results[0];
+                                if (name === 'perform_contact_action') {
+                                    resultMessage.text = `Найден контакт ${person.display_name}. Выберите действие.`;
+                                    resultMessage.card = {
+                                        type: 'direct_action_card',
+                                        icon: 'UsersIcon',
+                                        action: args.action, // 'call' or 'email'
+                                        person: person,
+                                    };
+                                } else {
+                                    resultMessage.text = `Вот информация по контакту "${person.display_name}".`;
+                                    resultMessage.card = {
+                                        type: 'contact',
+                                        icon: 'UsersIcon',
+                                        title: 'Карточка контакта',
+                                        person: person,
+                                    };
+                                }
+                            } else {
+                                 resultMessage.text = 'Я нашел несколько контактов. Кого вы имели в виду?';
+                                 resultMessage.card = {
+                                     type: 'contact_choice',
+                                     icon: 'UsersIcon',
+                                     title: 'Выберите контакт',
+                                     options: results
+                                 };
+                            }
                         } else {
-                            resultMessage.text = `Не удалось найти документы по запросу "${args.query || 'недавние'}".`;
+                            resultMessage.text = `Контакт "${args.query}" не найден.`;
                         }
                         break;
                     }
                     case 'create_note': {
                         const provider = getProvider('notes');
+                        const providerName = provider.getName ? provider.getName() : 'Supabase';
                         const result = await provider.createNote(args);
-                        resultMessage.text = `Заметка "${result.title || 'Без названия'}" успешно создана в ${provider.getName()}.`;
-                        resultMessage.card = createNoteCard(result, provider.getName());
-                        resultMessage.contextualActions = [
-                            { label: 'Создать еще заметку', prompt: 'Создай новую заметку о планах на выходные', icon: 'FileIcon' },
-                            { label: 'Найти последние заметки', prompt: 'Найди мои последние заметки', icon: 'FileIcon' }
-                        ];
+                        resultMessage.text = `Заметка "${result.title || 'Без названия'}" успешно создана.`;
+                        resultMessage.card = createNoteCard(result, providerName);
                         break;
                     }
-                    case 'find_notes': {
-                        const provider = getProvider('notes');
-                        const results = await provider.findNotes(args.query);
-                        if (results && results.length > 0) {
-                            const noteSummaries = results.map(note => {
-                                const title = note.title ? `**${note.title}**` : '*Заметка без названия*';
-                                const snippet = note.content ? note.content.substring(0, 150) + '...' : '';
-                                return `${title}\n${snippet}`;
-                            }).join('\n\n---\n\n');
-                            resultMessage.text = `Вот заметки, которые я нашел по запросу "${args.query}":\n\n${noteSummaries}`;
-                        } else {
-                            resultMessage.text = `Не удалось найти заметки по запросу "${args.query}".`;
-                        }
-                        resultMessage.contextualActions = [
-                             { label: 'Создать новую заметку', prompt: 'Создай новую заметку', icon: 'FileIcon' },
-                             { label: `Искать в ${provider.getName()} еще`, prompt: `Найди в ${provider.getName()} заметки о проекте`, icon: 'FileIcon' }
-                        ];
-                        break;
+                     case 'propose_document_with_content': {
+                         resultMessage.text = `Я подготовил содержание для документа "${args.title}". Создать?`;
+                         resultMessage.card = {
+                            type: 'document_creation_proposal',
+                            icon: 'FileIcon',
+                            title: 'Создать документ?',
+                            summary: args.summary,
+                            actions: [
+                                { label: 'Создать с содержанием', action: 'create_google_doc_with_content', payload: { title: args.title, content: args.summary } },
+                                { label: 'Создать пустой', action: 'create_google_doc', payload: { title: args.title } }
+                            ]
+                         };
+                         break;
                     }
-                     case 'create_google_doc':
-                     case 'create_google_sheet':
-                     case 'create_google_doc_with_content': {
-                        const provider = serviceProviders.google; // These are Google specific
+                    case 'create_google_doc':
+                    case 'create_google_sheet':
+                    case 'create_google_doc_with_content': {
                         let result;
+                        const creationProvider = serviceProviders.google;
                         if (name === 'create_google_sheet') {
-                            result = await provider.createGoogleSheet(args.title);
+                            result = await creationProvider.createGoogleSheet(args.title);
                         } else if (name === 'create_google_doc_with_content') {
-                            result = await provider.createGoogleDocWithContent(args.title, args.content);
+                            result = await creationProvider.createGoogleDocWithContent(args.title, args.content);
                         } else {
-                            result = await provider.createGoogleDoc(args.title);
+                            result = await creationProvider.createGoogleDoc(args.title);
                         }
-                        const docType = result.mimeType.includes('spreadsheet') ? 'Таблица' : 'Документ';
-                        resultMessage.text = `${docType} "${result.name}" успешно создан.`;
-                        resultMessage.card = { type: 'document', icon: 'FileIcon', title: result.name, details: { 'Тип': `Google ${docType}` }, actions: [{ label: 'Открыть документ', url: result.webViewLink }]};
-                        resultMessage.contextualActions = [
-                             { label: `Создать еще ${docType.toLowerCase()}`, prompt: `Создай новую ${docType.toLowerCase()}`, icon: 'FileIcon' },
-                             { label: 'Показать недавние файлы', prompt: 'Покажи мои недавние файлы', icon: 'FileIcon' }
-                        ];
+                        resultMessage.text = `Документ "${result.name}" успешно создан.`;
+                        resultMessage.card = {
+                            type: 'document',
+                            icon: 'FileIcon',
+                            title: result.name,
+                            actions: [{ label: 'Открыть', url: result.webViewLink }]
+                        };
+                        break;
+                    }
+                     case 'send_email': {
+                        await serviceProviders.google.sendEmail(args);
+                        resultMessage.text = `Письмо успешно отправлено получателю: ${args.to.join(', ')}.`;
                         break;
                      }
-                     case 'create_task': {
-                        const provider = serviceProviders.google;
-                        const result = await provider.createTask(args);
-                        resultMessage.text = `Задача "${result.title}" успешно создана.`;
-                        resultMessage.card = { type: 'task', icon: 'CheckSquareIcon', title: 'Задача создана', details: { 'Название': result.title, 'Статус': 'Нужно выполнить' }, actions: [{ label: 'Открыть в Google Tasks', url: 'https://tasks.google.com/embed/list/~default', target: '_blank' }, { label: 'Удалить', action: 'request_delete', payload: { id: result.id, type: 'task' }, style: 'danger' }]};
-                        resultMessage.contextualActions = [
-                             { label: 'Создать еще задачу', prompt: 'Создай еще одну задачу', icon: 'CheckSquareIcon' },
-                             { label: 'Показать все задачи', prompt: 'Покажи все мои задачи', icon: 'CheckSquareIcon' }
-                        ];
-                        break;
-                    }
-                    case 'update_task': {
-                        const provider = serviceProviders.google;
-                        const result = await provider.updateTask(args);
-                        resultMessage.text = `Задача "${result.title}" была успешно обновлена.`;
-                        resultMessage.contextualActions = [
-                             { label: 'Показать все задачи', prompt: 'Покажи все мои задачи', icon: 'CheckSquareIcon' },
-                             { label: 'Создать еще задачу', prompt: 'Создай еще одну задачу', icon: 'CheckSquareIcon' }
-                        ];
-                        break;
-                    }
-                    case 'send_email': {
-                        const provider = serviceProviders.google;
-                        await provider.sendEmail(args);
-                        resultMessage.text = `Письмо на тему "${args.subject}" успешно отправлено получателям: ${args.to.join(', ')}.`;
-                        resultMessage.contextualActions = [
-                            { label: 'Написать еще письмо', prompt: 'Напиши новое письмо', icon: 'EmailIcon' },
-                            { label: 'Проверить почту', prompt: 'Покажи последние 5 писем', icon: 'EmailIcon' }
-                        ];
-                        break;
-                    }
-                    case 'delete_calendar_event': {
-                        const provider = serviceProviders.google;
-                        await provider.deleteCalendarEvent(args);
-                        resultMessage.text = `Событие было успешно удалено.`;
-                        resultMessage.contextualActions = [
-                            { label: 'Показать расписание', prompt: 'Покажи мое расписание на сегодня', icon: 'CalendarIcon' }
-                        ];
+                      case 'delete_calendar_event': {
+                        await serviceProviders.google.deleteCalendarEvent(args);
+                        resultMessage.text = 'Событие успешно удалено из вашего календаря.';
                         break;
                     }
                     case 'delete_task': {
-                        const provider = serviceProviders.google;
-                        await provider.deleteTask(args);
-                        resultMessage.text = `Задача была успешно удалена.`;
-                        resultMessage.contextualActions = [
-                            { label: 'Показать все задачи', prompt: 'Покажи все мои задачи', icon: 'CheckSquareIcon' }
-                        ];
+                        await serviceProviders.google.deleteTask(args);
+                        resultMessage.text = 'Задача успешно удалена.';
                         break;
                     }
                     case 'delete_email': {
-                        const provider = serviceProviders.google;
-                        await provider.deleteEmail(args);
-                        resultMessage.text = `Письмо было перемещено в корзину.`;
-                         resultMessage.contextualActions = [
-                            { label: 'Проверить почту', prompt: 'Покажи последние 5 писем', icon: 'EmailIcon' }
-                        ];
+                        await serviceProviders.google.deleteEmail(args);
+                        resultMessage.text = 'Письмо перемещено в корзину.';
                         break;
                     }
-                    case 'summarize_and_save_memory': {
-                        const provider = serviceProviders.supabase;
-                        if (provider) {
-                            await provider.saveMemory(args);
-                            resultMessage.text = "Хорошо, я запомнил это.";
-                        } else {
-                            resultMessage.text = "Не могу сохранить в память, Supabase не настроен.";
-                        }
+                    case 'update_task': {
+                        const result = await serviceProviders.google.updateTask(args);
+                        resultMessage.text = `Задача "${result.title}" успешно обновлена.`;
                         break;
                     }
+                    case 'summarize_and_save_memory':
                     case 'recall_memory': {
-                        const provider = serviceProviders.supabase;
-                        if (provider) {
-                            const memories = await provider.recallMemory(args.query);
-                            if (memories.length > 0) {
-                                const memoryText = memories.map(m => `- ${m.summary} (Ключевые слова: ${m.keywords.join(', ')})`).join('\n');
-                                resultMessage.text = `Я кое-что вспомнил:\n${memoryText}`;
-                            } else {
-                                resultMessage.text = `По запросу "${args.query}" я ничего не вспомнил.`;
-                            }
-                        } else {
-                            resultMessage.text = "Не могу ничего вспомнить, Supabase не настроен.";
-                        }
-                        break;
+                         resultMessage.text = `(Действие с памятью выполнено: ${name})`;
+                         break;
                     }
                     default:
-                        resultMessage.text = `Неизвестный инструмент: ${name}`;
-                        break;
+                        resultMessage.text = `Неизвестный вызов функции: ${name}`;
                 }
             } catch (error) {
                 console.error(`Error executing tool ${name}:`, error);
                 resultMessage.sender = MessageSender.SYSTEM;
-                resultMessage.text = `Ошибка при выполнении действия: ${error.message}`;
+                resultMessage.text = `Произошла ошибка при выполнении действия "${name}": ${error.message}`;
             }
+
             return resultMessage;
         }
 
-        // Use the recommended .text accessor to get the model's text response.
-        const textResponse = (response.text || '').trim() || "Я не смог обработать ваш запрос.";
-
-        const contextualActionsRegex = /\[CONTEXT_ACTIONS\]\s*(.*)/s;
-        const quickRepliesRegex = /\[QUICK_REPLY\]\s*(.*)/g;
-
+        // --- Handle plain text responses ---
+        const textResponse = response.text?.trim() || "Я не совсем понял. Можете переформулировать?";
+        
+        // Extract contextual actions from the text response
+        const actionRegex = /\[CONTEXT_ACTIONS\]\s*(\[.*\])/;
+        const match = textResponse.match(actionRegex);
+        let contextualActions = [];
         let cleanText = textResponse;
-        let contextualActions = null;
-        let suggestedReplies = [];
 
-        const actionsMatch = textResponse.match(contextualActionsRegex);
-        if (actionsMatch && actionsMatch[1]) {
+        if (match && match[1]) {
             try {
-                contextualActions = JSON.parse(actionsMatch[1]);
-                cleanText = cleanText.replace(contextualActionsRegex, '').trim();
+                contextualActions = JSON.parse(match[1]);
+                cleanText = textResponse.replace(actionRegex, '').trim();
             } catch (e) {
-                console.error("Failed to parse contextual actions JSON:", e);
+                console.warn("Could not parse contextual actions:", e);
+                // Keep the original text if JSON is malformed
             }
         }
-
-        let replyMatch;
-        while ((replyMatch = quickRepliesRegex.exec(textResponse)) !== null) {
-            suggestedReplies.push(replyMatch[1].trim());
-        }
-        if (suggestedReplies.length > 0) {
-            cleanText = cleanText.replace(quickRepliesRegex, '').trim();
-        }
-
+        
         return {
             id: Date.now().toString(),
             sender: MessageSender.ASSISTANT,
             text: cleanText,
-            contextualActions: contextualActions,
-            suggestedReplies: suggestedReplies,
+            contextualActions: contextualActions
         };
-
+        
     } catch (error) {
-        console.error("Error calling Gemini API:", error);
-        
-        // Handle specific API key/quota errors
-        if (error.message.includes('quota') || error.message.includes('billing')) {
-            return {
-                id: Date.now().toString(),
-                sender: MessageSender.SYSTEM,
-                text: 'Достигнут лимит запросов к Gemini API.',
-                card: {
-                    type: 'system_action',
-                    icon: 'AlertTriangleIcon',
-                    title: 'Проблема с доступом к Gemini',
-                    text: 'Пожалуйста, проверьте ваш тарифный план, платежные данные или обновите ключ API для продолжения работы.',
-                    actions: [{
-                        label: 'Перейти в настройки',
-                        clientAction: 'open_settings'
-                    }]
-                }
-            };
-        }
-        if (error.message.includes('API key not valid')) {
-             return {
-                id: Date.now().toString(),
-                sender: MessageSender.SYSTEM,
-                text: 'Ключ Gemini API недействителен.',
-                card: {
-                    type: 'system_action',
-                    icon: 'SettingsIcon',
-                    title: 'Неверный ключ Gemini API',
-                    text: 'Пожалуйста, проверьте и обновите ваш ключ API в настройках для продолжения работы.',
-                    actions: [{
-                        label: 'Перейти в настройки',
-                        clientAction: 'open_settings'
-                    }]
-                }
-            };
-        }
-
-        // Handle generic errors
-        let friendlyMessage = "Произошла внутренняя ошибка при обращении к Gemini.";
-        try {
-            const errorJson = JSON.parse(error.message);
-            if (errorJson.error && errorJson.error.message) {
-                friendlyMessage = `Произошла ошибка при обращении к Gemini: ${errorJson.error.message}`;
-            }
-        } catch (e) {
-            friendlyMessage = `Произошла ошибка при обращении к Gemini: ${error.message}`;
-        }
-        
+        console.error("Gemini API call failed:", error);
         return {
             id: Date.now().toString(),
             sender: MessageSender.SYSTEM,
-            text: friendlyMessage,
+            text: `Не удалось связаться с Gemini API: ${error.message}. Проверьте ключ API и настройки прокси.`,
         };
     }
 };
 
-export const testProxyConnection = async ({ proxyUrl, apiKey, signal }) => {
-    if (!proxyUrl) {
-        return { status: 'error', message: 'URL прокси не указан.' };
-    }
-    if (!apiKey) {
-        return { status: 'error', message: 'Ключ Gemini API не указан для теста.' };
-    }
-
-    let timeoutId;
-    const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error('Timeout')), 15000); // 15-second timeout
-    });
-
-    try {
-        const clientOptions = { apiKey, apiEndpoint: proxyUrl.replace(/^https?:\/\//, '') };
-        const ai = new GoogleGenAI(clientOptions);
-
-        const startTime = performance.now();
-        
-        // The SDK doesn't seem to support AbortSignal directly in generateContent.
-        // We will rely on the timeoutPromise race.
-        const generatePromise = ai.models.generateContent({ model: GEMINI_MODEL, contents: 'test' });
-        
-        if (signal) {
-             signal.addEventListener('abort', () => {
-                clearTimeout(timeoutId);
-                // No standard way to abort the underlying fetch in the current SDK version.
-             }, { once: true });
-        }
-        
-        const response = await Promise.race([generatePromise, timeoutPromise]);
-        clearTimeout(timeoutId);
-
-        const endTime = performance.now();
-        const speed = Math.round(endTime - startTime);
-
-        if (response && response.text.length >= 0) { // Any valid response from Gemini is a success
-            return { status: 'ok', message: 'Соединение успешно.', speed };
-        } else {
-            throw new Error("Получен некорректный ответ от Gemini API через прокси.");
-        }
-
-    } catch (error) {
-        clearTimeout(timeoutId);
-
-        if (signal?.aborted) {
-            return { status: 'cancelled', message: 'Тест отменен.', speed: null };
-        }
-
-        console.error('Ошибка при тесте прокси:', error);
-        
-        let message = 'Не удалось подключиться через прокси.';
-        if (error.message.includes('API key not valid')) {
-            message = 'Прокси работает, но API ключ недействителен.';
-        } else if (error.message.includes('fetch') || error.message.includes('CORS')) {
-             message = `Ошибка сети. Проверьте URL прокси и CORS-заголовки.`;
-        } else if (error.message === 'Timeout') {
-            message = 'Тайм-аут: прокси не ответил в течение 15 секунд.';
-        } else if (error.message.includes('429')) {
-             message = 'Прокси работает, но Gemini блокирует (слишком много запросов).';
-        } else {
-            message = error.message;
-        }
-        
-        return { status: 'error', message: message, speed: null };
-    }
-};
-
-
-export const analyzeSyncErrorWithGemini = async ({ errorMessage, context, appStructure, apiKey, proxyUrl }) => {
-    if (!apiKey) {
-        throw new Error("Ключ Gemini API не предоставлен.");
-    }
+/**
+ * Uses Gemini to analyze a sync error message and provide a user-friendly explanation.
+ */
+export async function analyzeSyncErrorWithGemini({ errorMessage, context, appStructure, apiKey, proxyUrl }) {
+     if (!apiKey) throw new Error("Ключ Gemini API не предоставлен.");
+     
     const clientOptions = { apiKey };
-    if (proxyUrl) {
-        clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
-    }
+    if (proxyUrl) clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
     const ai = new GoogleGenAI(clientOptions);
 
-    const systemInstruction = `Ты — элитный Full-Stack инженер, отлаживающий веб-приложение "Секретарь+". Пользователь столкнулся с ошибкой во время фоновой синхронизации данных.
-Твоя задача:
-1.  **Проанализируй** техническое сообщение об ошибке. Особое внимание удели ошибкам, связанным с базой данных (например, "column does not exist", "relation does not exist"). Это может указывать на устаревшую схему Supabase.
-2.  **Учитывай структуру приложения**, чтобы дать максимально точный совет.
-3.  **Объясни** на русском языке простыми, понятными словами, что означает эта ошибка.
-4.  **Предложи** конкретное, пошаговое решение. Если проблема в схеме БД, четко скажи об этом и посоветуй пользователю выполнить SQL-скрипт из настроек на вкладке "База данных". Ссылайся на конкретные файлы, если это возможно.
-5.  Ответ должен быть в формате **Markdown**.
+    const systemInstruction = `
+        Ты - ведущий frontend-разработчик, специализирующийся на Supabase и Google API. 
+        Твоя задача - проанализировать техническую ошибку, которую получил пользователь в приложении "Секретарь+", и дать ему четкое, простое и пошаговое объяснение, как ее исправить.
+        Говори с пользователем на "ты".
 
-**Структура приложения для контекста:**
-${appStructure}`;
+        Контекст приложения:
+        ${appStructure}
+    `;
+    const userPrompt = `
+        Я столкнулся с ошибкой в приложении. 
+        Вот контекст: "${context}".
+        Вот сообщение об ошибке: "${errorMessage}".
 
-    const prompt = `Пользователь получил следующую ошибку. Проанализируй её и предложи решение.
-Контекст: ${context}
-Сообщение об ошибке:
-\`\`\`
-${errorMessage}
-\`\`\``;
+        Проанализируй ошибку и дай мне:
+        1.  **Простое объяснение:** Что именно означает эта ошибка простыми словами?
+        2.  **Основная причина:** Какова наиболее вероятная причина этой проблемы?
+        3.  **Пошаговое решение:** Что конкретно мне нужно сделать в интерфейсе приложения, чтобы это исправить? Будь максимально конкретным.
+    `;
 
     try {
         const response = await ai.models.generateContent({
             model: GEMINI_MODEL,
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            contents: userPrompt,
             config: {
-                systemInstruction: systemInstruction,
-            },
+                 systemInstruction: systemInstruction,
+            }
         });
         return response.text;
     } catch (error) {
-        console.error("Error calling Gemini for sync error analysis:", error);
-        return `### Ошибка при анализе\nНе удалось связаться с Gemini для анализа ошибки. Пожалуйста, проверьте свой API ключ и подключение к интернету.\n\n**Исходная ошибка:**\n\`\`\`\n${errorMessage}\n\`\`\``;
+        console.error("Gemini error analysis failed:", error);
+        throw new Error(`Анализ ошибки не удался: ${error.message}`);
     }
-};
+}
 
-export const DEFAULT_PROXY_PROMPT = `Ты — "Сетевой Скаут", ИИ-помощник для разработчика личного ассистента "Секретарь+". Моя цель — помочь пользователям получить доступ к Google API через публичные HTTPS прокси.
-Твоя задача:
-1.  Найти 5-10 **НОВЫХ** публичных HTTPS прокси, которые известны своей надежностью и скоростью для доступа к сервисам Google Cloud.
-2.  Приоритет — серверы в США (USA) или Европе (Germany, Netherlands, France).
-3.  **Критически важно:** Не предлагай прокси, которые уже есть в списке существующих. Это бесполезно.
-4.  Верни результат СТРОГО в виде JSON-массива объектов. Если ничего не найдено, верни пустой массив. Не добавляй никаких объяснений или комментариев вне JSON.`;
+/**
+ * Pings a proxy to see if it can reach the Gemini API.
+ */
+export async function testProxyConnection({ proxyUrl, apiKey }) {
+    if (!proxyUrl) return { status: 'error', message: 'URL не указан' };
+    if (!apiKey) return { status: 'error', message: 'Ключ Gemini API отсутствует' };
+    
+    const startTime = Date.now();
+    try {
+        const clientOptions = { apiKey, apiEndpoint: proxyUrl.replace(/^https?:\/\//, '') };
+        const ai = new GoogleGenAI(clientOptions);
+        
+        // Use a lightweight, fast model info request to test connectivity
+        await ai.models.generateContent({ model: GEMINI_MODEL, contents: 'test' });
 
-export const findProxiesWithGemini = async ({ apiKey, proxyUrl, existingProxies = [], customPrompt = '' }) => {
+        const speed = Date.now() - startTime;
+        return { status: 'ok', message: 'Соединение успешно', speed };
+    } catch (error) {
+        console.warn(`Proxy test failed for ${proxyUrl}:`, error);
+        let message = 'Неизвестная ошибка';
+        if (error.message.includes('API key not valid')) {
+            message = 'Неверный ключ Gemini API';
+        } else if (error.message.includes('fetch failed') || error.message.includes('network error')) {
+            message = 'Сетевая ошибка или недоступен';
+        } else if (error.message.includes('429')) {
+             message = 'Превышен лимит запросов';
+        } else {
+            message = error.message;
+        }
+        return { status: 'error', message, speed: null };
+    }
+}
+
+
+export const DEFAULT_PROXY_PROMPT = `
+Ты — эксперт по поиску информации в сети. Твоя задача — найти 10-15 общедоступных, бесплатных прокси-серверов, которые можно использовать для доступа к Google Gemini API.
+Критерии поиска:
+- Прокси должны быть HTTPS.
+- Они должны быть максимально быстрыми и анонимными.
+- Ищи списки прокси на известных сайтах, форумах (например, Reddit), GitHub.
+- Исключи из результатов прокси, которые уже есть в списке: [EXISTING_PROXIES].
+
+Твой ответ должен быть СТРОГО в формате JSON. Не добавляй никакого текста до или после JSON.
+Формат ответа: JSON-массив объектов. Каждый объект должен содержать два поля:
+1. "url": Полный URL прокси-сервера (например, "https://123.45.67.89:8080").
+2. "location": Страна, где расположен сервер (например, "Germany").
+
+Пример ответа:
+[
+  {"url": "https://1.2.3.4:8080", "location": "USA"},
+  {"url": "https://5.6.7.8:443", "location": "Canada"}
+]
+`;
+
+/**
+ * Uses Gemini to find new public proxies.
+ * @returns {Promise<{parsedData: Array, systemPrompt: string, rawResponse: string}>}
+ */
+export async function findProxiesWithGemini({ apiKey, existingProxies = [], customPrompt = '' }) {
     if (!apiKey) throw new Error("Ключ Gemini API не предоставлен.");
 
-    const clientOptions = { apiKey };
-    if (proxyUrl) {
-        clientOptions.apiEndpoint = proxyUrl.replace(/^https?:\/\//, '');
-    }
-    const ai = new GoogleGenAI(clientOptions);
-
-    const existingProxiesString = existingProxies.length > 0 ? existingProxies.join(', ') : 'Нет';
+    const ai = new GoogleGenAI({ apiKey });
     
-    const systemInstruction = customPrompt.trim() || DEFAULT_PROXY_PROMPT;
+    const systemPrompt = (customPrompt || DEFAULT_PROXY_PROMPT)
+        .replace('[EXISTING_PROXIES]', existingProxies.join(', ') || 'нет');
 
-    const prompt = `Существующие прокси (эти повторять нельзя): \`${existingProxiesString}\`.
-Найди новые HTTPS прокси, подходящие для доступа к Google API.`;
+    const schema = {
+        type: Type.ARRAY,
+        items: {
+            type: Type.OBJECT,
+            properties: {
+                url: { type: Type.STRING, description: 'Полный URL прокси-сервера.' },
+                location: { type: Type.STRING, description: 'Страна расположения.' },
+            },
+            required: ['url', 'location'],
+        },
+    };
 
     try {
         const response = await ai.models.generateContent({
             model: GEMINI_MODEL,
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            contents: "Найди, пожалуйста, список прокси-серверов согласно инструкции.",
             config: {
-                systemInstruction,
+                systemInstruction: systemPrompt,
                 responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                           url: { type: Type.STRING, description: 'A valid proxy URL, e.g., https://host:port' },
-                           location: { type: Type.STRING, description: 'The estimated country of the proxy' }
-                        }
-                    },
-                },
+                responseSchema: schema,
             },
         });
+
+        const rawResponse = response.text;
+        const parsedData = JSON.parse(rawResponse);
         
-        const jsonStr = response.text.trim();
-        // Return extra info for the "thinking" view
-        return {
-            systemPrompt: systemInstruction,
-            rawResponse: jsonStr,
-            parsedData: JSON.parse(jsonStr)
-        };
+        return { parsedData, systemPrompt, rawResponse };
 
     } catch (error) {
-        console.error("Error calling Gemini for proxy generation:", error);
-        throw new Error("Не удалось сгенерировать список прокси. Проверьте ваш API ключ и системный промпт.");
+        console.error("Gemini proxy search failed:", error);
+        throw new Error(`Поиск прокси с помощью ИИ не удался: ${error.message}`);
     }
-};
+}
