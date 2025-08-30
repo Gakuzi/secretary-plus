@@ -3,6 +3,7 @@ import { getSettings, saveSettings, getSyncStatus } from '../utils/storage.js';
 import { DB_SCHEMAS } from '../services/supabase/schema.js';
 import { createDbExecutionModal } from './DbExecutionModal.js';
 import { createProxyManagerModal } from './ProxyManagerModal.js';
+import { createMigrationModal } from './MigrationModal.js';
 
 // --- HELPERS ---
 const ROLE_DISPLAY_MAP = {
@@ -257,6 +258,54 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
         { id: 'history', label: 'История чата', icon: Icons.FileIcon },
     ];
     
+    const switchTab = async (tabId) => {
+        state.currentTab = tabId;
+        state.isLoading = true;
+        render();
+        try {
+            switch(tabId) {
+                case 'users': state.users = await supabaseService.getAllUserProfiles(); break;
+                case 'apiKeys': state.apiKeys = await supabaseService.getAllSharedGeminiKeysForAdmin(); break;
+                case 'history': state.history = await supabaseService.getChatHistoryForAdmin(); break;
+                case 'stats': state.stats = await supabaseService.getFullStats(); break;
+            }
+        } catch (error) {
+            console.error(`Failed to load data for tab ${tabId}:`, error);
+            handleSchemaError(error);
+        }
+        
+        state.isLoading = false;
+        render();
+    };
+
+    const handleSchemaError = (error) => {
+        const isSchemaError = (error.message.includes('relation') && error.message.includes('does not exist')) || 
+                              error.message.includes('Could not find the function');
+
+        if (!isSchemaError) {
+            alert(`Произошла непредвиденная ошибка: ${error.message}`);
+            return;
+        }
+
+        const globalModalContainer = document.getElementById('global-modal-container');
+        if (!globalModalContainer) {
+            console.error("Global modal container not found!");
+            alert(`Критическая ошибка: ${error.message}`);
+            return;
+        }
+        
+        const { element: migrationModal } = createMigrationModal({
+            supabaseService,
+            onOpenSettings: () => {
+                globalModalContainer.innerHTML = '';
+                switchTab('schema'); 
+            },
+        });
+
+        globalModalContainer.innerHTML = '';
+        globalModalContainer.appendChild(migrationModal);
+    };
+
     const render = () => {
         const contentContainer = document.createElement('div');
         contentContainer.className = 'h-full';
@@ -312,26 +361,6 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
         }
     };
     
-    const switchTab = async (tabId) => {
-        state.currentTab = tabId;
-        state.isLoading = true;
-        render();
-        try {
-            switch(tabId) {
-                case 'users': state.users = await supabaseService.getAllUserProfiles(); break;
-                case 'apiKeys': state.apiKeys = await supabaseService.getAllSharedGeminiKeysForAdmin(); break;
-                case 'history': state.history = await supabaseService.getChatHistoryForAdmin(); break;
-                case 'stats': state.stats = await supabaseService.getFullStats(); break;
-            }
-        } catch (error) {
-            console.error(`Failed to load data for tab ${tabId}:`, error);
-            modalElement.querySelector('#settings-tab-content').innerHTML = `<p class="p-4 text-red-500">Не удалось загрузить данные: ${error.message}</p>`;
-        }
-        
-        state.isLoading = false;
-        render();
-    };
-
     modalElement.addEventListener('click', async (e) => {
         const target = e.target.closest('[data-tab-id], [data-action]');
         if (!target) { if (e.target === modalElement || !e.target.closest('#settings-content')) { onClose(); } return; }
@@ -344,7 +373,14 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
                 case 'close': onClose(); break;
                 case 'delete-key': {
                     const keyId = target.dataset.keyId;
-                    if (confirm('Удалить этот ключ?')) { try { await supabaseService.deleteSharedGeminiKey(keyId); await switchTab('apiKeys'); } catch (err) { alert(`Ошибка: ${err.message}`); } }
+                    if (confirm('Удалить этот ключ?')) { 
+                        try { 
+                            await supabaseService.deleteSharedGeminiKey(keyId); 
+                            await switchTab('apiKeys'); 
+                        } catch (err) { 
+                            handleSchemaError(err);
+                        } 
+                    }
                     break;
                 }
                 case 'add-key': {
@@ -352,7 +388,12 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
                     const description = modalElement.querySelector('#new-key-desc-input').value.trim();
                     const priority = parseInt(modalElement.querySelector('#new-key-priority-input').value, 10);
                     if (!apiKey) { alert('Ключ API не может быть пустым.'); return; }
-                    try { await supabaseService.addSharedGeminiKey({ apiKey, description, priority }); await switchTab('apiKeys'); } catch(err) { alert(`Ошибка: ${err.message}`); }
+                    try { 
+                        await supabaseService.addSharedGeminiKey({ apiKey, description, priority }); 
+                        await switchTab('apiKeys'); 
+                    } catch(err) { 
+                        handleSchemaError(err);
+                    }
                     break;
                 }
                  case 'open-proxy-manager': {
@@ -406,8 +447,15 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
             const userId = roleTarget.dataset.userId;
             const newRole = roleTarget.value;
             if (confirm(`Изменить роль для пользователя на "${newRole}"?`)) {
-                try { await supabaseService.updateUserRole(userId, newRole); await switchTab('users'); } 
-                catch (error) { alert(`Ошибка: ${error.message}`); await switchTab('users'); }
+                try { 
+                    await supabaseService.updateUserRole(userId, newRole); 
+                    await switchTab('users'); 
+                } catch (error) { 
+                    handleSchemaError(error);
+                    await switchTab('users'); 
+                }
+            } else {
+                await switchTab('users');
             }
         }
 
@@ -417,8 +465,12 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
             const field = keyFieldTarget.dataset.field;
             let value = keyFieldTarget.type === 'checkbox' ? keyFieldTarget.checked : keyFieldTarget.value;
             const updates = { [field]: field === 'priority' ? (parseInt(value, 10) || 0) : value };
-            try { await supabaseService.updateSharedGeminiKey(keyId, updates); } 
-            catch (err) { alert(`Ошибка обновления: ${err.message}`); await switchTab('apiKeys'); }
+            try { 
+                await supabaseService.updateSharedGeminiKey(keyId, updates); 
+            } catch (err) { 
+                handleSchemaError(err);
+                await switchTab('apiKeys'); 
+            }
         }
     });
 
