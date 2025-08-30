@@ -72,6 +72,11 @@ function renderUsersTab(users, currentUserId, currentUserRole) {
 }
 
 function renderApiKeysTab(keys) {
+    // Defensive check to prevent crash on null/undefined data
+    if (!keys) {
+        return '<p class="text-center text-slate-500 dark:text-slate-400">Не удалось загрузить ключи. Попробуйте обновить вкладку.</p>';
+    }
+
     const keysHtml = keys.map(key => `
         <div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3" data-key-id="${key.id}">
             <div class="flex items-center justify-between">
@@ -359,16 +364,30 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
                 case 'close': onClose(); break;
                 case 'delete-key': {
                     const keyId = target.dataset.keyId;
-                    if (confirm('Удалить этот ключ?')) { await supabaseService.deleteSharedGeminiKey(keyId); await switchTab('apiKeys'); }
+                    if (confirm('Удалить этот ключ?')) {
+                        try {
+                            await supabaseService.deleteSharedGeminiKey(keyId);
+                            await switchTab('apiKeys');
+                        } catch (err) {
+                            alert(`Не удалось удалить ключ: ${err.message}`);
+                        }
+                    }
                     break;
                 }
                 case 'add-key': {
                     const apiKey = modalElement.querySelector('#new-key-input').value.trim();
                     const description = modalElement.querySelector('#new-key-desc-input').value.trim();
                     const priority = parseInt(modalElement.querySelector('#new-key-priority-input').value, 10);
-                    if (!apiKey) { alert('Ключ API не может быть пустым.'); return; }
-                    await supabaseService.addSharedGeminiKey({ apiKey, description, priority }); 
-                    await switchTab('apiKeys');
+                    if (!apiKey) {
+                        alert('Ключ API не может быть пустым.');
+                        return;
+                    }
+                    try {
+                        await supabaseService.addSharedGeminiKey({ apiKey, description, priority });
+                        await switchTab('apiKeys');
+                    } catch (err) {
+                        alert(`Не удалось добавить ключ: ${err.message}`);
+                    }
                     break;
                 }
                  case 'open-proxy-manager': {
@@ -422,19 +441,25 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
             const keyId = keyFieldTarget.closest('[data-key-id]').dataset.keyId;
             const field = keyFieldTarget.dataset.field;
             let value = keyFieldTarget.type === 'checkbox' ? keyFieldTarget.checked : keyFieldTarget.value;
+            
+            const performUpdate = async () => {
+                const updates = { [field]: field === 'priority' ? (parseInt(value, 10) || 0) : value };
+                try {
+                    await supabaseService.updateSharedGeminiKey(keyId, updates);
+                } catch (err) {
+                    alert(`Ошибка обновления ключа: ${err.message}`);
+                    // Revert UI on failure by reloading the tab data
+                    await switchTab('apiKeys');
+                }
+            };
+
             if (field === 'priority' || field === 'description') {
                  // Debounce input updates
                 clearTimeout(keyFieldTarget.debounceTimer);
-                keyFieldTarget.debounceTimer = setTimeout(async () => {
-                    const updates = { [field]: field === 'priority' ? (parseInt(value, 10) || 0) : value };
-                    try { await supabaseService.updateSharedGeminiKey(keyId, updates); } 
-                    catch (err) { alert(`Ошибка обновления ключа: ${err.message}`); await switchTab('apiKeys'); }
-                }, 500);
+                keyFieldTarget.debounceTimer = setTimeout(performUpdate, 500);
             } else {
                  // Update checkbox immediately
-                 const updates = { [field]: value };
-                 try { await supabaseService.updateSharedGeminiKey(keyId, updates); } 
-                 catch (err) { alert(`Ошибка обновления ключа: ${err.message}`); await switchTab('apiKeys'); }
+                 await performUpdate();
             }
         }
     });

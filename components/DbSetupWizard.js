@@ -299,7 +299,9 @@ export function createDbSetupWizard({ supabaseService, onComplete }) {
                 const token = tokenInput?.value.trim();
                 
                 if (!url || !token) {
-                    alert("Пожалуйста, введите URL и токен для проверки.");
+                    state.testStatus = 'error';
+                    state.errorMessage = 'Пожалуйста, введите URL и токен для проверки.';
+                    render();
                     return;
                 }
 

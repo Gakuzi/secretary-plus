@@ -12,7 +12,7 @@ import { createCameraView } from './components/CameraView.js';
 import { createAboutModal } from './components/AboutModal.js';
 import { createMigrationModal } from './components/MigrationModal.js';
 import { createDbSetupWizard } from './components/DbSetupWizard.js';
-import { SettingsIcon, QuestionMarkCircleIcon, UserIcon } from './components/icons/Icons.js';
+import * as Icons from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 import { SUPABASE_CONFIG } from './config.js';
 
@@ -96,7 +96,7 @@ function renderAuth(profile) {
             // Fallback icon for users without an avatar
             const fallbackIcon = document.createElement('div');
             fallbackIcon.className = 'w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400';
-            fallbackIcon.innerHTML = UserIcon;
+            fallbackIcon.innerHTML = Icons.UserIcon;
             profileButton.appendChild(fallbackIcon);
         }
         
@@ -465,6 +465,30 @@ function setupEmailPolling() {
 
 // --- APP STARTUP LOGIC ---
 
+function renderSetupRequiredScreen(errorMessage) {
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
+
+    mainContent.innerHTML = `
+        <div class="h-full flex flex-col items-center justify-center p-8 bg-slate-50 dark:bg-slate-900 text-center animate-fadeIn">
+            <div class="w-16 h-16 text-red-500">${Icons.DatabaseIcon}</div>
+            <h2 class="mt-4 text-2xl font-bold text-slate-800 dark:text-slate-100">Требуется настройка базы данных</h2>
+            <p class="mt-2 max-w-lg text-slate-600 dark:text-slate-400">
+                Приложение не может запуститься, так как база данных не настроена или ее структура устарела. 
+                Это нормально при первом запуске или после крупного обновления.
+            </p>
+            <div class="mt-4 p-3 bg-slate-100 dark:bg-slate-800 rounded-md text-xs font-mono text-slate-500 dark:text-slate-400">
+                Техническая деталь: ${errorMessage}
+            </div>
+            <button data-client-action="open_migration_modal" class="mt-6 flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition-transform hover:scale-105">
+                ${Icons.WandIcon}
+                <span>Запустить Мастер Настройки</span>
+            </button>
+        </div>
+    `;
+}
+
+
 function renderMainApp() {
     appContainer.innerHTML = `
         <div id="app" class="flex flex-col h-full">
@@ -486,16 +510,11 @@ function renderMainApp() {
     `;
     const settingsButton = document.getElementById('settings-button');
     const helpButton = document.getElementById('help-button');
-    settingsButton.innerHTML = SettingsIcon;
-    helpButton.innerHTML = QuestionMarkCircleIcon;
+    settingsButton.innerHTML = Icons.SettingsIcon;
+    helpButton.innerHTML = Icons.QuestionMarkCircleIcon;
     helpButton.addEventListener('click', showHelpModal);
     document.body.addEventListener('click', handleGlobalClick);
-    const mainContent = document.getElementById('main-content');
-    mainContent.innerHTML = '';
-    const chatContainer = createChatInterface(handleSendMessage, showCameraView, showSystemError, handleNewChat);
-    mainContent.appendChild(chatContainer);
 }
-
 
 async function startAuthenticatedSession(session) {
     if (state.isLoading) return;
@@ -510,6 +529,7 @@ async function startAuthenticatedSession(session) {
         googleProvider.setAuthToken(session.provider_token);
         await googleProvider.loadGapiClient();
         
+        // Render the main app shell (header, empty main content area)
         renderMainApp();
         renderAuth(state.userProfile);
 
@@ -517,56 +537,45 @@ async function startAuthenticatedSession(session) {
         const settingsBtn = document.getElementById('settings-button');
         if (settingsBtn) { settingsBtn.style.display = isAdminOrOwner ? 'block' : 'none'; }
         
-        // --- Step 2: Critical Schema Check and all data loading ---
+        // --- Step 2: Critical Schema Check ---
         try {
             await supabaseService.checkSchemaVersion();
-
-            const cloudSettings = await supabaseService.getUserSettings();
-            if (cloudSettings) {
-                state.settings = { ...getSettings(), ...cloudSettings };
-                saveSettings(state.settings);
-            }
-            supabaseService.setSettings(state.settings);
-            googleProvider.setTimezone(state.settings.timezone);
-            
-            state.keyPool = await supabaseService.getSharedGeminiKeys();
-            state.proxyPool = await supabaseService.getSharedProxies();
-            
-            await startNewChatSession();
-            startAutoSync();
-            setupEmailPolling();
-
         } catch (schemaError) {
-            // CRITICAL FIX: Make the error check case-insensitive to correctly identify schema errors.
             const errorMsg = String(schemaError.message).toLowerCase();
             const isSchemaError = errorMsg.includes('relation') || errorMsg.includes('does not exist') || errorMsg.includes('could not find the table');
             
             if (isSchemaError) {
-                // If a schema error is detected, ALWAYS show the actionable card.
-                // This empowers the administrator to fix the issue immediately upon seeing the error.
-                // The actions within the modal are protected by admin checks, so this is safe.
-                addMessageToChat({
-                    id: Date.now().toString(),
-                    sender: MessageSender.SYSTEM,
-                    text: 'Обнаружена проблема с базой данных. Вероятно, она не настроена или ее структура устарела. Для корректной работы приложения необходимо провести обновление.',
-                    card: {
-                        type: 'system_action',
-                        icon: 'DatabaseIcon',
-                        title: 'Требуется настройка БД',
-                        actions: [{
-                            label: 'Запустить Мастер Настройки',
-                            clientAction: 'open_migration_modal',
-                        }]
-                    }
-                });
+                // If a schema error is detected, render the dedicated setup screen and STOP.
+                renderSetupRequiredScreen(schemaError.message);
             } else {
-                // For any other non-schema related configuration errors, display the technical details.
-                 showSystemError(`Не удалось проверить конфигурацию: ${schemaError.message}`);
+                // For other critical errors during startup, show them in the main view.
+                showSystemError(`Критическая ошибка конфигурации: ${schemaError.message}`);
             }
             // IMPORTANT: Stop execution here. Do not proceed to load other data.
             state.isLoading = false;
             return; 
         }
+
+        // --- Step 3: Schema is OK. Load all data and start the chat ---
+        const cloudSettings = await supabaseService.getUserSettings();
+        if (cloudSettings) {
+            state.settings = { ...getSettings(), ...cloudSettings };
+            saveSettings(state.settings);
+        }
+        supabaseService.setSettings(state.settings);
+        googleProvider.setTimezone(state.settings.timezone);
+        
+        state.keyPool = await supabaseService.getSharedGeminiKeys();
+        state.proxyPool = await supabaseService.getSharedProxies();
+        
+        const mainContent = document.getElementById('main-content');
+        mainContent.innerHTML = '';
+        const chatContainer = createChatInterface(handleSendMessage, showCameraView, showSystemError, handleNewChat);
+        mainContent.appendChild(chatContainer);
+        
+        await startNewChatSession();
+        startAutoSync();
+        setupEmailPolling();
 
     } catch (error) {
         console.error("Critical error during session start:", error);
@@ -575,7 +584,6 @@ async function startAuthenticatedSession(session) {
             showSystemError(`Критическая ошибка при запуске сессии: ${error.message}. Попробуйте перезагрузить страницу.`);
         } else {
              await handleLogout();
-             // Show a user-friendly message on the welcome screen if possible
              alert(`Критическая ошибка: ${error.message}. Выполняется выход.`);
         }
     } finally {

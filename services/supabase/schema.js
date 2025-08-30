@@ -352,16 +352,20 @@ $$;
 
 -- RPC для админов: добавить новый ключ
 CREATE OR REPLACE FUNCTION public.add_shared_gemini_key(p_api_key TEXT, p_description TEXT, p_priority INTEGER)
-RETURNS void AS $$
+RETURNS void 
+LANGUAGE plpgsql 
+SECURITY DEFINER SET search_path = public, auth AS $$
 BEGIN
   IF NOT is_admin() THEN RAISE EXCEPTION 'У вас нет прав для выполнения этой операции.'; END IF;
   INSERT INTO public.shared_gemini_keys (api_key, description, priority, is_active) VALUES (p_api_key, p_description, p_priority, true);
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- RPC для админов: обновить ключ
 CREATE OR REPLACE FUNCTION public.update_shared_gemini_key(p_id UUID, p_updates JSONB)
-RETURNS void AS $$
+RETURNS void 
+LANGUAGE plpgsql 
+SECURITY DEFINER SET search_path = public, auth AS $$
 BEGIN
   IF NOT is_admin() THEN RAISE EXCEPTION 'У вас нет прав для выполнения этой операции.'; END IF;
   UPDATE public.shared_gemini_keys SET
@@ -371,16 +375,18 @@ BEGIN
     is_active = COALESCE((p_updates->>'is_active')::BOOLEAN, is_active)
   WHERE id = p_id;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- RPC для админов: удалить ключ
 CREATE OR REPLACE FUNCTION public.delete_shared_gemini_key(p_id UUID)
-RETURNS void AS $$
+RETURNS void 
+LANGUAGE plpgsql 
+SECURITY DEFINER SET search_path = public, auth AS $$
 BEGIN
   IF NOT is_admin() THEN RAISE EXCEPTION 'У вас нет прав для выполнения этой операции.'; END IF;
   DELETE FROM public.shared_gemini_keys WHERE id = p_id;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 `;
 
 // Renamed from SERVICE_SCHEMAS to DB_SCHEMAS to reflect that it now includes all tables.
