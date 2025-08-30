@@ -1,77 +1,112 @@
 import * as Icons from './icons/Icons.js';
+import { getSettings } from '../utils/storage.js';
+import { FULL_MIGRATION_SQL } from '../services/supabase/migrations.js';
 
-export function createMigrationModal() {
+export function createMigrationModal({ supabaseService, onOpenSettings }) {
     const modalElement = document.createElement('div');
     modalElement.id = 'migration-modal';
-    modalElement.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4';
-    
-    modalElement.innerHTML = `
-        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-md p-6 text-center">
-            <div id="migration-spinner" class="mx-auto h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <div id="migration-icon" class="hidden mx-auto h-12 w-12"></div>
-            <h3 id="migration-title" class="text-xl font-bold mt-4">Проверка базы данных...</h3>
-            <p id="migration-status" class="text-sm text-slate-500 dark:text-slate-400 mt-2">Пожалуйста, подождите.</p>
-            <div id="migration-actions" class="mt-6 space-x-2"></div>
-        </div>
-    `;
+    modalElement.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4 animate-fadeIn';
 
-    const spinner = modalElement.querySelector('#migration-spinner');
-    const iconContainer = modalElement.querySelector('#migration-icon');
-    const title = modalElement.querySelector('#migration-title');
-    const status = modalElement.querySelector('#migration-status');
-    const actions = modalElement.querySelector('#migration-actions');
+    let state = 'checking'; // 'checking', 'required', 'not-configured', 'migrating', 'success', 'error'
+    let errorMessage = '';
 
-    const updateState = (state, message = '', error = null) => {
-        spinner.classList.add('hidden');
-        iconContainer.classList.remove('hidden');
-        actions.innerHTML = '';
+    const render = () => {
+        let iconHtml, titleText, statusText, actionsHtml = '';
 
         switch (state) {
             case 'checking':
-                spinner.classList.remove('hidden');
-                title.textContent = 'Проверка базы данных...';
-                status.textContent = message || 'Определяем текущую версию схемы...';
+                iconHtml = `<div class="mx-auto h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>`;
+                titleText = 'Проверка базы данных...';
+                statusText = 'Определяем текущую версию схемы...';
                 break;
             case 'required':
-                iconContainer.innerHTML = Icons.AlertTriangleIcon;
-                iconContainer.className = 'mx-auto h-12 w-12 text-yellow-500';
-                title.textContent = 'Требуется обновление базы данных';
-                status.innerHTML = `Структура вашей базы данных устарела. Для корректной работы приложения необходимо её обновить. <br><strong class="mt-2 block">Все кэшированные данные будут удалены и синхронизированы заново.</strong>`;
-                 actions.innerHTML = `
-                    <button data-action="migrate" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold">Начать обновление</button>
-                `;
+                iconHtml = `<div class="mx-auto h-12 w-12 text-yellow-500">${Icons.AlertTriangleIcon}</div>`;
+                titleText = 'Требуется обновление базы данных';
+                statusText = 'Структура вашей базы данных устарела. Для корректной работы приложения необходимо её обновить. <br><strong class="mt-2 block">Все кэшированные данные будут удалены и синхронизированы заново.</strong>';
+                actionsHtml = `<button data-action="migrate" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold">Начать обновление</button>`;
                 break;
             case 'migrating':
-                spinner.classList.remove('hidden');
-                title.textContent = 'Обновление базы данных...';
-                status.textContent = message;
+                iconHtml = `<div class="mx-auto h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>`;
+                titleText = 'Обновление базы данных...';
+                statusText = 'Это может занять до минуты. Пожалуйста, не закрывайте вкладку.';
                 break;
             case 'success':
-                iconContainer.innerHTML = Icons.CheckSquareIcon;
-                iconContainer.className = 'mx-auto h-12 w-12 text-green-500';
-                title.textContent = 'База данных обновлена!';
-                status.textContent = message || 'Приложение перезагрузится через 3 секунды...';
+                iconHtml = `<div class="mx-auto h-12 w-12 text-green-500">${Icons.CheckSquareIcon}</div>`;
+                titleText = 'База данных обновлена!';
+                statusText = 'Приложение перезагрузится через 3 секунды...';
                 break;
             case 'error':
-                iconContainer.innerHTML = Icons.AlertTriangleIcon;
-                iconContainer.className = 'mx-auto h-12 w-12 text-red-500';
-                title.textContent = 'Ошибка обновления!';
-                status.innerHTML = `Не удалось обновить базу данных.<br><strong class="mt-2 block">${error || 'Неизвестная ошибка.'}</strong>`;
-                actions.innerHTML = `
-                    <button data-action="retry" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold">Повторить</button>
-                `;
+                iconHtml = `<div class="mx-auto h-12 w-12 text-red-500">${Icons.AlertTriangleIcon}</div>`;
+                titleText = 'Ошибка обновления!';
+                statusText = `Не удалось обновить базу данных.<br><strong class="mt-2 block">${errorMessage}</strong>`;
+                actionsHtml = `<button data-action="retry" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold">Повторить</button>`;
                 break;
-             case 'not-configured':
-                iconContainer.innerHTML = Icons.SettingsIcon;
-                iconContainer.className = 'mx-auto h-12 w-12 text-yellow-500';
-                title.textContent = 'Автоматическое обновление не настроено';
-                status.textContent = 'Для автоматического обновления схемы БД необходимо настроить "Управляющий воркер". Запустите мастер для его настройки.';
-                 actions.innerHTML = `
-                    <button data-action="open-wizard" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-semibold">Настроить Воркер</button>
-                `;
+            case 'not-configured':
+                iconHtml = `<div class="mx-auto h-12 w-12 text-yellow-500">${Icons.SettingsIcon}</div>`;
+                titleText = 'Автоматическое обновление не настроено';
+                statusText = 'Для автоматического обновления схемы БД необходимо настроить "Управляющий воркер". Откройте Центр Управления для его настройки.';
+                actionsHtml = `<button data-action="open-settings" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-semibold">Настроить Воркер</button>`;
                 break;
+        }
+
+        modalElement.innerHTML = `
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-md p-6 text-center">
+                ${iconHtml}
+                <h3 class="text-xl font-bold mt-4">${titleText}</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">${statusText}</p>
+                <div class="mt-6 space-x-2">${actionsHtml}</div>
+            </div>
+        `;
+    };
+
+    const runCheck = () => {
+        const settings = getSettings();
+        if (!settings.managementWorkerUrl || !settings.adminSecretToken) {
+            state = 'not-configured';
+        } else {
+            state = 'required';
+        }
+        render();
+    };
+
+    const runMigration = async () => {
+        state = 'migrating';
+        render();
+        try {
+            await supabaseService.executeSqlViaFunction(FULL_MIGRATION_SQL);
+            state = 'success';
+            render();
+            setTimeout(() => window.location.reload(), 3000);
+        } catch (error) {
+            errorMessage = error.message;
+            state = 'error';
+            render();
         }
     };
     
-    return { element: modalElement, updateState };
+    modalElement.addEventListener('click', (e) => {
+        const action = e.target.closest('[data-action]')?.dataset.action;
+        if (!action) return;
+
+        switch(action) {
+            case 'migrate':
+                if (confirm('Это действие удалит существующие кэшированные таблицы и создаст их заново. Вы уверены?')) {
+                    runMigration();
+                }
+                break;
+            case 'retry':
+                runCheck();
+                break;
+            case 'open-settings':
+                onOpenSettings();
+                modalElement.remove(); // Close this modal to avoid overlap
+                break;
+        }
+    });
+
+    render();
+    // Initial check to determine the first state to show
+    setTimeout(runCheck, 500);
+
+    return { element: modalElement };
 }

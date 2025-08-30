@@ -388,7 +388,7 @@ export const DB_SCHEMAS = {
     profiles: {
         label: 'Профили', icon: 'UserIcon', tableName: 'profiles', isEditable: false,
         fields: [
-            { name: 'id', type: 'UUID PRIMARY KEY', recommended: true, description: 'Уникальный идентификатор пользователя, совпадает с ID в системе аутентитификации.' },
+            { name: 'id', type: 'UUID PRIMARY KEY', recommended: true, description: 'Уникальный идентификатор пользователя, совпадает с ID в системе аутентификации.' },
             { name: 'full_name', type: 'TEXT', recommended: true, description: 'Полное имя пользователя, полученное от провайдера аутентификации.' },
             { name: 'avatar_url', type: 'TEXT', recommended: true, description: 'URL аватара пользователя.' },
             { name: 'role', type: 'user_role', recommended: true, description: 'Роль пользователя в системе (owner, admin, user). Определяет уровень доступа.' },
@@ -566,9 +566,19 @@ export function generateCreateTableSql(schema, fieldsToCreate) {
 
     // Add UNIQUE constraint for tables that have a source_id to prevent duplicates per user.
     const hasSourceId = fieldsToCreate.some(f => f.name === 'source_id');
-    const uniqueConstraint = hasSourceId ? `    UNIQUE(user_id, source_id)` : '';
-    if(uniqueConstraint) {
-        allColumns.push(uniqueConstraint);
+    if(hasSourceId) {
+        // Find the source_id field to correctly handle its type (TEXT or others)
+        const sourceIdField = fieldsToCreate.find(f => f.name === 'source_id');
+        // Re-add it without PRIMARY KEY, as 'id' is now the primary key.
+        const sourceIdIndex = allColumns.findIndex(c => c.includes('source_id'));
+        if (sourceIdIndex > -1) {
+            allColumns[sourceIdIndex] = `    "source_id" ${sourceIdField.type}`;
+        }
+        allColumns.push(`    UNIQUE(user_id, source_id)`);
+    }
+     // Special case for 'notes' which has no source_id and should use its own `id`
+    if (tableName === 'notes') {
+        allColumns.splice(0, 1, 'id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY');
     }
     
     const sql = `

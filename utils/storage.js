@@ -25,6 +25,9 @@ const defaultSettings = {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     enableEmailPolling: true, // For proactive email notifications
     enableAutoSync: true, // For background data synchronization
+    // New settings for the DB Management Worker
+    managementWorkerUrl: '',
+    adminSecretToken: '',
     serviceMap: {
         calendar: 'google',
         tasks: 'google',
@@ -77,6 +80,8 @@ export function saveSettings(settings) {
             timezone: settings.timezone,
             enableEmailPolling: settings.enableEmailPolling,
             enableAutoSync: settings.enableAutoSync,
+            managementWorkerUrl: settings.managementWorkerUrl,
+            adminSecretToken: settings.adminSecretToken,
             serviceMap: settings.serviceMap,
             enabledServices: settings.enabledServices, // Save the new setting
             serviceFieldConfig: settings.serviceFieldConfig, // Save the new field config

@@ -10,6 +10,7 @@ import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
 import { createAboutModal } from './components/AboutModal.js';
+import { createMigrationModal } from './components/MigrationModal.js';
 import { SettingsIcon, QuestionMarkCircleIcon, UserIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 import { SUPABASE_CONFIG } from './config.js';
@@ -67,7 +68,7 @@ const serviceProviders = {
 };
 
 // --- DOM ELEMENTS ---
-let appContainer, modalContainer, cameraViewContainer;
+let appContainer, modalContainer, cameraViewContainer, globalModalContainer;
 let emailCheckInterval = null;
 let syncInterval = null;
 
@@ -549,6 +550,39 @@ function renderMainApp() {
     mainContent.appendChild(chatContainer);
 }
 
+/**
+ * Checks for schema errors and prompts admin for migration if needed.
+ * @returns {Promise<boolean>} - Returns true if a migration prompt was shown, false otherwise.
+ */
+async function checkSchemaAndPromptMigration() {
+    const userRole = state.userProfile?.role;
+    const isAdminOrOwner = userRole === 'admin' || userRole === 'owner';
+
+    if (!isAdminOrOwner) {
+        return false;
+    }
+
+    try {
+        // A lightweight check for a table that is part of the new schema.
+        await supabaseService.checkSchemaVersion();
+        return false; // Schema is OK.
+    } catch (error) {
+         if (error.message.includes('relation') && error.message.includes('does not exist')) {
+            const { element: migrationModal } = createMigrationModal({
+                supabaseService,
+                onOpenSettings: () => showSettingsModal(),
+            });
+            globalModalContainer.innerHTML = '';
+            globalModalContainer.appendChild(migrationModal);
+            return true; // Migration prompt is now showing.
+        } else {
+             // A different kind of error occurred, show it normally.
+             showSystemError(`Не удалось проверить версию базы данных: ${error.message}`);
+             return false;
+        }
+    }
+}
+
 
 /**
  * Initializes all services for an authenticated session.
@@ -561,7 +595,6 @@ async function startAuthenticatedSession(session) {
     state.isLoading = true;
 
     // 1. Verify we can get a user profile before rendering the main app.
-    // If this fails, the session is invalid or the database is inconsistent. We must log out.
     try {
         const userProfile = await supabaseService.getCurrentUserProfile();
         if (!userProfile) {
@@ -570,9 +603,8 @@ async function startAuthenticatedSession(session) {
         state.userProfile = userProfile;
     } catch (profileError) {
         console.error("Critical error fetching user profile, signing out:", profileError);
-        // Do not render the main app. Instead, show an alert and sign out.
         alert(`Критическая ошибка: не удалось загрузить ваш профиль. Выполняется выход для повторной попытки.\n\nДетали: ${profileError.message}`);
-        state.isLoading = false; // Reset loading state
+        state.isLoading = false;
         await handleLogout();
         return;
     }
@@ -588,25 +620,28 @@ async function startAuthenticatedSession(session) {
     const cloudSettings = await supabaseService.getUserSettings();
     if (cloudSettings) {
         state.settings = { ...getSettings(), ...cloudSettings };
-        saveSettings(state.settings); // Persist merged settings locally
+        saveSettings(state.settings);
     }
     supabaseService.setSettings(state.settings);
     googleProvider.setTimezone(state.settings.timezone);
     
-    // 5. Fetch shared resource pools (keys and proxies)
+    // 5. Check database schema and prompt for migration if needed.
+    // If it returns true, it means a modal is showing, so we stop further execution.
+    if (await checkSchemaAndPromptMigration()) {
+        state.isLoading = false;
+        return;
+    }
+    
+    // 6. Fetch shared resource pools (keys and proxies)
     try {
         state.keyPool = await supabaseService.getSharedGeminiKeys();
         state.proxyPool = await supabaseService.getSharedProxies();
     } catch (poolError) {
         console.error("Failed to load shared resource pools:", poolError);
-        if (poolError.message && (poolError.message.includes('relation "public.shared_gemini_keys" does not exist') || poolError.message.includes('Could not find the table'))) {
-             showSystemError("Не удалось загрузить конфигурацию: схема базы данных устарела. Пожалуйста, обновите ее, используя скрипт из SETUP.md.");
-        } else {
-            showSystemError("Не удалось загрузить конфигурацию. Некоторые функции могут быть недоступны.");
-        }
+        showSystemError("Не удалось загрузить конфигурацию. Некоторые функции могут быть недоступны.");
     }
     
-    // 6. Configure UI based on user role
+    // 7. Configure UI based on user role
     const userRole = (state.userProfile.role || '').trim().toLowerCase();
     const isAdminOrOwner = userRole === 'admin' || userRole === 'owner';
     const settingsBtn = document.getElementById('settings-button');
@@ -620,13 +655,13 @@ async function startAuthenticatedSession(session) {
      if(helpBtn) helpBtn.style.display = 'block';
 
 
-    // 7. Finalize UI and start background services
+    // 8. Finalize UI and start background services
     renderAuth(state.userProfile);
     await startNewChatSession();
     startAutoSync();
     setupEmailPolling();
 
-    // 8. Mark loading as complete
+    // 9. Mark loading as complete
     state.isLoading = false;
 }
 
@@ -691,6 +726,7 @@ async function main() {
     appContainer = document.getElementById('app-container');
     modalContainer = document.getElementById('modal-container');
     cameraViewContainer = document.getElementById('camera-view-container');
+    globalModalContainer = document.getElementById('global-modal-container');
 
     // Display a loading indicator while waiting for libraries and auth state.
     appContainer.innerHTML = `<div class="h-full w-full flex items-center justify-center"><div class="animate-spin h-10 w-10 border-4 border-slate-300 border-t-transparent rounded-full"></div></div>`;

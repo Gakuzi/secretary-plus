@@ -1,6 +1,6 @@
 import * as Icons from './icons/Icons.js';
-import { getSyncStatus } from '../utils/storage.js';
-import { DB_SCHEMAS, generateCreateTableSql } from '../services/supabase/schema.js';
+import { getSettings, saveSettings, getSyncStatus } from '../utils/storage.js';
+import { DB_SCHEMAS } from '../services/supabase/schema.js';
 import { createDbExecutionModal } from './DbExecutionModal.js';
 import { createProxyManagerModal } from './ProxyManagerModal.js';
 
@@ -163,17 +163,36 @@ function renderSyncTab(tasks, state) {
 }
 
 function renderSchemaTab(state) {
-    if (state.isCheckingSchema) { return `<div class="flex justify-center items-center h-full p-8"><div class="animate-spin h-8 w-8 border-4 border-slate-300 border-t-transparent rounded-full"></div></div>`; }
-    if (state.schemaError) { return `<div class="p-4 bg-red-100 text-red-800 rounded-md"><strong>Ошибка:</strong> ${state.schemaError}</div>`; }
-    
-    const overallStatusHtml = `
-        <div class="p-4 bg-yellow-100/50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300 rounded-md">
-            <h4 class="font-bold text-lg">Управление схемой БД</h4>
-            <p class="text-sm mt-1">Здесь вы можете сгенерировать и выполнить SQL-скрипт для создания или обновления таблиц в вашей базе данных Supabase. Это необходимо для добавления новых функций или исправления ошибок.</p>
+    const settings = getSettings();
+    return `
+        <div class="p-4 bg-yellow-100/50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300 rounded-lg">
+            <h4 class="font-bold text-lg">Управление схемой БД и Воркером</h4>
+            <p class="text-sm mt-1">Здесь вы можете настроить "Управляющий воркер", который необходим для безопасного автоматического обновления схемы вашей базы данных, а также вручную запустить миграцию.</p>
         </div>
-        <button data-action="open-db-migration" class="mt-6 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center justify-center gap-2"> ${Icons.DatabaseIcon} <span>Открыть Редактор и Миграцию БД</span> </button>
+
+        <div class="mt-6 p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+             <h4 class="font-semibold text-lg mb-3">Конфигурация Воркера</h4>
+             <p class="text-xs text-slate-500 mb-4">Инструкции по созданию воркера находятся в файле <a href="./DB_WORKER_SETUP.md" target="_blank" class="text-blue-500 hover:underline">DB_WORKER_SETUP.md</a>.</p>
+             <div class="space-y-4">
+                 <div>
+                    <label for="worker-url-input" class="font-medium text-sm">URL Управляющего Воркера</label>
+                    <input type="url" id="worker-url-input" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm font-mono" placeholder="https://....supabase.co/functions/v1/db-admin" value="${settings.managementWorkerUrl || ''}">
+                </div>
+                 <div>
+                    <label for="worker-token-input" class="font-medium text-sm">Секретный токен</label>
+                    <input type="password" id="worker-token-input" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm" value="${settings.adminSecretToken || ''}">
+                </div>
+                <button data-action="save-worker-config" class="w-full mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center justify-center gap-2">Сохранить конфигурацию</button>
+             </div>
+        </div>
+
+        <div class="mt-4 p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+             <h4 class="font-semibold text-lg mb-3">Действия с БД</h4>
+            <button data-action="open-db-migration" class="w-full px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-semibold flex items-center justify-center gap-2">
+                ${Icons.DatabaseIcon} <span>Открыть Редактор и запустить Миграцию БД</span>
+            </button>
+        </div>
     `;
-    return `<div class="space-y-4">${overallStatusHtml}</div>`;
 }
 
 function renderStatsTab(statsData) {
@@ -343,10 +362,19 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
                 }
                 case 'open-db-migration': {
                     const execModal = createDbExecutionModal({
-                        onExecute: async (sql) => { /* Logic would go here if it was client-side, now just for display */ alert("Выполнение SQL через UI не поддерживается. Используйте SQL Editor в Supabase."); },
+                        onExecute: (sql) => supabaseService.executeSqlViaFunction(sql),
                         onClose: () => subModalContainer.innerHTML = ''
                     });
                     subModalContainer.appendChild(execModal);
+                    break;
+                }
+                case 'save-worker-config': {
+                    const settings = getSettings();
+                    settings.managementWorkerUrl = document.getElementById('worker-url-input').value.trim();
+                    settings.adminSecretToken = document.getElementById('worker-token-input').value.trim();
+                    saveSettings(settings);
+                    await supabaseService.saveUserSettings(settings);
+                    alert('Конфигурация воркера сохранена.');
                     break;
                 }
                 case 'test-connection': {

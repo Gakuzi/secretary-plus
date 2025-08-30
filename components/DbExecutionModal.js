@@ -15,7 +15,7 @@ export function createDbExecutionModal({ onExecute, onClose }) {
     const render = () => {
         let footerHtml = '';
         if (state.executionSuccess) {
-            footerHtml = `<button data-action="close" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold">Готово</button>`;
+            footerHtml = `<button data-action="close" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold">Готово (Перезагрузка)</button>`;
         } else {
             footerHtml = `
                 <button data-action="close" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md text-sm font-semibold">Отмена</button>
@@ -36,15 +36,15 @@ export function createDbExecutionModal({ onExecute, onClose }) {
                         <div class="w-5 h-5 flex-shrink-0 mt-0.5">${Icons.AlertTriangleIcon}</div>
                         <div>
                             <p class="font-bold">Внимание:</p>
-                            <p>Выполнение некорректного SQL-скрипта может повредить вашу базу данных. Это действие может быть необратимо. Убедитесь, что у вас есть резервная копия.</p>
+                            <p>Выполнение этого скрипта приведет к удалению и пересозданию всех таблиц с кэшированными данными (события, контакты, файлы и т.д.). Убедитесь, что у вас есть резервная копия, если это необходимо.</p>
                         </div>
                     </div>
                     <div>
                         <div class="flex justify-between items-center mb-1">
                             <label for="sql-script-area" class="font-semibold text-sm">SQL-скрипт для выполнения:</label>
-                            <button data-action="reset-sql" class="text-xs font-semibold bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 px-2 py-1 rounded-md transition-colors">Сбросить до стандартного</button>
+                             <button data-action="copy-sql" class="text-xs font-semibold bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 px-2 py-1 rounded-md transition-colors">Копировать</button>
                         </div>
-                        <textarea id="sql-script-area" class="w-full h-48 mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 font-mono text-xs focus:ring-2 focus:ring-blue-500 outline-none">${state.currentSql}</textarea>
+                        <textarea id="sql-script-area" class="w-full h-48 mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 font-mono text-xs focus:ring-2 focus:ring-blue-500 outline-none" readonly>${state.currentSql}</textarea>
                     </div>
                     <div>
                         <label class="font-semibold text-sm">Лог выполнения:</label>
@@ -73,11 +73,9 @@ export function createDbExecutionModal({ onExecute, onClose }) {
                 }
                 onClose();
                 break;
-            case 'reset-sql':
-                if (confirm('Вы уверены, что хотите сбросить скрипт до стандартной полной миграции? Все ваши изменения будут утеряны.')) {
-                    state.currentSql = FULL_MIGRATION_SQL;
-                    if(sqlTextarea) sqlTextarea.value = state.currentSql;
-                }
+            case 'copy-sql':
+                navigator.clipboard.writeText(sqlTextarea.value);
+                alert('SQL-скрипт скопирован в буфер обмена.');
                 break;
             case 'execute':
                 const sqlToExecute = sqlTextarea.value.trim();
@@ -93,7 +91,7 @@ export function createDbExecutionModal({ onExecute, onClose }) {
                 state.logOutput = 'Выполнение миграции...';
                 render();
                 try {
-                    const result = await onExecute(sqlToExecute); // Pass the current SQL to the handler
+                    const result = await onExecute(sqlToExecute);
                     state.logOutput = `УСПЕШНО! База данных настроена.\n\nОтвет сервера:\n${JSON.stringify(result, null, 2)}`;
                     state.executionSuccess = true;
                 } catch (error) {
@@ -107,12 +105,7 @@ export function createDbExecutionModal({ onExecute, onClose }) {
     };
 
     modalElement.addEventListener('click', handleAction);
-    modalElement.addEventListener('input', (e) => {
-        if (e.target.id === 'sql-script-area') {
-            state.currentSql = e.target.value;
-        }
-    });
-
+    
     render();
     return modalElement;
 }

@@ -1,5 +1,6 @@
 import { GOOGLE_SCOPES } from '../../constants.js';
 import { DB_SCHEMAS } from './schema.js';
+import { getSettings } from '../../utils/storage.js';
 
 export class SupabaseService {
     constructor(supabaseUrl, supabaseAnonKey) {
@@ -128,8 +129,8 @@ export class SupabaseService {
     }
 
     async syncCalendarEvents(googleItems) {
+        const config = this.settings.serviceFieldConfig?.calendar || {};
         const formatter = (event, userId) => {
-            const config = this.settings.serviceFieldConfig?.calendar || {};
             const item = { user_id: userId, source_id: event.id };
             if (config.title) item.title = event.summary;
             if (config.description) item.description = event.description;
@@ -147,8 +148,8 @@ export class SupabaseService {
     }
 
     async syncContacts(googleItems) {
+        const config = this.settings.serviceFieldConfig?.contacts || {};
         const formatter = (contact, userId) => {
-            const config = this.settings.serviceFieldConfig?.contacts || {};
             const c = contact; // Alias for brevity
             const item = { user_id: userId, source_id: c.resourceName };
             if (config.display_name) item.display_name = c.names?.[0]?.displayName;
@@ -165,8 +166,8 @@ export class SupabaseService {
     }
 
     async syncFiles(googleItems) {
+        const config = this.settings.serviceFieldConfig?.files || {};
         const formatter = (file, userId) => {
-            const config = this.settings.serviceFieldConfig?.files || {};
             const item = { user_id: userId, source_id: file.id };
             if (config.name) item.name = file.name;
             if (config.mime_type) item.mime_type = file.mimeType;
@@ -184,8 +185,8 @@ export class SupabaseService {
     }
     
     async syncTasks(googleItems) {
+        const config = this.settings.serviceFieldConfig?.tasks || {};
         const formatter = (task, userId) => {
-            const config = this.settings.serviceFieldConfig?.tasks || {};
             const item = { user_id: userId, source_id: task.id };
             if (config.title) item.title = task.title;
             if (config.notes) item.notes = task.notes;
@@ -199,8 +200,8 @@ export class SupabaseService {
     }
 
     async syncEmails(googleItems) {
+         const config = this.settings.serviceFieldConfig?.emails || {};
          const formatter = (email, userId) => {
-            const config = this.settings.serviceFieldConfig?.emails || {};
             const item = { user_id: userId, source_id: email.id };
             if (config.thread_id) item.thread_id = email.threadId;
             if (config.subject) item.subject = email.subject;
@@ -367,7 +368,46 @@ export class SupabaseService {
         }
     }
     
-    // --- Admin Functions ---
+    // --- Admin & Schema Functions ---
+    async checkSchemaVersion() {
+        // This is a lightweight check. We query for a table that we know is part of the latest schema.
+        // If it fails, we know the schema is outdated. This is much faster than checking all tables/columns.
+        const { error } = await this.client.from('shared_gemini_keys').select('id').limit(1);
+        if (error) throw error;
+    }
+
+    async executeSqlViaFunction(sql) {
+        const settings = getSettings();
+        const { managementWorkerUrl, adminSecretToken } = settings;
+
+        if (!managementWorkerUrl || !adminSecretToken) {
+            throw new Error("URL или токен управляющего воркера не настроены в 'Центре Управления'.");
+        }
+        const { data: { session } } = await this.client.auth.getSession();
+        if (!session || !session.access_token) {
+            throw new Error("Не удалось получить токен аутентификации.");
+        }
+
+        const response = await fetch(managementWorkerUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`, // Send user's JWT
+                'x-admin-secret-token': adminSecretToken // Send the shared secret
+            },
+            body: JSON.stringify({ sql_query: sql })
+        });
+        
+        const responseData = await response.json();
+        
+        if (!response.ok) {
+            const errorMessage = responseData.error || `HTTP error! status: ${response.status}`;
+            throw new Error(errorMessage);
+        }
+        
+        return responseData;
+    }
+
     async getAllUserProfiles() {
         const { data, error } = await this.client.rpc('get_all_user_profiles_with_email');
         if (error) throw error;
