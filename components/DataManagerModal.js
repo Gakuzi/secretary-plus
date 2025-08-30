@@ -215,7 +215,7 @@ export function createDataManagerModal({ supabaseService, syncTasks, onClose, on
                 const viewerContainer = modalOverlay.querySelector('#data-viewer-container');
                 viewerContainer.innerHTML = `<div class="fixed inset-0 bg-black/10 flex items-center justify-center z-[53]"><div class="animate-spin h-8 w-8 border-4 border-white border-t-transparent rounded-full"></div></div>`;
                 const { data, error } = await supabaseService.getSampleData(tableName);
-                const modal = createDataViewerModal(label, data, error.message, () => viewerContainer.innerHTML = '');
+                const modal = createDataViewerModal(label, data, error ? error.message : null, () => viewerContainer.innerHTML = '');
                 viewerContainer.innerHTML = '';
                 viewerContainer.appendChild(modal);
                 break;
