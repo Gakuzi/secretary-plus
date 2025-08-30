@@ -22,7 +22,6 @@ ALTER ROLE postgres SET pgrst.db_anon_role = 'postgres';
 NOTIFY pgrst, 'reload schema';
 
 -- Drop existing tables to start fresh. USER DATA TABLES (profiles, settings, proxies) ARE PRESERVED.
-DROP TABLE IF EXISTS public.profiles CASCADE;
 DROP TABLE IF EXISTS public.calendar_events CASCADE;
 DROP TABLE IF EXISTS public.contacts CASCADE;
 DROP TABLE IF EXISTS public.files CASCADE;
@@ -33,6 +32,9 @@ DROP TABLE IF EXISTS public.chat_memory CASCADE;
 DROP TABLE IF EXISTS public.chat_history CASCADE;
 DROP TABLE IF EXISTS public.sessions CASCADE;
 DROP TABLE IF EXISTS public.action_stats CASCADE;
+DROP TABLE IF EXISTS public.user_settings CASCADE;
+DROP TABLE IF EXISTS public.proxies CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
 
 
 -- Drop types if they exist to avoid conflicts on re-creation.

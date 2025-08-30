@@ -146,7 +146,7 @@ BEGIN
     WHERE id = auth.uid() AND (role = 'admin'::public.user_role OR role = 'owner'::public.user_role)
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
 
 -- Функция для проверки, является ли пользователь владельцем
 CREATE OR REPLACE FUNCTION public.is_owner()
@@ -157,7 +157,7 @@ BEGIN
     WHERE id = auth.uid() AND role = 'owner'::public.user_role
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
 
 -- Политики для профилей
 CREATE POLICY "Пользователи могут видеть все профили." ON public.profiles FOR SELECT USING (true);
@@ -320,7 +320,7 @@ BEGIN
 
     RETURN result;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
 `;
 
 // Renamed from SERVICE_SCHEMAS to DB_SCHEMAS to reflect that it now includes all tables.
