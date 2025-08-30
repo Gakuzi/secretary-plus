@@ -517,11 +517,10 @@ async function startAuthenticatedSession(session) {
         const settingsBtn = document.getElementById('settings-button');
         if (settingsBtn) { settingsBtn.style.display = isAdminOrOwner ? 'block' : 'none'; }
         
-        // --- Step 2: Critical Schema Check ---
+        // --- Step 2: Critical Schema Check and all data loading ---
         try {
             await supabaseService.checkSchemaVersion();
 
-            // --- Step 3: Load remaining data (ONLY if schema is OK) ---
             const cloudSettings = await supabaseService.getUserSettings();
             if (cloudSettings) {
                 state.settings = { ...getSettings(), ...cloudSettings };
@@ -538,10 +537,15 @@ async function startAuthenticatedSession(session) {
             setupEmailPolling();
 
         } catch (schemaError) {
-             const isSchemaError = schemaError.message.includes('relation') || schemaError.message.includes('does not exist') || schemaError.message.includes('could not find the table');
+            // CRITICAL FIX: Make the error check case-insensitive to correctly identify schema errors.
+            const errorMsg = String(schemaError.message).toLowerCase();
+            const isSchemaError = errorMsg.includes('relation') || errorMsg.includes('does not exist') || errorMsg.includes('could not find the table');
             
-            if (isAdminOrOwner && isSchemaError) {
-                 addMessageToChat({
+            if (isSchemaError) {
+                // If a schema error is detected, ALWAYS show the actionable card.
+                // This empowers the administrator to fix the issue immediately upon seeing the error.
+                // The actions within the modal are protected by admin checks, so this is safe.
+                addMessageToChat({
                     id: Date.now().toString(),
                     sender: MessageSender.SYSTEM,
                     text: 'Обнаружена проблема с базой данных. Вероятно, она не настроена или ее структура устарела. Для корректной работы приложения необходимо провести обновление.',
@@ -555,9 +559,8 @@ async function startAuthenticatedSession(session) {
                         }]
                     }
                 });
-            } else if (isSchemaError) {
-                 showSystemError("База данных не настроена или устарела. Обратитесь к администратору для обновления.");
             } else {
+                // For any other non-schema related configuration errors, display the technical details.
                  showSystemError(`Не удалось проверить конфигурацию: ${schemaError.message}`);
             }
             // IMPORTANT: Stop execution here. Do not proceed to load other data.
