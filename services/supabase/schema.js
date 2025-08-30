@@ -333,6 +333,54 @@ BEGIN
     RETURN result;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
+
+-- RPC для админов: получить все общие ключи
+CREATE OR REPLACE FUNCTION public.get_all_shared_gemini_keys_for_admin()
+RETURNS TABLE (
+    id UUID,
+    api_key TEXT,
+    is_active BOOLEAN,
+    priority INTEGER,
+    description TEXT,
+    created_at TIMESTAMPTZ
+) LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth AS $$
+BEGIN
+  IF NOT is_admin() THEN RAISE EXCEPTION 'У вас нет прав для выполнения этой операции.'; END IF;
+  RETURN QUERY SELECT k.id, k.api_key, k.is_active, k.priority, k.description, k.created_at FROM public.shared_gemini_keys k ORDER BY k.priority, k.created_at;
+END;
+$$;
+
+-- RPC для админов: добавить новый ключ
+CREATE OR REPLACE FUNCTION public.add_shared_gemini_key(p_api_key TEXT, p_description TEXT, p_priority INTEGER)
+RETURNS void AS $$
+BEGIN
+  IF NOT is_admin() THEN RAISE EXCEPTION 'У вас нет прав для выполнения этой операции.'; END IF;
+  INSERT INTO public.shared_gemini_keys (api_key, description, priority, is_active) VALUES (p_api_key, p_description, p_priority, true);
+END;
+$$ LANGUAGE plpgsql;
+
+-- RPC для админов: обновить ключ
+CREATE OR REPLACE FUNCTION public.update_shared_gemini_key(p_id UUID, p_updates JSONB)
+RETURNS void AS $$
+BEGIN
+  IF NOT is_admin() THEN RAISE EXCEPTION 'У вас нет прав для выполнения этой операции.'; END IF;
+  UPDATE public.shared_gemini_keys SET
+    api_key = COALESCE((p_updates->>'api_key')::TEXT, api_key),
+    description = COALESCE((p_updates->>'description')::TEXT, description),
+    priority = COALESCE((p_updates->>'priority')::INTEGER, priority),
+    is_active = COALESCE((p_updates->>'is_active')::BOOLEAN, is_active)
+  WHERE id = p_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- RPC для админов: удалить ключ
+CREATE OR REPLACE FUNCTION public.delete_shared_gemini_key(p_id UUID)
+RETURNS void AS $$
+BEGIN
+  IF NOT is_admin() THEN RAISE EXCEPTION 'У вас нет прав для выполнения этой операции.'; END IF;
+  DELETE FROM public.shared_gemini_keys WHERE id = p_id;
+END;
+$$ LANGUAGE plpgsql;
 `;
 
 // Renamed from SERVICE_SCHEMAS to DB_SCHEMAS to reflect that it now includes all tables.
@@ -340,7 +388,7 @@ export const DB_SCHEMAS = {
     profiles: {
         label: 'Профили', icon: 'UserIcon', tableName: 'profiles', isEditable: false,
         fields: [
-            { name: 'id', type: 'UUID PRIMARY KEY', recommended: true, description: 'Уникальный идентификатор пользователя, совпадает с ID в системе аутентификации.' },
+            { name: 'id', type: 'UUID PRIMARY KEY', recommended: true, description: 'Уникальный идентификатор пользователя, совпадает с ID в системе аутентитификации.' },
             { name: 'full_name', type: 'TEXT', recommended: true, description: 'Полное имя пользователя, полученное от провайдера аутентификации.' },
             { name: 'avatar_url', type: 'TEXT', recommended: true, description: 'URL аватара пользователя.' },
             { name: 'role', type: 'user_role', recommended: true, description: 'Роль пользователя в системе (owner, admin, user). Определяет уровень доступа.' },

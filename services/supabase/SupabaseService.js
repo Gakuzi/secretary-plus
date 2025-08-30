@@ -408,4 +408,33 @@ export class SupabaseService {
         if (error) throw error;
         return data;
     }
+
+    // --- Admin Functions for Shared Keys ---
+    async getAllSharedGeminiKeysForAdmin() {
+        const { data, error } = await this.client.rpc('get_all_shared_gemini_keys_for_admin');
+        if (error) throw error;
+        return data;
+    }
+
+    async addSharedGeminiKey({ apiKey, description, priority }) {
+        const { error } = await this.client.rpc('add_shared_gemini_key', {
+            p_api_key: apiKey,
+            p_description: description,
+            p_priority: priority
+        });
+        if (error) throw error;
+    }
+
+    async updateSharedGeminiKey(id, updates) {
+        const { error } = await this.client.rpc('update_shared_gemini_key', {
+            p_id: id,
+            p_updates: updates
+        });
+        if (error) throw error;
+    }
+
+    async deleteSharedGeminiKey(id) {
+        const { error } = await this.client.rpc('delete_shared_gemini_key', { p_id: id });
+        if (error) throw error;
+    }
 }

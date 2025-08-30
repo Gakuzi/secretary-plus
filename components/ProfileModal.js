@@ -92,6 +92,12 @@ function createDataViewerModal(title, data, error, onClose) {
     return modal;
 }
 
+// A helper to mask API keys
+function maskApiKey(key) {
+    if (!key || key.length < 10) return 'Неверный ключ';
+    return `${key.substring(0, 5)}...${key.substring(key.length - 4)}`;
+}
+
 // --- TAB CONTENT RENDERERS ---
 
 function renderProfileTab(profile) {
@@ -319,6 +325,62 @@ function renderSyncTab(syncTasks, syncStatus, isSyncingAll, syncingSingle) {
     `;
 }
 
+function renderApiKeysTab(keys) {
+    const keysHtml = keys.map(key => `
+        <div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3" data-key-id="${key.id}">
+            <div class="flex items-center justify-between">
+                <p class="font-mono text-sm font-semibold text-slate-700 dark:text-slate-200">${maskApiKey(key.api_key)}</p>
+                <div class="flex items-center gap-2">
+                    <label class="toggle-switch">
+                        <input type="checkbox" data-action="update-key-field" data-field="is_active" ${key.is_active ? 'checked' : ''}>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <button data-action="delete-key" data-key-id="${key.id}" class="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full">${Icons.TrashIcon.replace(/width="24" height="24"/g, 'width="16" height="16"')}</button>
+                </div>
+            </div>
+            <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div>
+                    <label class="font-medium text-xs text-slate-500">Описание</label>
+                    <input type="text" value="${key.description || ''}" data-action="update-key-field" data-field="description" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-1.5 text-sm" placeholder="Например, 'Основной ключ'">
+                </div>
+                <div>
+                    <label class="font-medium text-xs text-slate-500">Приоритет</label>
+                    <input type="number" value="${key.priority}" data-action="update-key-field" data-field="priority" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-1.5 text-sm" placeholder="0">
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    return `
+        <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg text-sm text-blue-800 dark:text-blue-200 mb-6">
+            <h3 class="font-bold">Управление общим пулом ключей Gemini API</h3>
+            <p class="mt-1">Добавленные здесь ключи будут использоваться всеми пользователями системы. Ассистент будет автоматически переключаться между активными ключами (начиная с наименьшего приоритета) в случае, если один из них исчерпает лимиты.</p>
+        </div>
+        <div class="space-y-3 mb-6">${keys.length > 0 ? keysHtml : '<p class="text-center text-slate-500">Нет добавленных ключей.</p>'}</div>
+        <div class="p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+            <h4 class="font-semibold text-lg mb-3">Добавить новый ключ</h4>
+            <div class="space-y-3">
+                <div>
+                    <label class="font-medium text-sm">API Ключ</label>
+                    <input type="password" id="new-key-input" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm" placeholder="Введите полный ключ API...">
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div>
+                        <label class="font-medium text-sm">Описание</label>
+                        <input type="text" id="new-key-desc-input" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm" placeholder="Например, 'Резервный ключ'">
+                    </div>
+                     <div>
+                        <label class="font-medium text-sm">Приоритет</label>
+                        <input type="number" id="new-key-priority-input" value="10" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm">
+                    </div>
+                </div>
+                <button data-action="add-key" class="w-full mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center justify-center gap-2">Добавить ключ</button>
+            </div>
+        </div>
+    `;
+}
+
+
 // --- MAIN COMPONENT ---
 export function createProfileModal({ currentUserProfile, supabaseService, syncTasks, onClose, onLogout, onRunSingleSync, onRunAllSyncs }) {
     const modalElement = document.createElement('div');
@@ -338,6 +400,8 @@ export function createProfileModal({ currentUserProfile, supabaseService, syncTa
         history: [],
         // Stats tab state
         stats: null,
+        // API Keys tab state
+        apiKeys: [],
     };
     
     const role = (currentUserProfile.role || '').trim().toLowerCase();
@@ -347,6 +411,7 @@ export function createProfileModal({ currentUserProfile, supabaseService, syncTa
         { id: 'services', label: 'Службы', icon: Icons.SettingsIcon, roles: ['user', 'admin', 'owner'] },
         { id: 'sync', label: 'Синхронизация', icon: Icons.RefreshCwIcon, roles: ['admin', 'owner'] },
         { id: 'users', label: 'Пользователи', icon: Icons.UsersIcon, roles: ['admin', 'owner'] },
+        { id: 'apiKeys', label: 'API Ключи', icon: Icons.CodeIcon, roles: ['admin', 'owner'] },
         { id: 'stats', label: 'Статистика', icon: Icons.ChartBarIcon, roles: ['admin', 'owner'] },
         { id: 'history', label: 'История чата', icon: Icons.FileIcon, roles: ['admin', 'owner'] },
         { id: 'about', label: 'О приложении', icon: Icons.QuestionMarkCircleIcon, roles: ['user', 'admin', 'owner'] }
@@ -369,6 +434,7 @@ export function createProfileModal({ currentUserProfile, supabaseService, syncTa
                 case 'users': contentContainer.innerHTML = renderUsersTab(state.users, currentUserProfile.id); break;
                 case 'history': contentContainer.innerHTML = renderHistoryTab(state.history); break;
                 case 'stats': contentContainer.innerHTML = renderStatsTab(state.stats); break;
+                case 'apiKeys': contentContainer.innerHTML = renderApiKeysTab(state.apiKeys); break;
                 default: contentContainer.innerHTML = `<p>Выберите вкладку</p>`;
             }
         }
@@ -432,6 +498,7 @@ export function createProfileModal({ currentUserProfile, supabaseService, syncTa
                 case 'users': state.users = await supabaseService.getAllUserProfiles(); break;
                 case 'history': state.history = await supabaseService.getChatHistoryForAdmin(); break;
                 case 'stats': state.stats = await supabaseService.getFullStats(); break;
+                case 'apiKeys': state.apiKeys = await supabaseService.getAllSharedGeminiKeysForAdmin(); break;
             }
         } catch (error) {
             console.error(`Failed to load data for tab ${tabId}:`, error);
@@ -503,15 +570,40 @@ export function createProfileModal({ currentUserProfile, supabaseService, syncTa
                     subModalContainer.appendChild(modal);
                     break;
                 }
+                case 'delete-key': {
+                    const keyId = target.dataset.keyId;
+                    if (confirm('Вы уверены, что хотите удалить этот ключ?')) {
+                        try {
+                            await supabaseService.deleteSharedGeminiKey(keyId);
+                            await switchTab('apiKeys');
+                        } catch (err) { alert(`Ошибка удаления: ${err.message}`); }
+                    }
+                    break;
+                }
+                case 'add-key': {
+                    const apiKey = modalElement.querySelector('#new-key-input').value.trim();
+                    const description = modalElement.querySelector('#new-key-desc-input').value.trim();
+                    const priority = parseInt(modalElement.querySelector('#new-key-priority-input').value, 10);
+
+                    if (!apiKey) {
+                        alert('Поле "API Ключ" не может быть пустым.');
+                        return;
+                    }
+                    try {
+                        await supabaseService.addSharedGeminiKey({ apiKey, description, priority });
+                        await switchTab('apiKeys');
+                    } catch(err) { alert(`Ошибка добавления: ${err.message}`); }
+                    break;
+                }
             }
         }
     });
     
      modalElement.addEventListener('change', async (e) => {
-        const target = e.target.closest('[data-action="change-role"]');
-        if (target) {
-            const userId = target.dataset.userId;
-            const newRole = target.value;
+        const roleTarget = e.target.closest('[data-action="change-role"]');
+        if (roleTarget) {
+            const userId = roleTarget.dataset.userId;
+            const newRole = roleTarget.value;
             if (confirm(`Вы уверены, что хотите изменить роль для пользователя на "${newRole}"?`)) {
                 try {
                     await supabaseService.updateUserRole(userId, newRole);
@@ -520,8 +612,33 @@ export function createProfileModal({ currentUserProfile, supabaseService, syncTa
                 } catch (error) {
                     alert(`Ошибка: ${error.message}`);
                     const user = state.users.find(u => u.id === userId); // Revert select box if cancelled
-                    if (user) target.value = user.role;
+                    if (user) roleTarget.value = user.role;
                 }
+            }
+             return;
+        }
+
+        const keyFieldTarget = e.target.closest('[data-action="update-key-field"]');
+        if (keyFieldTarget) {
+            const keyId = keyFieldTarget.closest('[data-key-id]').dataset.keyId;
+            const field = keyFieldTarget.dataset.field;
+            let value = keyFieldTarget.type === 'checkbox' ? keyFieldTarget.checked : keyFieldTarget.value;
+
+            const updates = { [field]: value };
+            if (field === 'priority') {
+                updates[field] = parseInt(value, 10) || 0;
+            }
+
+            try {
+                await supabaseService.updateSharedGeminiKey(keyId, updates);
+                // Optimistic update to avoid full reload
+                const key = state.apiKeys.find(k => k.id === keyId);
+                if (key) {
+                    key[field] = value;
+                }
+            } catch (err) {
+                alert(`Ошибка обновления: ${err.message}`);
+                await switchTab('apiKeys'); // Full reload on error
             }
         }
     });
