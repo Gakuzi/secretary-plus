@@ -596,7 +596,7 @@ async function startAuthenticatedSession(session) {
         state.proxyPool = await supabaseService.getSharedProxies();
     } catch (poolError) {
         console.error("Failed to load shared resource pools:", poolError);
-        if (poolError.message && poolError.message.includes('Could not find the table')) {
+        if (poolError.message && (poolError.message.includes('relation "public.shared_gemini_keys" does not exist') || poolError.message.includes('Could not find the table'))) {
              showSystemError("Не удалось загрузить конфигурацию: схема базы данных устарела. Пожалуйста, обновите ее, используя скрипт из SETUP.md.");
         } else {
             showSystemError("Не удалось загрузить конфигурацию. Некоторые функции могут быть недоступны.");
@@ -648,8 +648,8 @@ function waitForExternalLibs() {
         let elapsed = 0;
 
         const check = () => {
-            // Check for all required global objects from CDNs
-            if (window.google && window.google.accounts && window.gapi && window.supabase && window.pdfjsLib && window.Chart) {
+            // Check for all required global objects from CDNs with more specific checks
+            if (window.google && window.google.accounts && window.google.accounts.oauth2 && window.gapi && window.gapi.client && window.supabase && typeof window.supabase.createClient === 'function' && window.pdfjsLib && typeof window.pdfjsLib.getDocument === 'function' && window.Chart) {
                 resolve();
             } else {
                 elapsed += interval;

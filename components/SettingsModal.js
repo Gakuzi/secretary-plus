@@ -34,7 +34,7 @@ export function createSettingsModal({ settings, onClose, onSave }) {
                     </div>
                      <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
                         <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-3">Администрирование</h3>
-                        <p class="text-xs text-slate-500 mt-1 mb-2">Управление общим пулом ключей API и прокси-серверов будет доступно здесь в будущих версиях.</p>
+                        <p class="text-xs text-slate-500 mt-1 mb-2">Управление общим пулом ключей API и прокси-серверов доступно в вашем Профиле.</p>
                     </div>
                 </div>
             </main>
