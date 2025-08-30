@@ -1,9 +1,8 @@
 import { getSettings, saveGoogleToken, getGoogleToken, clearGoogleToken } from '../utils/storage.js';
-import { SupabaseService } from '../services/supabase/SupabaseService.js';
 import * as Icons from './icons/Icons.js';
 import { createProxyManagerModal } from './ProxyManagerModal.js';
 
-export function createSetupWizard({ onComplete, onExit, googleProvider, supabaseConfig, googleClientId, resumeState = null }) {
+export function createSetupWizard({ onComplete, onExit, googleProvider, supabaseService, googleClientId, resumeState = null }) {
     const wizardElement = document.createElement('div');
     wizardElement.className = 'fixed inset-0 bg-slate-900 z-50 flex items-center justify-center p-4';
     
@@ -15,9 +14,6 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         userProfile: null,
         isLoading: false,
     };
-    
-    // This will be the wizard's own instance, created on demand.
-    let localSupabaseService = null;
 
     if (resumeState) {
         state = { ...state, ...resumeState };
@@ -36,18 +32,14 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
     let handleNext; // Forward-declare
 
     const showProxyManagerModal = () => {
-        if (!localSupabaseService) {
-            // Re-initialize if it was lost, which can happen if user goes back and forth
-            if (state.authChoice === 'supabase') {
-                 localSupabaseService = new SupabaseService(supabaseConfig.url, supabaseConfig.anonKey);
-            } else {
-                 alert("Ошибка: Сервис Supabase не инициализирован. Невозможно открыть менеджер прокси.");
-                 return;
-            }
+        if (!supabaseService) {
+             alert("Ошибка: Сервис Supabase не инициализирован. Невозможно открыть менеджер прокси.");
+             return;
         }
 
         const manager = createProxyManagerModal({
-            supabaseService: localSupabaseService,
+            supabaseService: supabaseService,
+            apiKey: state.config.geminiApiKey,
             onClose: () => {
                 manager.remove();
             },
@@ -285,13 +277,13 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         sessionStorage.setItem('wizardState', JSON.stringify(resumeData));
 
         if (state.authChoice === 'supabase') {
-            if (!localSupabaseService) {
+            if (!supabaseService) {
                 alert("Ошибка: сервис Supabase не инициализирован. Пожалуйста, вернитесь на шаг назад и выберите способ подключения.");
                 state.isLoading = false;
                 render();
                 return;
             }
-            await localSupabaseService.signInWithGoogle();
+            await supabaseService.signInWithGoogle();
         } else {
             googleProvider.initClient(googleClientId, handleDirectGoogleAuthSuccess);
             googleProvider.authenticate();
@@ -303,12 +295,13 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         render();
 
         if (state.authChoice === 'supabase') {
-            // Re-create the local service instance for this check
-            localSupabaseService = new SupabaseService(supabaseConfig.url, supabaseConfig.anonKey);
-            const { data: { session } } = await localSupabaseService.client.auth.getSession();
+             if (!supabaseService) { // Ensure service is available
+                state.isLoading = false; render(); return;
+            }
+            const { data: { session } } = await supabaseService.client.auth.getSession();
             if (session) {
                 googleProvider.setAuthToken(session.provider_token);
-                const cloudSettings = await localSupabaseService.getUserSettings();
+                const cloudSettings = await supabaseService.getUserSettings();
                 if (cloudSettings) {
                     state.config = { ...state.config, ...cloudSettings };
                 }
@@ -351,11 +344,6 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         if (choice) {
             state.authChoice = choice;
             state.config.isSupabaseEnabled = choice === 'supabase';
-            if (choice === 'supabase' && !localSupabaseService) {
-                localSupabaseService = new SupabaseService(supabaseConfig.url, supabaseConfig.anonKey);
-            } else if (choice === 'direct') {
-                localSupabaseService = null;
-            }
             render();
             return;
         }
@@ -367,10 +355,10 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             case 'exit': onExit(); break;
             case 'finish': 
                 collectInputs();
-                if (localSupabaseService) {
+                if (state.authChoice === 'supabase' && supabaseService) {
                     // We only save if Supabase was used during the wizard.
                     try {
-                        await localSupabaseService.saveUserSettings(state.config);
+                        await supabaseService.saveUserSettings(state.config);
                     } catch (err) {
                         console.warn("Could not save settings during wizard completion:", err.message);
                     }

@@ -689,8 +689,13 @@ function showHelpModal() {
         }),
         onRelaunchWizard: () => {
             if (confirm('Вы уверены? Ваши текущие ключи, сохраненные в браузере, будут удалены.')) {
-                 localStorage.removeItem('secretary-plus-settings-v4');
-                 window.location.reload();
+                 const promptResponse = prompt('Это действие необратимо. Для подтверждения введите "УДАЛИТЬ НАСТРОЙКИ".');
+                 if (promptResponse === "УДАЛИТЬ НАСТРОЙКИ") {
+                    localStorage.removeItem('secretary-plus-settings-v4');
+                    window.location.reload();
+                 } else {
+                    alert("Сброс отменен.");
+                 }
             }
         },
         onLaunchDbWizard: showDbSetupWizard,
@@ -747,6 +752,7 @@ function showProxyManagerModal() {
     wizardContainer.innerHTML = '';
     const manager = createProxyManagerModal({
         supabaseService: supabaseService,
+        apiKey: state.settings.geminiApiKey, // Pass the key for the AI finder
         onClose: () => { wizardContainer.innerHTML = ''; },
     });
     wizardContainer.appendChild(manager);
@@ -871,8 +877,23 @@ async function startFullApp() {
     // Add the global click handler to the body to catch all dynamic actions
     document.body.addEventListener('click', handleGlobalClick);
     
-    const settings = getSettings();
+    let settings = getSettings();
     const savedWizardState = sessionStorage.getItem('wizardState');
+
+    // **Cloud-first settings check**
+    // If supabase is enabled, try to fetch cloud settings BEFORE showing the wizard.
+    if (settings.isSupabaseEnabled && supabaseService) {
+        const { data: { session } } = await supabaseService.client.auth.getSession();
+        if (session) {
+            const cloudSettings = await supabaseService.getUserSettings();
+            if (cloudSettings && cloudSettings.geminiApiKey) {
+                // If cloud settings are valid, merge them and override local settings.
+                settings = { ...settings, ...cloudSettings };
+                saveSettings(settings);
+                state.settings = settings; // Update global state
+            }
+        }
+    }
 
     // Condition to show the initial setup wizard
     if (!settings.geminiApiKey) {
@@ -903,7 +924,7 @@ async function startFullApp() {
                 initializeAppServices().then(renderMainContent);
             },
             googleProvider,
-            supabaseConfig: SUPABASE_CONFIG,
+            supabaseService: supabaseService, // Pass the single global instance
             googleClientId: GOOGLE_CLIENT_ID,
             resumeState: savedWizardState ? JSON.parse(savedWizardState) : null
         });

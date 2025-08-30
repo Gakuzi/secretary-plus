@@ -87,7 +87,7 @@ function createAiSettingsModal(currentPrompt, onSave, onClose) {
 /**
  * A new, dedicated modal for the AI proxy finding process, providing full transparency.
  */
-function createAiFinderModal({ supabaseService, existingProxies, onComplete }) {
+function createAiFinderModal({ supabaseService, existingProxies, apiKey, onComplete }) {
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-[52] p-4';
 
@@ -176,11 +176,13 @@ function createAiFinderModal({ supabaseService, existingProxies, onComplete }) {
     const run = async () => {
         try {
             const currentSettings = getSettings();
-            if (!currentSettings.geminiApiKey) {
+            const keyToUse = apiKey || currentSettings.geminiApiKey;
+
+            if (!keyToUse) {
                 throw new Error("Ключ Gemini API не указан в настройках.");
             }
             const result = await findProxiesWithGemini({
-                apiKey: currentSettings.geminiApiKey,
+                apiKey: keyToUse,
                 existingProxies: existingProxies,
                 customPrompt: currentSettings.customProxyPrompt,
             });
@@ -228,7 +230,8 @@ function createAiFinderModal({ supabaseService, existingProxies, onComplete }) {
                 proxy.status = 'testing';
                 render();
                 const currentSettings = getSettings();
-                const result = await testProxyConnection({ proxyUrl: proxy.url, apiKey: currentSettings.geminiApiKey });
+                const keyToUse = apiKey || currentSettings.geminiApiKey;
+                const result = await testProxyConnection({ proxyUrl: proxy.url, apiKey: keyToUse });
                 proxy.status = result.status;
                 proxy.speed = result.speed;
                 render();
@@ -246,7 +249,7 @@ function createAiFinderModal({ supabaseService, existingProxies, onComplete }) {
 
 // --- MAIN COMPONENT ---
 
-export function createProxyManagerModal({ supabaseService, onClose }) {
+export function createProxyManagerModal({ supabaseService, apiKey, onClose }) {
     const modalElement = document.createElement('div');
     modalElement.className = 'fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[51] animate-fadeIn';
 
@@ -425,6 +428,7 @@ export function createProxyManagerModal({ supabaseService, onClose }) {
                 const finderModal = createAiFinderModal({
                     supabaseService,
                     existingProxies: state.storageProxies.map(p => p.url),
+                    apiKey: apiKey, // Pass the key from props
                     onComplete: () => {
                         finderModal.remove();
                         loadProxies(); // Refresh the main list after the finder closes

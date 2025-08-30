@@ -25,7 +25,7 @@ END$$;
 
 
 -- Создаем таблицу для профилей пользователей
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name TEXT,
     avatar_url TEXT,
@@ -35,7 +35,7 @@ CREATE TABLE public.profiles (
 COMMENT ON TABLE public.profiles IS 'Профили пользователей с дополнительными данными и ролями.';
 
 -- Таблица для сессий чата
-CREATE TABLE public.sessions (
+CREATE TABLE IF NOT EXISTS public.sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT now()
@@ -43,7 +43,7 @@ CREATE TABLE public.sessions (
 COMMENT ON TABLE public.sessions IS 'Отслеживает отдельные сессии чата для группировки сообщений.';
 
 -- Таблица для истории чата
-CREATE TABLE public.chat_history (
+CREATE TABLE IF NOT EXISTS public.chat_history (
     id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     session_id UUID NOT NULL REFERENCES public.sessions(id) ON DELETE CASCADE,
@@ -57,7 +57,7 @@ CREATE TABLE public.chat_history (
 COMMENT ON TABLE public.chat_history IS 'Полный лог всех взаимодействий в чате для аналитики.';
 
 -- Таблица для долговременной памяти чата
-CREATE TABLE public.chat_memory (
+CREATE TABLE IF NOT EXISTS public.chat_memory (
     id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     summary TEXT,
@@ -67,7 +67,7 @@ CREATE TABLE public.chat_memory (
 COMMENT ON TABLE public.chat_memory IS 'Долговременная память ассистента.';
 
 -- Таблица для хранения настроек пользователя
-CREATE TABLE public.user_settings (
+CREATE TABLE IF NOT EXISTS public.user_settings (
     user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     settings JSONB,
     updated_at TIMESTAMPTZ DEFAULT now()
@@ -75,7 +75,7 @@ CREATE TABLE public.user_settings (
 COMMENT ON TABLE public.user_settings IS 'Облачное хранилище настроек пользователя.';
 
 -- Таблица для статистики использования инструментов
-CREATE TABLE public.action_stats (
+CREATE TABLE IF NOT EXISTS public.action_stats (
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     function_name TEXT,
     call_count INTEGER DEFAULT 1,
@@ -85,7 +85,7 @@ CREATE TABLE public.action_stats (
 COMMENT ON TABLE public.action_stats IS 'Статистика вызова функций Gemini.';
 
 -- Таблица для хранения прокси-серверов
-CREATE TABLE public.proxies (
+CREATE TABLE IF NOT EXISTS public.proxies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     url TEXT NOT NULL,
@@ -132,7 +132,9 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Применяем триггер к таблицам, где он нужен
+DROP TRIGGER IF EXISTS on_profiles_update ON public.profiles;
 CREATE TRIGGER on_profiles_update BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+DROP TRIGGER IF EXISTS on_user_settings_update ON public.user_settings;
 CREATE TRIGGER on_user_settings_update BEFORE UPDATE ON public.user_settings FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 -- Функция для проверки, является ли пользователь администратором (или владельцем)
@@ -481,6 +483,7 @@ COMMENT ON TABLE public.${schema.tableName} IS 'Таблица для служб
 ALTER TABLE public.${schema.tableName} ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.${schema.tableName};
 CREATE POLICY "Enable all access for authenticated users" ON public.${schema.tableName} FOR ALL TO authenticated USING (auth.uid() = user_id);
+DROP TRIGGER IF EXISTS on_${schema.tableName}_update ON public.${schema.tableName};
 CREATE TRIGGER on_${schema.tableName}_update BEFORE UPDATE ON public.${schema.tableName} FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
     `;
     return fullSql.trim();
