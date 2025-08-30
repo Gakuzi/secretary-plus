@@ -381,6 +381,108 @@ const isRateLimitError = (error) => {
     return String(error.message).includes('429');
 };
 
+export const DEFAULT_PROXY_PROMPT = `
+You are an expert assistant specialized in finding network proxies. The user needs a list of public, working, and fast reverse proxies that can forward requests to "generativelanguage.googleapis.com".
+
+Your task is to:
+1. Find a list of public reverse proxies.
+2. The proxies MUST support HTTPS.
+3. The proxies MUST NOT require authentication.
+4. The proxies MUST add the necessary CORS headers (Access-Control-Allow-Origin: *).
+5. Provide the location/country for each proxy if available.
+
+IMPORTANT: Your final response MUST be ONLY a JSON array of objects, with no other text before or after it.
+Each object must have the following structure: {"url": "https://proxy.example.com", "location": "USA"}
+Do not include proxies that are known to be slow or unreliable.
+
+Here is an example of the expected output format:
+[
+  {"url": "https://example-proxy-1.com", "location": "Germany"},
+  {"url": "https://another-proxy.org", "location": "Singapore"}
+]
+`;
+
+export const findProxiesWithGemini = async ({ apiKey, existingProxies, customPrompt }) => {
+    if (!apiKey) {
+        throw new Error("Gemini API key is required to find proxies.");
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
+    const systemPrompt = customPrompt || DEFAULT_PROXY_PROMPT;
+    const userPrompt = `Find new proxies. Exclude these from the results if you find them: ${JSON.stringify(existingProxies)}`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+            config: {
+                systemInstruction: systemPrompt,
+                responseMimeType: "application/json",
+            }
+        });
+
+        const rawResponse = response.text;
+        let parsedData = [];
+        try {
+            parsedData = JSON.parse(rawResponse);
+            if (!Array.isArray(parsedData)) {
+                parsedData = [parsedData];
+            }
+        } catch (e) {
+            console.error("Failed to parse Gemini response as JSON:", rawResponse);
+            throw new Error("AI returned a response in an invalid format. Raw response: " + rawResponse);
+        }
+
+        return {
+            systemPrompt: systemPrompt,
+            rawResponse: rawResponse,
+            parsedData: parsedData.filter(p => p.url)
+        };
+
+    } catch (error) {
+        console.error("Error finding proxies with Gemini:", error);
+        throw new Error(`Failed to communicate with Gemini API: ${error.message}`);
+    }
+};
+
+export const testProxyConnection = async ({ proxyUrl, apiKey }) => {
+    if (!proxyUrl || !apiKey) {
+        return { status: 'error', message: 'Proxy URL and API Key are required.' };
+    }
+
+    const startTime = Date.now();
+    let controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
+
+    try {
+        // Use a simple, lightweight model listing endpoint for the test.
+        const endpoint = `/v1beta/models?key=${apiKey}`;
+        const url = new URL(endpoint, proxyUrl);
+
+        const response = await fetch(url, {
+            method: 'GET',
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        const duration = Date.now() - startTime;
+
+        if (response.ok) {
+            return { status: 'ok', speed: duration, message: 'Connection successful.' };
+        } else {
+            return { status: 'error', speed: duration, message: `Server returned status ${response.status}.` };
+        }
+
+    } catch (error) {
+        clearTimeout(timeoutId);
+        const duration = Date.now() - startTime;
+        if (error.name === 'AbortError') {
+             return { status: 'error', speed: duration, message: 'Request timed out (>10s).' };
+        }
+        return { status: 'error', speed: duration, message: `Network error: ${error.message}` };
+    }
+};
+
 
 export const callGemini = async ({
     userMessage,

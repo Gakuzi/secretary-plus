@@ -11,41 +11,6 @@ const ROLE_DISPLAY_MAP = {
     user: { text: 'Пользователь', class: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200' }
 };
 
-const ACTION_NAMES = {
-    'get_calendar_events': 'Просмотр календаря',
-    'create_calendar_event': 'Создание событий',
-    'delete_calendar_event': 'Удаление событий',
-    'get_tasks': 'Просмотр задач',
-    'create_task': 'Создание задач',
-    'update_task': 'Обновление задач',
-    'delete_task': 'Удаление задач',
-    'get_recent_emails': 'Чтение почты',
-    'send_email': 'Отправка Email',
-    'delete_email': 'Удаление писем',
-    'find_documents': 'Поиск документов',
-    'get_recent_files': 'Поиск недавних файлов',
-    'create_google_doc': 'Создание Google Docs',
-    'create_google_sheet': 'Создание Google Sheets',
-    'create_google_doc_with_content': 'Создание Docs с текстом',
-    'propose_document_with_content': 'Предложение документа',
-    'find_contacts': 'Поиск контактов',
-    'perform_contact_action': 'Действия с контактами',
-    'create_note': 'Создание заметок',
-    'find_notes': 'Поиск заметок',
-    'summarize_and_save_memory': 'Сохранение в память',
-    'recall_memory': 'Чтение из памяти',
-};
-
-const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#ef4444', '#f97316', '#eab308', '#6366f1', '#ec4899', '#06b6d4', '#22c55e', '#a855f7', '#f43f5e'];
-
-const ROLES = ['owner', 'admin', 'manager', 'user'];
-
-// A helper to mask API keys
-function maskApiKey(key) {
-    if (!key || key.length < 10) return 'Неверный ключ';
-    return `${key.substring(0, 5)}...${key.substring(key.length - 4)}`;
-}
-
 // --- TAB CONTENT RENDERERS ---
 
 function renderProfileTab(profile) {
@@ -132,142 +97,6 @@ function renderServicesTab(settings) {
     `;
 }
 
-function renderUsersTab(users, currentUserId) {
-    const usersHtml = users.map(user => {
-        const roleInfo = ROLE_DISPLAY_MAP[user.role] || ROLE_DISPLAY_MAP.user;
-        const lastSignIn = user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString('ru-RU') : 'Никогда';
-        
-        // Owner cannot be changed, others can
-        const canChangeRole = user.role !== 'owner';
-        const roleSelector = canChangeRole ? `
-            <select data-action="change-role" data-user-id="${user.id}" class="bg-transparent text-xs p-1 rounded border border-slate-300 dark:border-slate-600 focus:ring-blue-500 focus:border-blue-500">
-                ${ROLES.map(role => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${ROLE_DISPLAY_MAP[role].text}</option>`).join('')}
-            </select>
-        ` : `<span class="px-2 py-1 text-xs font-semibold rounded-full ${roleInfo.class}">${roleInfo.text}</span>`;
-
-        return `
-            <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
-                <div class="flex items-center gap-3">
-                    <img src="${user.avatar_url}" class="w-10 h-10 rounded-full" alt="${user.full_name}">
-                    <div>
-                        <p class="font-bold text-sm text-slate-800 dark:text-slate-100">${user.full_name} ${user.id === currentUserId ? '<span class="text-blue-500">(Вы)</span>' : ''}</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">${user.email}</p>
-                        <p class="text-xs text-slate-400 dark:text-slate-500">Вход: ${lastSignIn}</p>
-                    </div>
-                </div>
-                <div>${roleSelector}</div>
-            </div>
-        `;
-    }).join('');
-    return `<div class="space-y-3">${usersHtml}</div>`;
-}
-
-function renderHistoryTab(history) {
-    if (!history || history.length === 0) {
-        return `<p class="text-center text-slate-500 dark:text-slate-400 p-8">История чата пуста.</p>`;
-    }
-
-    const historyHtml = history.map(msg => {
-        const senderClass = msg.sender === 'user' ? 'bg-blue-50 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' : 'bg-slate-50 text-slate-800 dark:bg-slate-900/50 dark:text-slate-300';
-        return `
-            <div class="p-3 rounded-lg ${senderClass}">
-                <div class="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400 mb-2">
-                    <div class="flex items-center gap-2">
-                         <img src="${msg.avatar_url}" class="w-5 h-5 rounded-full" alt="">
-                         <span class="font-semibold">${msg.full_name || msg.email}</span>
-                    </div>
-                    <span>${new Date(msg.created_at).toLocaleString('ru-RU')}</span>
-                </div>
-                <p class="text-sm">${msg.text_content || ' '}</p>
-                ${msg.card_data ? `<pre class="mt-2 p-2 bg-slate-200 dark:bg-slate-800 rounded text-xs overflow-auto">${JSON.stringify(msg.card_data, null, 2)}</pre>` : ''}
-            </div>
-        `;
-    }).join('');
-    return `<div class="space-y-3">${historyHtml}</div>`;
-}
-
-function renderStatsTab(statsData) {
-     if (!statsData || Object.keys(statsData).length === 0) {
-        return `<div class="text-center p-8 text-slate-500 dark:text-slate-400">Нет данных для статистики.</div>`;
-    }
-    return `
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow">
-                <h4 class="font-bold text-lg">Динамика активности (по дням)</h4>
-                <div class="h-64 mt-2"><canvas id="activity-chart"></canvas></div>
-            </div>
-             <div class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow">
-                <h4 class="font-bold text-lg">Анализ действий</h4>
-                <div class="h-64 mt-2 flex items-center justify-center"><canvas id="actions-chart"></canvas></div>
-            </div>
-            <div class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow">
-                <h4 class="font-bold text-lg">Самые активные пользователи</h4>
-                <div class="h-64 mt-2"><canvas id="users-chart"></canvas></div>
-            </div>
-             <div class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow">
-                <h4 class="font-bold text-lg">Анализ ответов ассистента</h4>
-                <div class="h-64 mt-2 flex items-center justify-center"><canvas id="responses-chart"></canvas></div>
-            </div>
-        </div>
-    `;
-}
-
-function renderApiKeysTab(keys) {
-    const keysHtml = keys.map(key => `
-        <div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3" data-key-id="${key.id}">
-            <div class="flex items-center justify-between">
-                <p class="font-mono text-sm font-semibold text-slate-700 dark:text-slate-200">${maskApiKey(key.api_key)}</p>
-                <div class="flex items-center gap-2">
-                    <label class="toggle-switch">
-                        <input type="checkbox" data-action="update-key-field" data-field="is_active" ${key.is_active ? 'checked' : ''}>
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <button data-action="delete-key" data-key-id="${key.id}" class="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full">${Icons.TrashIcon.replace(/width="24" height="24"/g, 'width="16" height="16"')}</button>
-                </div>
-            </div>
-            <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div>
-                    <label class="font-medium text-xs text-slate-500">Описание</label>
-                    <input type="text" value="${key.description || ''}" data-action="update-key-field" data-field="description" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-1.5 text-sm" placeholder="Например, 'Основной ключ'">
-                </div>
-                <div>
-                    <label class="font-medium text-xs text-slate-500">Приоритет</label>
-                    <input type="number" value="${key.priority}" data-action="update-key-field" data-field="priority" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-1.5 text-sm" placeholder="0">
-                </div>
-            </div>
-        </div>
-    `).join('');
-
-    return `
-        <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg text-sm text-blue-800 dark:text-blue-200 mb-6">
-            <h3 class="font-bold">Управление общим пулом ключей Gemini API</h3>
-            <p class="mt-1">Добавленные здесь ключи будут использоваться всеми пользователями системы. Ассистент будет автоматически переключаться между активными ключами (начиная с наименьшего приоритета) в случае, если один из них исчерпает лимиты.</p>
-        </div>
-        <div class="space-y-3 mb-6">${keys.length > 0 ? keysHtml : '<p class="text-center text-slate-500">Нет добавленных ключей.</p>'}</div>
-        <div class="p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
-            <h4 class="font-semibold text-lg mb-3">Добавить новый ключ</h4>
-            <div class="space-y-3">
-                <div>
-                    <label class="font-medium text-sm">API Ключ</label>
-                    <input type="password" id="new-key-input" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm" placeholder="Введите полный ключ API...">
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <div>
-                        <label class="font-medium text-sm">Описание</label>
-                        <input type="text" id="new-key-desc-input" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm" placeholder="Например, 'Резервный ключ'">
-                    </div>
-                     <div>
-                        <label class="font-medium text-sm">Приоритет</label>
-                        <input type="number" id="new-key-priority-input" value="10" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm">
-                    </div>
-                </div>
-                <button data-action="add-key" class="w-full mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center justify-center gap-2">Добавить ключ</button>
-            </div>
-        </div>
-    `;
-}
-
-
 // --- MAIN COMPONENT ---
 export function createProfileModal({ currentUserProfile, supabaseService, onClose, onLogout }) {
     const modalElement = document.createElement('div');
@@ -275,48 +104,27 @@ export function createProfileModal({ currentUserProfile, supabaseService, onClos
     
     let state = {
         currentTab: 'profile',
-        isLoading: false,
         settings: getSettings(),
-        users: [],
-        history: [],
-        stats: null,
-        apiKeys: [],
     };
     
-    const role = (currentUserProfile.role || '').trim().toLowerCase();
-
-    const ALL_TABS = [
-        { id: 'profile', label: 'Профиль', icon: Icons.UserIcon, roles: ['user', 'admin', 'owner'] },
-        { id: 'services', label: 'Службы', icon: Icons.SettingsIcon, roles: ['user', 'admin', 'owner'] },
-        { id: 'users', label: 'Пользователи', icon: Icons.UsersIcon, roles: ['admin', 'owner'] },
-        { id: 'apiKeys', label: 'API Ключи', icon: Icons.CodeIcon, roles: ['admin', 'owner'] },
-        { id: 'stats', label: 'Статистика', icon: Icons.ChartBarIcon, roles: ['admin', 'owner'] },
-        { id: 'history', label: 'История чата', icon: Icons.FileIcon, roles: ['admin', 'owner'] },
-        { id: 'about', label: 'О приложении', icon: Icons.QuestionMarkCircleIcon, roles: ['user', 'admin', 'owner'] }
+    const TABS = [
+        { id: 'profile', label: 'Профиль', icon: Icons.UserIcon },
+        { id: 'services', label: 'Службы', icon: Icons.SettingsIcon },
+        { id: 'about', label: 'О приложении', icon: Icons.QuestionMarkCircleIcon }
     ];
-    
-    const visibleTabs = ALL_TABS.filter(tab => tab.roles.includes(role));
 
     const render = () => {
         const contentContainer = document.createElement('div');
         contentContainer.className = 'h-full';
 
-        if (state.isLoading) {
-            contentContainer.innerHTML = `<div class="flex items-center justify-center h-full"><div class="animate-spin h-10 w-10 border-4 border-slate-300 border-t-transparent rounded-full"></div></div>`;
-        } else {
-            switch (state.currentTab) {
-                case 'profile': contentContainer.innerHTML = renderProfileTab(currentUserProfile); break;
-                case 'services': contentContainer.innerHTML = renderServicesTab(state.settings); break;
-                case 'about': contentContainer.appendChild(renderAboutTab()); break;
-                case 'users': contentContainer.innerHTML = renderUsersTab(state.users, currentUserProfile.id); break;
-                case 'history': contentContainer.innerHTML = renderHistoryTab(state.history); break;
-                case 'stats': contentContainer.innerHTML = renderStatsTab(state.stats); break;
-                case 'apiKeys': contentContainer.innerHTML = renderApiKeysTab(state.apiKeys); break;
-                default: contentContainer.innerHTML = `<p>Выберите вкладку</p>`;
-            }
+        switch (state.currentTab) {
+            case 'profile': contentContainer.innerHTML = renderProfileTab(currentUserProfile); break;
+            case 'services': contentContainer.innerHTML = renderServicesTab(state.settings); break;
+            case 'about': contentContainer.appendChild(renderAboutTab()); break;
+            default: contentContainer.innerHTML = `<p>Выберите вкладку</p>`;
         }
 
-        const tabButtonsHtml = visibleTabs.map(tab => `
+        const tabButtonsHtml = TABS.map(tab => `
             <button class="profile-tab-button ${state.currentTab === tab.id ? 'active' : ''}" data-tab-id="${tab.id}">
                 <span class="w-5 h-5">${tab.icon}</span>
                 <span>${tab.label}</span>
@@ -326,7 +134,7 @@ export function createProfileModal({ currentUserProfile, supabaseService, onClos
         modalElement.innerHTML = `
             <div id="profile-content" class="bg-white dark:bg-slate-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-4xl sm:rounded-lg shadow-xl text-slate-800 dark:text-slate-100">
                 <header class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
-                    <h2 class="text-xl sm:text-2xl font-bold">Профиль и Управление</h2>
+                    <h2 class="text-xl sm:text-2xl font-bold">Профиль и настройки</h2>
                     <button data-action="close" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Закрыть профиль">&times;</button>
                 </header>
                 <main class="flex-1 flex flex-col sm:flex-row overflow-hidden bg-slate-50 dark:bg-slate-900/70">
@@ -340,49 +148,14 @@ export function createProfileModal({ currentUserProfile, supabaseService, onClos
                     </aside>
                     <div class="flex-1 p-4 sm:p-6 overflow-y-auto" id="profile-tab-content"></div>
                 </main>
-                 <div id="sub-modal-container"></div>
             </div>
         `;
         
         modalElement.querySelector('#profile-tab-content').appendChild(contentContainer);
-
-        if (state.currentTab === 'stats' && state.stats && !state.isLoading) {
-             setTimeout(() => {
-                if(!window.Chart) return;
-                const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-                const textColor = isDarkMode ? '#e2e8f0' : '#334155';
-                const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-
-                const activityCanvas = document.getElementById('activity-chart');
-                if(activityCanvas && state.stats.actions_by_day) new Chart(activityCanvas, { type: 'line', data: { labels: state.stats.actions_by_day.map(d => new Date(d.date).toLocaleDateString('ru-RU')), datasets: [{ label: 'Действия', data: state.stats.actions_by_day.map(d => d.count), borderColor: '#3b82f6', tension: 0.1, fill: false }] }, options: { scales: { y: { beginAtZero: true, ticks: { color: textColor }, grid: { color: gridColor } }, x: { ticks: { color: textColor }, grid: { color: gridColor } } }, plugins: { legend: { labels: { color: textColor } } } } });
-                const actionsCanvas = document.getElementById('actions-chart');
-                if (actionsCanvas && state.stats.actions_by_function) new Chart(actionsCanvas, { type: 'doughnut', data: { labels: state.stats.actions_by_function.map(d => ACTION_NAMES[d.function_name] || d.function_name), datasets: [{ data: state.stats.actions_by_function.map(d => d.count), backgroundColor: CHART_COLORS }] }, options: { plugins: { legend: { position: 'right', labels: { color: textColor, boxWidth: 20 } } } } });
-                const usersCanvas = document.getElementById('users-chart');
-                if(usersCanvas && state.stats.actions_by_user) new Chart(usersCanvas, { type: 'bar', data: { labels: state.stats.actions_by_user.map(d => d.full_name), datasets: [{ label: 'Действия', data: state.stats.actions_by_user.map(d => d.count), backgroundColor: '#10b981' }] }, options: { indexAxis: 'y', scales: { y: { ticks: { color: textColor }, grid: { color: gridColor } }, x: { ticks: { color: textColor }, grid: { color: gridColor } } }, plugins: { legend: { display: false } } } });
-                const responsesCanvas = document.getElementById('responses-chart');
-                if(responsesCanvas && state.stats.responses_by_type) new Chart(responsesCanvas, { type: 'pie', data: { labels: state.stats.responses_by_type.map(d => d.type === 'card' ? 'Карточки' : 'Текст'), datasets: [{ data: state.stats.responses_by_type.map(d => d.count), backgroundColor: ['#8b5cf6', '#ef4444'] }] }, options: { plugins: { legend: { position: 'top', labels: { color: textColor } } } } });
-             }, 0);
-        }
     };
     
-    const switchTab = async (tabId) => {
+    const switchTab = (tabId) => {
         state.currentTab = tabId;
-        state.isLoading = true;
-        render();
-
-        try {
-            switch(tabId) {
-                case 'users': state.users = await supabaseService.getAllUserProfiles(); break;
-                case 'history': state.history = await supabaseService.getChatHistoryForAdmin(); break;
-                case 'stats': state.stats = await supabaseService.getFullStats(); break;
-                case 'apiKeys': state.apiKeys = await supabaseService.getAllSharedGeminiKeysForAdmin(); break;
-            }
-        } catch (error) {
-            console.error(`Failed to load data for tab ${tabId}:`, error);
-            modalElement.querySelector('#profile-tab-content').innerHTML = `<p class="p-4 text-red-500">Не удалось загрузить данные: ${error.message}</p>`;
-        }
-        
-        state.isLoading = false;
         render();
     };
 
@@ -416,82 +189,15 @@ export function createProfileModal({ currentUserProfile, supabaseService, onClos
                         try { 
                             await supabaseService.saveUserSettings(newSettings); 
                             alert("Настройки служб сохранены.");
-                        } catch (e) { 
-                            console.error("Failed to save service settings", e);
-                            alert(`Ошибка сохранения настроек: ${e.message}`);
+                        } catch (err) { 
+                            console.error("Failed to save service settings", err);
+                            alert(`Ошибка сохранения настроек: ${err.message}`);
                         }
+                    } else {
+                         alert("Настройки служб сохранены локально.");
                     }
                     break;
                 }
-                case 'delete-key': {
-                    const keyId = target.dataset.keyId;
-                    if (confirm('Вы уверены, что хотите удалить этот ключ?')) {
-                        try {
-                            await supabaseService.deleteSharedGeminiKey(keyId);
-                            await switchTab('apiKeys');
-                        } catch (err) { alert(`Ошибка удаления: ${err.message}`); }
-                    }
-                    break;
-                }
-                case 'add-key': {
-                    const apiKey = modalElement.querySelector('#new-key-input').value.trim();
-                    const description = modalElement.querySelector('#new-key-desc-input').value.trim();
-                    const priority = parseInt(modalElement.querySelector('#new-key-priority-input').value, 10);
-
-                    if (!apiKey) {
-                        alert('Поле "API Ключ" не может быть пустым.');
-                        return;
-                    }
-                    try {
-                        await supabaseService.addSharedGeminiKey({ apiKey, description, priority });
-                        await switchTab('apiKeys');
-                    } catch(err) { alert(`Ошибка добавления: ${err.message}`); }
-                    break;
-                }
-            }
-        }
-    });
-    
-     modalElement.addEventListener('change', async (e) => {
-        const roleTarget = e.target.closest('[data-action="change-role"]');
-        if (roleTarget) {
-            const userId = roleTarget.dataset.userId;
-            const newRole = roleTarget.value;
-            if (confirm(`Вы уверены, что хотите изменить роль для пользователя на "${newRole}"?`)) {
-                try {
-                    await supabaseService.updateUserRole(userId, newRole);
-                    state.users = await supabaseService.getAllUserProfiles(); // Refresh users list
-                    render();
-                } catch (error) {
-                    alert(`Ошибка: ${error.message}`);
-                    const user = state.users.find(u => u.id === userId); // Revert select box if cancelled
-                    if (user) roleTarget.value = user.role;
-                }
-            }
-             return;
-        }
-
-        const keyFieldTarget = e.target.closest('[data-action="update-key-field"]');
-        if (keyFieldTarget) {
-            const keyId = keyFieldTarget.closest('[data-key-id]').dataset.keyId;
-            const field = keyFieldTarget.dataset.field;
-            let value = keyFieldTarget.type === 'checkbox' ? keyFieldTarget.checked : keyFieldTarget.value;
-
-            const updates = { [field]: value };
-            if (field === 'priority') {
-                updates[field] = parseInt(value, 10) || 0;
-            }
-
-            try {
-                await supabaseService.updateSharedGeminiKey(keyId, updates);
-                // Optimistic update to avoid full reload
-                const key = state.apiKeys.find(k => k.id === keyId);
-                if (key) {
-                    key[field] = value;
-                }
-            } catch (err) {
-                alert(`Ошибка обновления: ${err.message}`);
-                await switchTab('apiKeys'); // Full reload on error
             }
         }
     });

@@ -2,8 +2,8 @@ import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.j
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
 import { callGemini } from './services/geminiService.js';
-import { getSettings, saveSettings, getSyncStatus, saveSyncStatus, clearGoogleToken } from './utils/storage.js';
-import { createDataManagerModal } from './components/DataManagerModal.js';
+import { getSettings, saveSettings, getSyncStatus, saveSyncStatus } from './utils/storage.js';
+import { createSettingsModal } from './components/SettingsModal.js';
 import { createProfileModal } from './components/ProfileModal.js';
 import { createHelpModal } from './components/HelpModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
@@ -41,7 +41,7 @@ let state = {
     settings: getSettings(),
     messages: [],
     userProfile: null,
-    isLoading: false,
+    isLoading: false, // Prevents auth race conditions
     lastSeenEmailId: null,
     syncStatus: getSyncStatus(),
     isSyncing: false,
@@ -182,12 +182,13 @@ async function startNewChatSession() {
 // --- EVENT HANDLERS & LOGIC ---
 async function handleLogout() {
     modalContainer.innerHTML = '';
+    stopEmailPolling();
+    stopAutoSync();
     if (supabaseService) {
         await supabaseService.signOut();
     }
-    clearGoogleToken();
-    localStorage.removeItem('secretary-plus-settings-v4');
-    localStorage.removeItem('secretary-plus-sync-status-v1');
+    // A full reload is the cleanest way to reset all application state.
+    // The onAuthStateChange listener will then correctly show the welcome screen.
     window.location.reload();
 }
 
@@ -382,7 +383,7 @@ async function handleGlobalClick(event) {
         event.preventDefault();
         const action = clientActionButton.dataset.clientAction;
         if (action === 'open_settings') {
-            showDataManagerModal();
+            showSettingsModal();
         }
         return;
     }
@@ -413,12 +414,11 @@ async function handleGlobalClick(event) {
 
 // --- MODAL & WIZARD MANAGEMENT ---
 
-function showDataManagerModal() {
+function showSettingsModal() {
     modalContainer.innerHTML = '';
-    const modal = createDataManagerModal({
+    const modal = createSettingsModal({
         supabaseService: supabaseService,
-        tasks: getEnabledSyncTasks(),
-        settings: state.settings,
+        allSyncTasks: getEnabledSyncTasks(),
         onClose: () => { modalContainer.innerHTML = ''; },
         onRunSingleSync: runSingleSync,
         onRunAllSyncs: runAllSyncs,
@@ -554,26 +554,35 @@ function renderMainApp() {
  * Initializes all services for an authenticated session.
  */
 async function startAuthenticatedSession(session) {
-    // 1. Render the main application structure
+    // Critical fix: Prevent re-entry if an auth process is already running.
+    if (state.isLoading && state.userProfile) {
+        return;
+    }
+    state.isLoading = true;
+
+    // 1. Verify we can get a user profile before rendering the main app.
+    // If this fails, the session is invalid or the database is inconsistent. We must log out.
+    try {
+        const userProfile = await supabaseService.getCurrentUserProfile();
+        if (!userProfile) {
+            throw new Error("Профиль пользователя не найден в базе данных. Возможно, он не был создан при первой регистрации.");
+        }
+        state.userProfile = userProfile;
+    } catch (profileError) {
+        console.error("Critical error fetching user profile, signing out:", profileError);
+        // Do not render the main app. Instead, show an alert and sign out.
+        alert(`Критическая ошибка: не удалось загрузить ваш профиль. Выполняется выход для повторной попытки.\n\nДетали: ${profileError.message}`);
+        state.isLoading = false; // Reset loading state
+        await handleLogout();
+        return;
+    }
+    
+    // 2. Render the main application structure
     renderMainApp();
     
-    // 2. Set Google token and initialize Google services
+    // 3. Set Google token and initialize Google services
     googleProvider.setAuthToken(session.provider_token);
     await googleProvider.loadGapiClient();
-
-    // 3. Get user profile and role from Supabase
-    try {
-        state.userProfile = await supabaseService.getCurrentUserProfile();
-    } catch (profileError) {
-        console.error("Critical error fetching user profile:", profileError);
-        showSystemError("Не удалось загрузить ваш профиль. Попробуйте перезагрузить страницу.");
-        return;
-    }
-
-    if (!state.userProfile) {
-        showSystemError("Не удалось загрузить ваш профиль. Данные пользователя не найдены. Попробуйте перезагрузить страницу или войти заново.");
-        return;
-    }
 
     // 4. Fetch cloud settings and merge with local
     const cloudSettings = await supabaseService.getUserSettings();
@@ -616,6 +625,9 @@ async function startAuthenticatedSession(session) {
     await startNewChatSession();
     startAutoSync();
     setupEmailPolling();
+
+    // 8. Mark loading as complete
+    state.isLoading = false;
 }
 
 
@@ -680,6 +692,9 @@ async function main() {
     modalContainer = document.getElementById('modal-container');
     cameraViewContainer = document.getElementById('camera-view-container');
 
+    // Display a loading indicator while waiting for libraries and auth state.
+    appContainer.innerHTML = `<div class="h-full w-full flex items-center justify-center"><div class="animate-spin h-10 w-10 border-4 border-slate-300 border-t-transparent rounded-full"></div></div>`;
+
     try {
         await waitForExternalLibs();
     } catch (error) {
@@ -693,9 +708,20 @@ async function main() {
     }
     
     supabaseService.onAuthStateChange(async (event, session) => {
+        // Prevent re-rendering if the user's auth state is already what we expect.
+        // This stops loops caused by TOKEN_REFRESHED events.
+        if (session && state.userProfile) {
+            return;
+        }
+        if (!session && !state.userProfile) {
+            // Already on the welcome screen, do nothing.
+             if (document.querySelector('.welcome-screen-container')) return;
+        }
+
         if (session) {
             await startAuthenticatedSession(session);
         } else {
+            state.isLoading = false; // Ensure loading is reset
             state.userProfile = null;
             renderAuth(null);
             showWelcomeScreen();
