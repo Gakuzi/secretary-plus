@@ -639,6 +639,10 @@ function showSettingsModal() {
         onLaunchProxyManager: () => {
             modalContainer.innerHTML = ''; // Close settings before opening manager
             showProxyManagerModal();
+        },
+        onLaunchDataManager: () => {
+            modalContainer.innerHTML = '';
+            showDataManagerModal();
         }
     });
     modalContainer.appendChild(modal);
@@ -656,9 +660,11 @@ async function showProfileModal() {
         const modal = createProfileModal({
             currentUserProfile: state.userProfile,
             supabaseService: supabaseService,
+            syncTasks: syncTasks,
             onClose: () => { modalContainer.innerHTML = ''; },
             onLogout: handleLogout,
-            onLaunchDataManager: showDataManagerModal,
+            onRunSingleSync: runSingleSync,
+            onRunAllSyncs: runAllSyncs,
         });
         modalContainer.appendChild(modal);
 

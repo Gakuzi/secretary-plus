@@ -1,7 +1,7 @@
 import { getSettings, saveSettings } from '../utils/storage.js';
 import * as Icons from './icons/Icons.js';
 
-export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizard, onLaunchProxyManager, onLaunchDbExecutionModal }) {
+export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizard, onLaunchProxyManager, onLaunchDbExecutionModal, onLaunchDataManager }) {
     const modalElement = document.createElement('div');
     modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
     
@@ -67,6 +67,14 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
                                     <button data-action="launch-db-execution" class="w-full px-4 py-2 bg-slate-500 hover:bg-slate-600 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2 ${!settings.managementWorkerUrl || !settings.adminSecretToken ? 'opacity-50 cursor-not-allowed' : ''}" ${!settings.managementWorkerUrl || !settings.adminSecretToken ? 'disabled' : ''}>
                                         ${Icons.CodeIcon}
                                         <span>Открыть SQL-редактор</span>
+                                    </button>
+                                </div>
+                                <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                                    <h4 class="font-semibold text-slate-800 dark:text-slate-200">Центр управления данными</h4>
+                                    <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Просмотр кэшированных данных, статусы и ручной запуск синхронизации.</p>
+                                    <button data-action="launch-data-manager" class="w-full px-4 py-2 bg-slate-500 hover:bg-slate-600 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2 ${!settings.isSupabaseEnabled ? 'opacity-50 cursor-not-allowed' : ''}" ${!settings.isSupabaseEnabled ? 'disabled' : ''}>
+                                        ${Icons.DatabaseIcon}
+                                        <span>Открыть Центр управления</span>
                                     </button>
                                 </div>
                             </div>
@@ -141,6 +149,9 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
                 break;
             case 'launch-db-execution':
                 onLaunchDbExecutionModal();
+                break;
+            case 'launch-data-manager':
+                onLaunchDataManager();
                 break;
         }
     };
