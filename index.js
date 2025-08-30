@@ -10,7 +10,7 @@ import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
 import { createAboutModal } from './components/AboutModal.js';
-import { SettingsIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
+import { SettingsIcon, QuestionMarkCircleIcon, UserIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 import { SUPABASE_CONFIG } from './config.js';
 
@@ -87,7 +87,13 @@ function renderAuth(profile) {
         const profileButton = document.createElement('button');
         profileButton.className = 'flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-blue-500 rounded-full';
         profileButton.setAttribute('aria-label', 'Открыть профиль пользователя');
-        profileButton.innerHTML = `<img src="${profile.avatar_url}" alt="${profile.full_name}" class="w-8 h-8 rounded-full">`;
+        
+        if (profile.avatar_url) {
+            profileButton.innerHTML = `<img src="${profile.avatar_url}" alt="${profile.full_name}" class="w-8 h-8 rounded-full">`;
+        } else {
+            profileButton.innerHTML = `<div class="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400">${UserIcon}</div>`;
+        }
+        
         profileButton.addEventListener('click', showProfileModal);
         authContainer.appendChild(profileButton);
     }
@@ -700,5 +706,5 @@ async function main() {
     }
 }
 
-// Start the application once the DOM is fully loaded.
-document.addEventListener('DOMContentLoaded', main);
+// Start the application once all resources are fully loaded.
+window.addEventListener('load', main);
