@@ -8,7 +8,7 @@ const GOOGLE_TOKEN_KEY = 'secretary-plus-google-token-v1';
 const buildDefaultFieldConfig = () => {
     const config = {};
     for (const [key, schema] of Object.entries(DB_SCHEMAS)) {
-        if (schema.tableName) { // Process only schemas that correspond to a table
+        if (schema.tableName && schema.isEditable) { // Process only schemas that correspond to a table
             config[key] = {};
             for (const field of schema.fields) {
                 if (field.recommended) {

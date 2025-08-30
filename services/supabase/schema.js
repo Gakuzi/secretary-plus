@@ -326,7 +326,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
 // Renamed from SERVICE_SCHEMAS to DB_SCHEMAS to reflect that it now includes all tables.
 export const DB_SCHEMAS = {
     profiles: {
-        label: 'Профили', icon: 'UserIcon', tableName: 'profiles',
+        label: 'Профили', icon: 'UserIcon', tableName: 'profiles', isEditable: false,
         fields: [
             { name: 'id', type: 'UUID PRIMARY KEY', recommended: true, description: 'Уникальный идентификатор пользователя, совпадает с ID в системе аутентификации.' },
             { name: 'full_name', type: 'TEXT', recommended: true, description: 'Полное имя пользователя, полученное от провайдера аутентификации.' },
@@ -336,7 +336,7 @@ export const DB_SCHEMAS = {
         ]
     },
     user_settings: {
-        label: 'Настройки пользователей', icon: 'SettingsIcon', tableName: 'user_settings',
+        label: 'Настройки пользователей', icon: 'SettingsIcon', tableName: 'user_settings', isEditable: false,
         fields: [
             { name: 'user_id', type: 'UUID PRIMARY KEY', recommended: true, description: 'Идентификатор пользователя, к которому относятся настройки.' },
             { name: 'settings', type: 'JSONB', recommended: true, description: 'Все настройки приложения в формате JSON (ключи, сервисы, прокси и т.д.).' },
@@ -344,7 +344,7 @@ export const DB_SCHEMAS = {
         ]
     },
      proxies: {
-        label: 'Прокси-серверы', icon: 'GlobeIcon', tableName: 'proxies',
+        label: 'Прокси-серверы', icon: 'GlobeIcon', tableName: 'proxies', isEditable: false,
         fields: [
             { name: 'id', type: 'UUID PRIMARY KEY', recommended: true, description: 'Уникальный идентификатор прокси-сервера.' },
             { name: 'user_id', type: 'UUID', recommended: true, description: 'Идентификатор пользователя-владельца прокси.' },
@@ -357,8 +357,45 @@ export const DB_SCHEMAS = {
             { name: 'last_test_speed', type: 'INTEGER', recommended: true, description: 'Скорость ответа в миллисекундах по результатам последнего теста.' },
         ]
     },
+     sessions: {
+        label: 'Сеансы', icon: 'KeyboardIcon', tableName: 'sessions', isEditable: false,
+        fields: [
+            { name: 'id', type: 'UUID PRIMARY KEY', recommended: true, description: 'Уникальный идентификатор сессии чата.' },
+            { name: 'user_id', type: 'UUID', recommended: true, description: 'Идентификатор пользователя, начавшего сессию.' },
+            { name: 'created_at', type: 'TIMESTAMPTZ', recommended: true, description: 'Время начала сессии.' },
+        ]
+    },
+    chat_history: {
+        label: 'История чата', icon: 'FileIcon', tableName: 'chat_history', isEditable: false,
+        fields: [
+            { name: 'id', type: 'BIGINT PRIMARY KEY', recommended: true, description: 'Уникальный идентификатор сообщения.' },
+            { name: 'user_id', type: 'UUID', recommended: true, description: 'Идентификатор пользователя.' },
+            { name: 'session_id', type: 'UUID', recommended: true, description: 'Идентификатор сессии, к которой относится сообщение.' },
+            { name: 'sender', type: 'chat_sender', recommended: true, description: 'Отправитель сообщения (user, assistant, system).' },
+            { name: 'text_content', type: 'TEXT', recommended: true, description: 'Текстовое содержимое сообщения.' },
+            { name: 'card_data', type: 'JSONB', recommended: true, description: 'Данные интерактивной карточки в формате JSON.' },
+        ]
+    },
+    chat_memory: {
+        label: 'Память чата', icon: 'FileIcon', tableName: 'chat_memory', isEditable: false,
+        fields: [
+            { name: 'id', type: 'BIGINT PRIMARY KEY', recommended: true, description: 'Уникальный идентификатор записи в памяти.' },
+            { name: 'user_id', type: 'UUID', recommended: true, description: 'Идентификатор пользователя.' },
+            { name: 'summary', type: 'TEXT', recommended: true, description: 'Краткая сводка из диалога.' },
+            { name: 'keywords', type: 'TEXT[]', recommended: true, description: 'Ключевые слова для поиска.' },
+        ]
+    },
+     action_stats: {
+        label: 'Параметры действия', icon: 'ChartBarIcon', tableName: 'action_stats', isEditable: false,
+        fields: [
+            { name: 'user_id', type: 'UUID', recommended: true, description: 'Идентификатор пользователя.' },
+            { name: 'function_name', type: 'TEXT', recommended: true, description: 'Название вызванной функции Gemini.' },
+            { name: 'call_count', type: 'INTEGER', recommended: true, description: 'Количество вызовов функции.' },
+            { name: 'last_called_at', type: 'TIMESTAMPTZ', recommended: true, description: 'Время последнего вызова.' },
+        ]
+    },
     calendar: {
-        label: 'Календарь', icon: 'CalendarIcon', tableName: 'calendar_events',
+        label: 'Календарь-мероприятий', icon: 'CalendarIcon', tableName: 'calendar_events', isEditable: true,
         fields: [
             { name: 'source_id', type: 'TEXT', recommended: true, description: 'Уникальный идентификатор события из Google Calendar.' },
             { name: 'title', type: 'TEXT', recommended: true, description: 'Название или заголовок события.' },
@@ -374,7 +411,7 @@ export const DB_SCHEMAS = {
         ]
     },
     contacts: {
-        label: 'Контакты', icon: 'UsersIcon', tableName: 'contacts',
+        label: 'Контакты', icon: 'UsersIcon', tableName: 'contacts', isEditable: true,
         fields: [
             { name: 'source_id', type: 'TEXT', recommended: true, description: 'Уникальный идентификатор контакта из Google Contacts.' },
             { name: 'display_name', type: 'TEXT', recommended: true, description: 'Отображаемое имя контакта.' },
@@ -387,7 +424,7 @@ export const DB_SCHEMAS = {
         ]
     },
     files: {
-        label: 'Файлы', icon: 'FileIcon', tableName: 'files',
+        label: 'Файлы', icon: 'FileIcon', tableName: 'files', isEditable: true,
         fields: [
             { name: 'source_id', type: 'TEXT', recommended: true, description: 'Уникальный идентификатор файла из Google Drive.' },
             { name: 'name', type: 'TEXT', recommended: true, description: 'Название файла.' },
@@ -400,11 +437,10 @@ export const DB_SCHEMAS = {
             { name: 'size', type: 'BIGINT', recommended: false, description: 'Размер файла в байтах.' },
             { name: 'owner', type: 'TEXT', recommended: false, description: 'Имя владельца файла.' },
             { name: 'last_modifying_user', type: 'TEXT', recommended: false, description: 'Имя пользователя, который последним изменил файл.' },
-            { name: 'permissions', type: 'JSONB', recommended: false, description: 'Информация о правах доступа к файлу.' },
         ]
     },
     tasks: {
-        label: 'Задачи', icon: 'CheckSquareIcon', tableName: 'tasks',
+        label: 'Задачи', icon: 'CheckSquareIcon', tableName: 'tasks', isEditable: true,
         fields: [
             { name: 'source_id', type: 'TEXT', recommended: true, description: 'Уникальный идентификатор задачи из Google Tasks.' },
             { name: 'title', type: 'TEXT', recommended: true, description: 'Текст или название задачи.' },
@@ -416,7 +452,7 @@ export const DB_SCHEMAS = {
         ]
     },
     emails: {
-        label: 'Почта', icon: 'EmailIcon', tableName: 'emails',
+        label: 'Электронные письма', icon: 'EmailIcon', tableName: 'emails', isEditable: true,
         fields: [
             { name: 'source_id', type: 'TEXT', recommended: true, description: 'Уникальный идентификатор письма из Gmail.' },
             { name: 'thread_id', type: 'TEXT', recommended: true, description: 'Идентификатор цепочки писем, к которой относится это письмо.' },
@@ -433,7 +469,7 @@ export const DB_SCHEMAS = {
         ]
     },
     notes: {
-        label: 'Заметки', icon: 'FileIcon', tableName: 'notes',
+        label: 'Примечания', icon: 'FileIcon', tableName: 'notes', isEditable: true,
         fields: [
             { name: 'title', type: 'TEXT', recommended: true, description: 'Заголовок заметки.' },
             { name: 'content', type: 'TEXT', recommended: true, description: 'Основное содержимое заметки.' },
@@ -448,7 +484,7 @@ export function generateCreateTableSql(schema, selectedFields) {
     if (!schema || !selectedFields || selectedFields.length === 0) return '';
     
     // Check if the schema uses the standard 'id, user_id, created_at, updated_at' pattern.
-    const isStandardServiceTable = !['profiles', 'user_settings', 'proxies'].includes(schema.tableName);
+    const isStandardServiceTable = schema.isEditable;
 
     let fieldsSql, baseColumns, uniqueConstraint, closingColumns;
 

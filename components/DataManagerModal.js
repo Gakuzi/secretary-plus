@@ -2,6 +2,7 @@ import * as Icons from './icons/Icons.js';
 import { getSyncStatus } from '../utils/storage.js';
 import { DB_SCHEMAS, generateCreateTableSql } from '../services/supabase/schema.js';
 import { createDbExecutionModal } from './DbExecutionModal.js';
+import { SUPABASE_CONFIG } from '../config.js';
 
 function createDataViewerModal(title, data, error, onClose) {
     const modal = document.createElement('div');
@@ -27,7 +28,7 @@ function createDataViewerModal(title, data, error, onClose) {
                                 if (typeof value === 'object' && value !== null) {
                                     value = JSON.stringify(value);
                                 }
-                                return `<td class="p-2 max-w-xs truncate" title="${value}">${value}</td>`;
+                                return `<td class="p-2 max-w-xs truncate" title="${value}">${String(value ?? '')}</td>`;
                             }).join('')}</tr>
                         `).join('')}
                     </tbody>
@@ -76,12 +77,13 @@ function renderSyncTab(tasks, state) {
         const isSyncing = state.syncingSingle === task.name;
 
         const syncButtonHtml = task.isSyncable ? `
-            <button data-action="run-single-sync" data-task-name="${task.name}" class="flex-1 px-3 py-2 text-sm bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-md font-semibold flex items-center justify-center gap-1" ${isSyncing ? 'disabled' : ''}>
+            <button data-action="run-single-sync" data-task-name="${task.name}" class="flex-1 px-3 py-1.5 text-xs bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-md font-semibold flex items-center justify-center gap-1" ${isSyncing ? 'disabled' : ''}>
                ${isSyncing ? `<div class="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>` : Icons.RefreshCwIcon.replace('width="24"', 'width="16"')}
                <span>Синхр.</span>
             </button>
         ` : `<div class="flex-1"></div>`;
 
+        const supabaseUrl = `https://app.supabase.com/project/${SUPABASE_CONFIG.url.split('.')[0].split('//')[1]}/editor?schema=public&table=${task.tableName}`;
 
         return `
             <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-4 flex flex-col justify-between border-l-4 ${errorDetails ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'}">
@@ -97,10 +99,14 @@ function renderSyncTab(tasks, state) {
                 </div>
                 <div class="mt-4 flex gap-2">
                     ${syncButtonHtml}
-                    <button data-action="view-data" data-table-name="${task.tableName}" data-label="${task.label}" class="flex-1 px-3 py-2 text-sm bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-md font-semibold flex items-center justify-center gap-1">
+                    <button data-action="view-data" data-table-name="${task.tableName}" data-label="${task.label}" class="flex-1 px-3 py-1.5 text-xs bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-md font-semibold flex items-center justify-center gap-1">
                         ${Icons.DatabaseIcon.replace('width="24"', 'width="16"')}
                         <span>Данные</span>
                     </button>
+                    <a href="${supabaseUrl}" target="_blank" rel="noopener noreferrer" class="flex-1 px-3 py-1.5 text-xs bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-md font-semibold flex items-center justify-center gap-1">
+                       ${Icons.ExternalLinkIcon.replace('width="24"', 'width="16"')}
+                        <span>В Supabase</span>
+                    </a>
                 </div>
             </div>`;
     }).join('');
@@ -147,15 +153,15 @@ function renderSchemaTab(state) {
         return `<div class="p-4 bg-red-100 text-red-800 rounded-md"><strong>Ошибка проверки схемы:</strong> ${state.schemaError}</div>`;
     }
     
-    const servicesHtml = Object.entries(DB_SCHEMAS).map(([key, schema]) => {
+    const servicesHtml = Object.values(DB_SCHEMAS).map(schema => {
         const tableStatus = state.schemaStatus[schema.tableName];
         if (!tableStatus) return ''; // Should not happen if checkSchema ran
 
         const fieldsHtml = schema.fields.map(field => `
-            <li class="flex items-center gap-2 text-sm py-1">
-                 <input type="checkbox" id="field-${schema.tableName}-${field.name}" data-table="${schema.tableName}" data-field="${field.name}" ${tableStatus.columns[field.name] ? 'checked' : ''} class="w-4 h-4 rounded text-blue-600 bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 focus:ring-blue-500">
+            <li class="flex items-center gap-2 text-sm py-1" title="${field.description}">
+                 <input type="checkbox" id="field-${schema.tableName}-${field.name}" data-table="${schema.tableName}" data-field="${field.name}" ${tableStatus.columns[field.name] ? 'checked' : ''} ${!schema.isEditable ? 'disabled' : ''} class="w-4 h-4 rounded text-blue-600 bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 focus:ring-blue-500">
                  <label for="field-${schema.tableName}-${field.name}" class="flex-1 text-slate-700 dark:text-slate-300">${field.name}</label>
-                 <span class="font-mono text-xs text-slate-500 dark:text-slate-400">${field.type}</span>
+                 <span class="font-mono text-xs text-slate-500 dark:text-slate-400">${field.type.split(' ')[0]}</span>
             </li>
         `).join('');
 
@@ -178,8 +184,9 @@ function renderSchemaTab(state) {
                     ${statusIndicator}
                 </summary>
                 <div class="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                    <div class="flex justify-end mb-2">
-                        <button class="text-xs font-semibold text-blue-500 hover:underline" data-action="select-recommended" data-table="${schema.tableName}">Выбрать рекомендуемые</button>
+                    <div class="flex justify-between items-center mb-2">
+                        <p class="text-xs text-slate-500">${schema.isEditable ? 'Выберите поля для синхронизации.' : 'Системная таблица. Только просмотр.'}</p>
+                        ${schema.isEditable ? `<button class="text-xs font-semibold text-blue-500 hover:underline" data-action="select-recommended" data-table="${schema.tableName}">Выбрать рекомендуемые</button>` : ''}
                     </div>
                     <ul class="space-y-1">${fieldsHtml}</ul>
                 </div>
@@ -271,7 +278,7 @@ export function createDataManagerModal({ supabaseService, tasks, settings, onClo
         let sql = '';
         for (const schema of Object.values(DB_SCHEMAS)) {
             const status = state.schemaStatus[schema.tableName];
-            if (!status) continue;
+            if (!status || !schema.isEditable) continue;
             
             const selectedFields = schema.fields.filter(field => {
                 const checkbox = modalOverlay.querySelector(`#field-${schema.tableName}-${field.name}`);
@@ -287,7 +294,7 @@ export function createDataManagerModal({ supabaseService, tasks, settings, onClo
                 if (missingFields.length > 0) {
                     sql += `-- Изменения для таблицы: ${schema.tableName}\n`;
                     sql += `ALTER TABLE public.${schema.tableName}\n`;
-                    sql += missingFields.map(field => `    ADD COLUMN IF NOT EXISTS ${field.name} ${field.type}`).join(',\n') + ';\n\n';
+                    sql += missingFields.map(field => `    ADD COLUMN IF NOT EXISTS "${field.name}" ${field.type}`).join(',\n') + ';\n\n';
                 }
             }
         }
