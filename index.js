@@ -42,7 +42,7 @@ let state = {
     settings: getSettings(),
     messages: [],
     userProfile: null,
-    isLoading: false, // Prevents auth race conditions
+    isLoading: false, // Prevents auth race conditions and duplicate actions
     lastSeenEmailId: null,
     syncStatus: getSyncStatus(),
     isSyncing: false,
@@ -183,14 +183,11 @@ async function startNewChatSession() {
 // --- EVENT HANDLERS & LOGIC ---
 async function handleLogout() {
     modalContainer.innerHTML = '';
-    stopEmailPolling();
-    stopAutoSync();
+    // The onAuthStateChange handler will now manage showing the welcome screen.
+    // We just need to trigger it by signing out.
     if (supabaseService) {
         await supabaseService.signOut();
     }
-    // A full reload is the cleanest way to reset all application state.
-    // The onAuthStateChange listener will then correctly show the welcome screen.
-    window.location.reload();
 }
 
 async function handleNewChat() {
@@ -206,6 +203,7 @@ async function handleNewChat() {
 
 
 async function processBotResponse(userMessage, isSilent) {
+    if (state.isLoading) return;
     state.isLoading = true;
     if (!isSilent) showLoadingIndicator();
     
@@ -588,105 +586,90 @@ async function checkSchemaAndPromptMigration() {
  * Initializes all services for an authenticated session.
  */
 async function startAuthenticatedSession(session) {
-    // Critical fix: Prevent re-entry if an auth process is already running.
-    if (state.isLoading && state.userProfile) {
-        return;
-    }
+    // The ONLY guard needed is the global isLoading flag to prevent re-entry.
+    if (state.isLoading) return;
     state.isLoading = true;
 
-    // 1. Verify we can get a user profile before rendering the main app.
     try {
+        // 1. Verify we can get a user profile before rendering the main app.
         const userProfile = await supabaseService.getCurrentUserProfile();
         if (!userProfile) {
             throw new Error("Профиль пользователя не найден в базе данных. Возможно, он не был создан при первой регистрации.");
         }
         state.userProfile = userProfile;
-    } catch (profileError) {
-        console.error("Critical error fetching user profile, signing out:", profileError);
-        alert(`Критическая ошибка: не удалось загрузить ваш профиль. Выполняется выход для повторной попытки.\n\nДетали: ${profileError.message}`);
-        state.isLoading = false;
-        await handleLogout();
-        return;
-    }
-    
-    // 2. Render the main application structure
-    renderMainApp();
-    
-    // 3. Set Google token and initialize Google services
-    googleProvider.setAuthToken(session.provider_token);
-    await googleProvider.loadGapiClient();
 
-    // 4. Fetch cloud settings and merge with local
-    const cloudSettings = await supabaseService.getUserSettings();
-    if (cloudSettings) {
-        state.settings = { ...getSettings(), ...cloudSettings };
-        saveSettings(state.settings);
-    }
-    supabaseService.setSettings(state.settings);
-    googleProvider.setTimezone(state.settings.timezone);
-    
-    // 5. Check database schema and prompt for migration if needed.
-    // If it returns true, it means a modal is showing, so we stop further execution.
-    if (await checkSchemaAndPromptMigration()) {
-        state.isLoading = false;
-        return;
-    }
-    
-    // 6. Fetch shared resource pools (keys and proxies)
-    try {
-        state.keyPool = await supabaseService.getSharedGeminiKeys();
-        state.proxyPool = await supabaseService.getSharedProxies();
-    } catch (poolError) {
-        console.error("Failed to load shared resource pools:", poolError);
+        // 2. Set Google token and initialize Google services
+        googleProvider.setAuthToken(session.provider_token);
+        await googleProvider.loadGapiClient();
 
-        const userRole = state.userProfile?.role;
-        const isAdminOrOwner = userRole === 'admin' || userRole === 'owner';
-        const isSchemaError = poolError.message.includes('relation') && poolError.message.includes('does not exist');
+        // 3. Fetch cloud settings and merge with local
+        const cloudSettings = await supabaseService.getUserSettings();
+        if (cloudSettings) {
+            state.settings = { ...getSettings(), ...cloudSettings };
+            saveSettings(state.settings);
+        }
+        supabaseService.setSettings(state.settings);
+        googleProvider.setTimezone(state.settings.timezone);
+        
+        // 4. Render the main application structure FIRST.
+        renderMainApp();
+        renderAuth(state.userProfile);
 
-        if (isAdminOrOwner && isSchemaError) {
-            // The configuration failed because the tables don't exist.
-            // For an admin, this triggers the actionable migration modal instead of a passive error message.
-            const { element: migrationModal } = createMigrationModal({
-                supabaseService,
-                onOpenSettings: () => showSettingsModal(),
-            });
-            globalModalContainer.innerHTML = '';
-            globalModalContainer.appendChild(migrationModal);
-            // Stop further execution as the app is not in a usable state until migration.
+        // 5. Check database schema and prompt for migration if needed.
+        // If it returns true, it means a modal is showing, so we stop further execution.
+        if (await checkSchemaAndPromptMigration()) {
             state.isLoading = false;
             return;
-        } else {
-            // For non-admins, or for other types of errors (e.g., network), show the generic message.
-            showSystemError("Не удалось загрузить конфигурацию. Некоторые функции могут быть недоступны.");
         }
+        
+        // 6. Fetch shared resource pools (keys and proxies)
+        try {
+            state.keyPool = await supabaseService.getSharedGeminiKeys();
+            state.proxyPool = await supabaseService.getSharedProxies();
+        } catch (poolError) {
+            console.error("Failed to load shared resource pools:", poolError);
+            const isSchemaError = poolError.message.includes('relation') && poolError.message.includes('does not exist');
+
+            if (isAdminOrOwner && isSchemaError) {
+                const { element: migrationModal } = createMigrationModal({ supabaseService, onOpenSettings: () => showSettingsModal() });
+                globalModalContainer.innerHTML = '';
+                globalModalContainer.appendChild(migrationModal);
+                state.isLoading = false;
+                return;
+            } else {
+                showSystemError("Не удалось загрузить конфигурацию. Некоторые функции могут быть недоступны.");
+            }
+        }
+        
+        // 7. Configure UI based on user role
+        const isAdminOrOwner = userProfile.role === 'admin' || userProfile.role === 'owner';
+        const settingsBtn = document.getElementById('settings-button');
+        
+        if (settingsBtn) {
+            settingsBtn.style.display = isAdminOrOwner ? 'block' : 'none';
+        }
+
+        // 8. Start background services
+        await startNewChatSession();
+        startAutoSync();
+        setupEmailPolling();
+
+    } catch (error) {
+        console.error("Critical error during session start, signing out:", error);
+        alert(`Критическая ошибка: не удалось запустить сессию. Выполняется выход для повторной попытки.\n\nДетали: ${error.message}`);
+        await handleLogout();
+    } finally {
+        // 9. Mark loading as complete
+        state.isLoading = false;
     }
-    
-    // 7. Configure UI based on user role
-    const userRole = (state.userProfile.role || '').trim().toLowerCase();
-    const isAdminOrOwner = userRole === 'admin' || userRole === 'owner';
-    const settingsBtn = document.getElementById('settings-button');
-    const helpBtn = document.getElementById('help-button');
-    
-    if (!isAdminOrOwner) {
-        if(settingsBtn) settingsBtn.style.display = 'none';
-    } else {
-         if(settingsBtn) settingsBtn.style.display = 'block';
-    }
-     if(helpBtn) helpBtn.style.display = 'block';
-
-
-    // 8. Finalize UI and start background services
-    renderAuth(state.userProfile);
-    await startNewChatSession();
-    startAutoSync();
-    setupEmailPolling();
-
-    // 9. Mark loading as complete
-    state.isLoading = false;
 }
 
 
 function showWelcomeScreen() {
+    // Only render if it's not already there to prevent flashes
+    if (document.querySelector('.welcome-screen-container')) {
+        return;
+    }
     appContainer.innerHTML = '';
     const welcome = createWelcomeScreen({
         onLogin: async () => {
@@ -748,7 +731,6 @@ async function main() {
     cameraViewContainer = document.getElementById('camera-view-container');
     globalModalContainer = document.getElementById('global-modal-container');
 
-    // Display a loading indicator while waiting for libraries and auth state.
     appContainer.innerHTML = `<div class="h-full w-full flex items-center justify-center"><div class="animate-spin h-10 w-10 border-4 border-slate-300 border-t-transparent rounded-full"></div></div>`;
 
     try {
@@ -764,27 +746,35 @@ async function main() {
     }
     
     supabaseService.onAuthStateChange(async (event, session) => {
-        // Prevent re-rendering if the user's auth state is already what we expect.
-        // This stops loops caused by TOKEN_REFRESHED events.
-        if (session && state.userProfile) {
-            return;
-        }
-        if (!session && !state.userProfile) {
-            // Already on the welcome screen, do nothing.
-             if (document.querySelector('.welcome-screen-container')) return;
-        }
-
+        // If a session object exists, we attempt to log in.
         if (session) {
-            await startAuthenticatedSession(session);
-        } else {
-            state.isLoading = false; // Ensure loading is reset
-            state.userProfile = null;
-            renderAuth(null);
-            showWelcomeScreen();
+            // But only if we aren't already logged in. This handles token refreshes gracefully.
+            if (!state.userProfile) {
+                await startAuthenticatedSession(session);
+            } else {
+                // This is a token refresh for an existing session, just update the provider token.
+                googleProvider.setAuthToken(session.provider_token);
+            }
+        } 
+        // If no session object exists, we log out.
+        else {
+            // But only if we were previously logged in. This prevents loops on the welcome screen.
+            if (state.userProfile) {
+                state.userProfile = null;
+                state.isLoading = false; // Ensure loading state is reset
+                stopEmailPolling();
+                stopAutoSync();
+                showWelcomeScreen();
+            } else {
+                 // We are not logged in and have no session. Make sure the welcome screen is visible.
+                 // This is a defensive check for the initial page load.
+                 if (!document.querySelector('.welcome-screen-container')) {
+                    showWelcomeScreen();
+                 }
+            }
         }
     });
 }
 
-// Use window.onload to ensure all resources including scripts are fully loaded,
-// which can be more reliable on mobile and for preventing race conditions.
+// Use window.onload to ensure all resources including scripts are fully loaded.
 window.onload = main;
