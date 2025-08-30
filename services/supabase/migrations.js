@@ -326,9 +326,22 @@ CREATE POLICY "Enable all access for authenticated users" ON public.proxies FOR 
 -- Функция для автоматического создания профиля нового пользователя
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  user_count integer;
+  new_user_role public.user_role;
 BEGIN
+  -- Проверяем, есть ли уже пользователи в системе
+  SELECT count(*) INTO user_count FROM public.profiles;
+  
+  -- Если это первый пользователь, назначаем ему роль 'owner'
+  IF user_count = 0 THEN
+    new_user_role := 'owner';
+  ELSE
+    new_user_role := 'user';
+  END IF;
+
   INSERT INTO public.profiles (id, full_name, avatar_url, role)
-  VALUES (new.id, new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url', 'user');
+  VALUES (new.id, new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url', new_user_role);
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

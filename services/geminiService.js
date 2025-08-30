@@ -926,6 +926,13 @@ ${errorMessage}
     }
 };
 
+export const DEFAULT_PROXY_PROMPT = `Ты — "Сетевой Скаут", ИИ-помощник для разработчика личного ассистента "Секретарь+". Моя цель — помочь пользователям получить доступ к Google API через публичные HTTPS прокси.
+Твоя задача:
+1.  Найти 5-10 **НОВЫХ** публичных HTTPS прокси, которые известны своей надежностью и скоростью для доступа к сервисам Google Cloud.
+2.  Приоритет — серверы в США (USA) или Европе (Germany, Netherlands, France).
+3.  **Критически важно:** Не предлагай прокси, которые уже есть в списке существующих. Это бесполезно.
+4.  Верни результат СТРОГО в виде JSON-массива объектов. Если ничего не найдено, верни пустой массив. Не добавляй никаких объяснений или комментариев вне JSON.`;
+
 export const findProxiesWithGemini = async ({ apiKey, proxyUrl, existingProxies = [], customPrompt = '' }) => {
     if (!apiKey) throw new Error("Ключ Gemini API не предоставлен.");
 
@@ -936,15 +943,8 @@ export const findProxiesWithGemini = async ({ apiKey, proxyUrl, existingProxies 
     const ai = new GoogleGenAI(clientOptions);
 
     const existingProxiesString = existingProxies.length > 0 ? existingProxies.join(', ') : 'Нет';
-
-    const defaultSystemInstruction = `Ты — "Сетевой Скаут", ИИ-помощник для разработчика личного ассистента "Секретарь+". Моя цель — помочь пользователям получить доступ к Google API через публичные HTTPS прокси.
-Твоя задача:
-1.  Найти 5-10 **НОВЫХ** публичных HTTPS прокси, которые известны своей надежностью и скоростью для доступа к сервисам Google Cloud.
-2.  Приоритет — серверы в США (USA) или Европе (Germany, Netherlands, France).
-3.  **Критически важно:** Не предлагай прокси, которые уже есть в списке существующих. Это бесполезно.
-4.  Верни результат СТРОГО в виде JSON-массива объектов. Если ничего не найдено, верни пустой массив. Не добавляй никаких объяснений или комментариев вне JSON.`;
     
-    const systemInstruction = customPrompt.trim() || defaultSystemInstruction;
+    const systemInstruction = customPrompt.trim() || DEFAULT_PROXY_PROMPT;
 
     const prompt = `Существующие прокси (эти повторять нельзя): \`${existingProxiesString}\`.
 Найди новые HTTPS прокси, подходящие для доступа к Google API.`;

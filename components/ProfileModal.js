@@ -67,7 +67,7 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
     
     let activeTab = 'profile';
     const isOwner = currentUserProfile?.role === 'owner';
-    const isAdmin = currentUserProfile?.role === 'admin' || isOwner;
+    const isAdmin = ['admin', 'owner'].includes(currentUserProfile?.role);
 
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4 animate-fadeIn';
@@ -220,11 +220,7 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
         // Render content for specific tabs
         if (activeTab === 'sync') {
              const syncContainer = modalOverlay.querySelector('#tab-sync');
-            if (settings.isSupabaseEnabled) {
-                renderSyncSection(syncContainer);
-            } else {
-                syncContainer.innerHTML = `<div class="text-center p-8 text-slate-500 dark:text-slate-400">Синхронизация недоступна, так как режим Supabase отключен в настройках.</div>`;
-            }
+             renderSyncSection(syncContainer);
         }
         
         if (activeTab === 'analytics' && isAdmin) {
@@ -239,27 +235,46 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
 
     const renderSyncSection = (container) => {
         if (!container) return;
+
+        // --- DIAGNOSTICS START ---
+        if (!settings.isSupabaseEnabled) {
+            container.innerHTML = `
+                <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 text-center">
+                    <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Синхронизация отключена</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 mb-4">Для использования облачной синхронизации данных необходимо включить режим "Supabase" в настройках.</p>
+                    <a href="#settings" data-client-action="open_settings_from_profile" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold text-sm">Перейти в настройки</a>
+                </div>`;
+            return;
+        }
+
         const currentStatus = getSyncStatus();
-        const hasAnyError = Object.values(currentStatus).some(s => s.error);
         const hasSchemaError = Object.values(currentStatus).some(s => 
             s.error && (s.error.includes('column') || s.error.includes('does not exist') || s.error.includes('constraint') || s.error.includes('relation'))
         );
         
+        if (hasSchemaError) {
+             container.innerHTML = `
+                <div class="p-4 rounded-md bg-red-100/50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 text-red-800 dark:text-red-300">
+                    <div class="flex items-start gap-3">
+                        <div class="w-5 h-5 flex-shrink-0 mt-0.5">${Icons.AlertTriangleIcon}</div>
+                        <div>
+                            <p class="font-bold">Обнаружена критическая ошибка синхронизации!</p>
+                            <p class="text-sm mt-1 mb-3">Вероятно, структура вашей базы данных устарела. Это может произойти после обновления приложения. Пожалуйста, обновите схему с помощью мастера, чтобы исправить проблему.</p>
+                            <button data-action="launch-db-wizard" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-semibold">Запустить мастер настройки БД</button>
+                        </div>
+                    </div>
+                </div>`;
+            return;
+        }
+        // --- DIAGNOSTICS END ---
+
+        const hasAnyError = Object.values(currentStatus).some(s => s.error);
+
         const buttonHtml = `
             <button data-action="force-sync" class="w-full sm:w-auto px-4 py-2 ${hasAnyError ? 'bg-orange-500 hover:bg-orange-600' : 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500'} text-slate-800 dark:text-white rounded-md text-sm font-semibold flex items-center justify-center gap-2">
                 ${hasAnyError ? Icons.AlertTriangleIcon : Icons.RefreshCwIcon}
                 <span>${hasAnyError ? 'Повторить синхронизацию' : 'Синхронизировать сейчас'}</span>
             </button>`;
-
-        const schemaErrorHtml = hasSchemaError ? `
-            <div class="p-3 mb-4 rounded-md bg-red-100/50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 text-red-800 dark:text-red-300 flex items-start gap-3">
-                <div class="w-5 h-5 flex-shrink-0 mt-0.5">${Icons.AlertTriangleIcon}</div>
-                <div>
-                    <p class="font-bold">Обнаружена проблема с базой данных!</p>
-                    <p class="text-sm">Вероятно, структура вашей базы данных устарела. Пожалуйста, обновите схему с помощью мастера.</p>
-                     <button data-action="launch-db-wizard" class="mt-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-semibold">Запустить мастер настройки БД</button>
-                </div>
-            </div>` : '';
 
         const projectRef = supabaseUrl ? new URL(supabaseUrl).hostname.split('.')[0] : null;
 
@@ -307,7 +322,6 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
                     <h3 class="text-lg font-semibold">Синхронизация данных</h3>
                     <div id="force-sync-button-wrapper">${buttonHtml}</div>
                 </div>
-                ${schemaErrorHtml}
                 <div id="sync-status-list" class="space-y-1">${syncItemsHtml}</div>
             </div>`;
     };
@@ -405,7 +419,10 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
             case 'close': onClose(); break;
             case 'logout': onLogout(); break;
             case 'delete': onDelete(); break;
-            case 'launch-db-wizard': onLaunchDbWizard(); break;
+            case 'launch-db-wizard': 
+                onClose();
+                onLaunchDbWizard(); 
+                break;
             case 'toggle-danger-zone':
                 e.preventDefault();
                 modalOverlay.querySelector('#danger-zone')?.classList.toggle('hidden');

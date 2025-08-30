@@ -1,5 +1,5 @@
 import * as Icons from './icons/Icons.js';
-import { testProxyConnection, findProxiesWithGemini } from '../services/geminiService.js';
+import { testProxyConnection, findProxiesWithGemini, DEFAULT_PROXY_PROMPT } from '../services/geminiService.js';
 import { getSettings, saveSettings } from '../utils/storage.js';
 
 // --- SUB-COMPONENTS (MODALS) ---
@@ -43,33 +43,50 @@ function createAddManualProxyModal(onAdd, onClose) {
 
 function createAiSettingsModal(currentPrompt, onSave, onClose) {
     const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-[52]';
+    modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-[52] p-4';
     modal.innerHTML = `
-        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl p-6 m-4 flex flex-col max-h-[80vh] animate-fadeIn">
-            <h3 class="text-lg font-bold mb-4">Настройки ИИ для поиска прокси</h3>
-            <p class="text-sm text-slate-600 dark:text-slate-400 mb-2">Здесь вы можете изменить системный промпт, который используется для поиска прокси-серверов. Это позволяет тонко настроить критерии поиска.</p>
-            <textarea id="ai-prompt-textarea" class="w-full flex-1 bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md p-2 font-mono text-xs resize-none">${currentPrompt}</textarea>
-            <div class="mt-4 flex justify-end gap-2">
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-3xl flex flex-col max-h-[90vh] animate-fadeIn">
+            <header class="p-4 border-b border-slate-200 dark:border-slate-700">
+                 <h3 class="text-lg font-bold">Настройки ИИ для поиска прокси</h3>
+                 <p class="text-sm text-slate-600 dark:text-slate-400">Измените системный промпт для тонкой настройки поиска.</p>
+            </header>
+            <main class="p-4 flex-1 overflow-y-auto space-y-4">
+                 <div>
+                    <label class="font-semibold text-sm">Стандартный системный промпт (для справки):</label>
+                    <div class="mt-1 p-2 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-mono max-h-32 overflow-y-auto">${DEFAULT_PROXY_PROMPT.replace(/\n/g, '<br>')}</div>
+                </div>
+                <div>
+                    <div class="flex justify-between items-center">
+                        <label for="ai-prompt-textarea" class="font-semibold text-sm">Ваш кастомный промпт (переопределяет стандартный):</label>
+                        <button data-action="reset" class="text-xs font-semibold text-blue-500 hover:underline">Сбросить до стандартного</button>
+                    </div>
+                    <textarea id="ai-prompt-textarea" class="w-full flex-1 mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 font-mono text-xs" rows="8" placeholder="Оставьте пустым, чтобы использовать стандартный промпт...">${currentPrompt}</textarea>
+                </div>
+            </main>
+            <footer class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
                 <button data-action="cancel" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md text-sm font-semibold">Отмена</button>
                 <button data-action="save" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-semibold">Сохранить</button>
-            </div>
+            </footer>
         </div>
     `;
     modal.addEventListener('click', (e) => {
         const action = e.target.closest('[data-action]')?.dataset.action;
+        const textarea = modal.querySelector('#ai-prompt-textarea');
         if (action === 'cancel' || e.target === modal) {
             onClose();
         } else if (action === 'save') {
-            const newPrompt = modal.querySelector('#ai-prompt-textarea').value;
-            onSave(newPrompt);
+            onSave(textarea.value);
+        } else if (action === 'reset') {
+            textarea.value = '';
         }
     });
     return modal;
 }
 
+
 function createAiThinkingModal(onClose) {
      const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-[52]';
+    modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-[52] p-4';
     modal.innerHTML = `
          <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl p-6 m-4 flex flex-col max-h-[80vh] animate-fadeIn">
             <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
@@ -106,6 +123,7 @@ export function createProxyManagerModal({ supabaseService, onClose }) {
         isTesting: false,
         draggedItemId: null,
         editingId: null,
+        testLog: [], // Array of log messages for detailed testing
     };
     let testAbortController = null;
 
@@ -165,6 +183,11 @@ export function createProxyManagerModal({ supabaseService, onClose }) {
                 </div>
             `;
         }).join('');
+        
+        const testLogHtml = state.testLog.map(log => {
+            const color = log.status === 'ok' ? 'text-green-400' : (log.status === 'error' ? 'text-red-400' : 'text-slate-400');
+            return `<div class="${color} flex justify-between"><span>${log.message}</span><span>${log.speed ? log.speed+' мс' : ''}</span></div>`;
+        }).join('');
 
         modalElement.innerHTML = `
             <div class="bg-slate-50 dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-5xl h-[90vh] flex flex-col text-slate-800 dark:text-slate-100">
@@ -199,6 +222,17 @@ export function createProxyManagerModal({ supabaseService, onClose }) {
                         </div>
                     </div>
                 </main>
+                <footer class="p-3 border-t border-slate-200 dark:border-slate-700 flex-shrink-0">
+                    <details>
+                        <summary class="cursor-pointer text-sm font-semibold text-slate-600 dark:text-slate-300">Детальное тестирование</summary>
+                        <div class="mt-2 p-3 bg-slate-900 text-slate-200 rounded-md font-mono text-xs space-y-1 max-h-32 overflow-y-auto">
+                            <div id="test-log-container">${testLogHtml || '<div class="text-slate-500">Нажмите "Проверить все активные прокси", чтобы начать...</div>'}</div>
+                        </div>
+                        <div class="mt-2 flex justify-end">
+                            <button data-action="test-all" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold text-sm disabled:bg-slate-500" ${state.isTesting ? 'disabled' : ''}>${state.isTesting ? 'Тестирование...' : 'Проверить все активные прокси'}</button>
+                        </div>
+                    </details>
+                </footer>
                  <div id="sub-modal-container"></div>
             </div>
         `;
@@ -210,7 +244,7 @@ export function createProxyManagerModal({ supabaseService, onClose }) {
         try {
             const allProxies = await supabaseService.getProxies();
             state.storageProxies = allProxies;
-            state.activeProxies = allProxies.filter(p => p.is_active);
+            state.activeProxies = allProxies.filter(p => p.is_active).sort((a, b) => a.priority - b.priority);
         } catch (e) {
             alert(`Ошибка загрузки прокси: ${e.message}`);
         } finally {
@@ -307,23 +341,25 @@ export function createProxyManagerModal({ supabaseService, onClose }) {
                     await loadProxies();
                 }
                 break;
-            case 'test':
+            case 'test': {
                  const proxyToTest = state.storageProxies.find(p => p.id === id);
                  if (proxyToTest) {
-                     await runTest(proxyToTest);
+                     await runSingleTestAndUpdate(proxyToTest);
                  }
                 break;
+            }
+            case 'test-all': {
+                await runAllActiveTests();
+                break;
+            }
         }
     };
 
-    const runTest = async (proxy) => {
+    const runSingleTestAndUpdate = async (proxy) => {
         if(state.isTesting) return;
-
         state.isTesting = true;
-        
-        const proxyElement = modalElement.querySelector(`[data-id="${proxy.id}"]`);
-        if(proxyElement) proxyElement.classList.add('testing'); // Add visual feedback
-        
+        render();
+
         try {
             const currentSettings = getSettings();
             if (!currentSettings.geminiApiKey) throw new Error("Ключ Gemini API не найден.");
@@ -347,6 +383,44 @@ export function createProxyManagerModal({ supabaseService, onClose }) {
             state.isTesting = false;
             await loadProxies();
         }
+    };
+    
+    const runAllActiveTests = async () => {
+        if(state.isTesting) return;
+        state.isTesting = true;
+        state.testLog = [];
+        render();
+
+        const proxiesToTest = state.activeProxies;
+        if (proxiesToTest.length === 0) {
+            state.testLog.push({ message: "Нет активных прокси для тестирования." });
+            state.isTesting = false;
+            render();
+            return;
+        }
+
+        const currentSettings = getSettings();
+        if (!currentSettings.geminiApiKey) {
+             state.testLog.push({ message: "Ошибка: Ключ Gemini API не найден.", status: 'error' });
+             state.isTesting = false;
+             render();
+             return;
+        }
+
+        for (const proxy of proxiesToTest) {
+            state.testLog.push({ message: `Тестирование ${proxy.url}...` });
+            render();
+
+            const result = await testProxyConnection({ proxyUrl: proxy.url, apiKey: currentSettings.geminiApiKey });
+            await supabaseService.updateProxy(proxy.id, { last_test_status: result.status, last_test_speed: result.speed });
+            
+            state.testLog[state.testLog.length - 1] = { ...result, message: `${proxy.url}: ${result.message}` };
+            render();
+        }
+
+        state.testLog.push({ message: "Тестирование завершено." });
+        state.isTesting = false;
+        await loadProxies(); // Reload all data with updated statuses
     };
     
     const attachDragAndDrop = () => {
