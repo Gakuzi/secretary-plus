@@ -87,6 +87,7 @@ const settingsForInit = getSettings();
 if (settingsForInit.isSupabaseEnabled) {
     try {
         supabaseService = new SupabaseService(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+        supabaseService.setSettings(settingsForInit); // Pass initial settings
         state.isSupabaseReady = true; // Set state early
     } catch (e) {
         console.error("Global Supabase initialization failed", e);
@@ -300,6 +301,9 @@ async function handleAuthentication() {
 
 async function initializeAppServices() {
     state.settings = getSettings();
+    if (supabaseService) {
+        supabaseService.setSettings(state.settings);
+    }
     await googleProvider.initClient(GOOGLE_CLIENT_ID, null);
     googleProvider.setTimezone(state.settings.timezone);
     await handleAuthentication();
@@ -616,6 +620,7 @@ function showSettingsModal() {
             if (supabaseService) {
                 try {
                     await supabaseService.saveUserSettings(newSettings);
+                    supabaseService.setSettings(newSettings); // Update service instance with new settings
                 } catch (error) {
                     console.error("Failed to save settings to cloud:", error);
                     showSystemError(`Не удалось сохранить настройки в облаке: ${error.message}`);
@@ -874,7 +879,9 @@ async function startFullApp(initialSession = null) {
             googleProvider.setAuthToken(session.provider_token);
             const cloudSettings = await supabaseService.getUserSettings();
             if (cloudSettings && cloudSettings.geminiApiKey) {
-                settings = { ...settings, ...cloudSettings };
+                settings = getSettings(); // get fresh defaults
+                // Deep merge settings
+                Object.assign(settings, cloudSettings);
                 saveSettings(settings);
             }
         }
@@ -885,6 +892,7 @@ async function startFullApp(initialSession = null) {
         }
     }
     state.settings = settings; // Update global state
+    if(supabaseService) supabaseService.setSettings(state.settings);
 
     // Condition to show the initial setup wizard
     const shouldShowWizard = !settings.geminiApiKey;

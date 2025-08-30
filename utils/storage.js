@@ -1,6 +1,25 @@
+import { DB_SCHEMAS } from '../services/supabase/schema.js';
+
 const SETTINGS_KEY = 'secretary-plus-settings-v4';
 const SYNC_STATUS_KEY = 'secretary-plus-sync-status-v1';
 const GOOGLE_TOKEN_KEY = 'secretary-plus-google-token-v1';
+
+// Helper to build the default field config based on recommended fields from the schema
+const buildDefaultFieldConfig = () => {
+    const config = {};
+    for (const [key, schema] of Object.entries(DB_SCHEMAS)) {
+        if (schema.tableName) { // Process only schemas that correspond to a table
+            config[key] = {};
+            for (const field of schema.fields) {
+                if (field.recommended) {
+                    config[key][field.name] = true;
+                }
+            }
+        }
+    }
+    return config;
+};
+
 
 const defaultSettings = {
     geminiApiKey: '',
@@ -30,7 +49,9 @@ const defaultSettings = {
         files: true,
         emails: true,
         notes: true,
-    }
+    },
+    // New setting for fine-grained field control during sync
+    serviceFieldConfig: buildDefaultFieldConfig(),
 };
 
 export function getSettings() {
@@ -41,7 +62,16 @@ export function getSettings() {
             // Ensure all nested objects exist and have default keys
             const serviceMap = { ...defaultSettings.serviceMap, ...(parsed.serviceMap || {}) };
             const enabledServices = { ...defaultSettings.enabledServices, ...(parsed.enabledServices || {}) };
-            return { ...defaultSettings, ...parsed, serviceMap, enabledServices };
+            const serviceFieldConfig = { ...defaultSettings.serviceFieldConfig };
+            // Deep merge for serviceFieldConfig
+            if (parsed.serviceFieldConfig) {
+                for (const serviceKey in serviceFieldConfig) {
+                    if (parsed.serviceFieldConfig[serviceKey]) {
+                        serviceFieldConfig[serviceKey] = { ...serviceFieldConfig[serviceKey], ...parsed.serviceFieldConfig[serviceKey] };
+                    }
+                }
+            }
+            return { ...defaultSettings, ...parsed, serviceMap, enabledServices, serviceFieldConfig };
         }
     } catch (error) {
         console.error("Failed to parse settings from localStorage", error);
@@ -67,6 +97,7 @@ export function saveSettings(settings) {
             useProxy: settings.useProxy,
             customProxyPrompt: settings.customProxyPrompt,
             enabledServices: settings.enabledServices, // Save the new setting
+            serviceFieldConfig: settings.serviceFieldConfig, // Save the new field config
         };
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
     } catch (error)

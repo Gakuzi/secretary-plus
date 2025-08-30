@@ -1,78 +1,7 @@
 import { getSettings, saveGoogleToken, getGoogleToken, clearGoogleToken } from '../utils/storage.js';
 import * as Icons from './icons/Icons.js';
 import { createProxyManagerModal } from './ProxyManagerModal.js';
-import { FULL_MIGRATION_SQL } from '../services/supabase/migrations.js';
-
-
-const EDGE_FUNCTION_CODE = `
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import postgres from 'https://deno.land/x/postgresjs@v3.4.2/mod.js';
-
-// Заголовки CORS для preflight и обычных запросов
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
-
-serve(async (req) => {
-  // Обработка CORS preflight запросов
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
-  }
-
-  const sql = postgres(Deno.env.get('DATABASE_URL'));
-
-  try {
-    // 1. Получаем секреты из переменных окружения
-    const ADMIN_SECRET_TOKEN = Deno.env.get('ADMIN_SECRET_TOKEN');
-
-    if (!Deno.env.get('DATABASE_URL') || !ADMIN_SECRET_TOKEN) {
-      throw new Error('Database URL или Admin Token не установлены в секретах функции.');
-    }
-
-    // 2. Извлекаем SQL-запрос и токен из тела запроса
-    const { sql: sqlQuery, admin_token: requestToken } = await req.json();
-
-    // 3. Проверяем токен администратора
-    if (requestToken !== ADMIN_SECRET_TOKEN) {
-      return new Response(JSON.stringify({ error: 'Unauthorized: Неверный токен.' }), {
-        status: 401,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (!sqlQuery || typeof sqlQuery !== 'string') {
-      return new Response(JSON.stringify({ error: 'Bad Request: "sql" параметр отсутствует или неверен.' }), {
-        status: 400,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // 4. Выполняем SQL-запрос внутри транзакции
-    const result = await sql.begin(async (sql) => {
-        // sql.unsafe() внутри транзакции позволяет выполнять несколько операторов
-        const transactionResult = await sql.unsafe(sqlQuery);
-        return transactionResult;
-    });
-
-    // 5. Возвращаем результат
-    return new Response(JSON.stringify({ ok: true, result }), {
-      status: 200,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-    });
-
-  } catch (err) {
-    return new Response(JSON.stringify({ error: err.message, stack: err.stack }), {
-      status: 500,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-    });
-  } finally {
-      // Гарантируем закрытие соединения
-      await sql.end();
-  }
-});
-`.trim();
+import { DB_SCHEMAS } from '../services/supabase/schema.js';
 
 
 export function createSetupWizard({ onComplete, googleProvider, supabaseService, googleClientId, resumeState = null }) {
@@ -101,6 +30,8 @@ export function createSetupWizard({ onComplete, googleProvider, supabaseService,
         { id: 'connection', title: 'Способ подключения' },
         { id: 'auth', title: 'Аутентификация' },
         { id: 'gemini', title: 'Ключ Gemini API' },
+        { id: 'services', title: 'Службы и Поля' },
+        { id: 'proxy', title: 'Настройка Прокси' },
         { id: 'database', title: 'Управляющий воркер' },
         { id: 'finish', title: 'Завершение' },
     ];
@@ -200,6 +131,70 @@ export function createSetupWizard({ onComplete, googleProvider, supabaseService,
                     </div>`;
                 addNextButton();
                 break;
+             case 'services': {
+                const servicesHtml = Object.entries(DB_SCHEMAS)
+                    .filter(([key]) => key !== 'profiles' && key !== 'user_settings' && key !== 'proxies') // Exclude internal tables
+                    .map(([key, schema]) => {
+                        const isEnabled = state.config.enabledServices[key];
+                        const fieldsHtml = schema.fields
+                            .filter(field => !['id', 'user_id', 'created_at', 'updated_at'].includes(field.name)) // Exclude common fields
+                            .map(field => {
+                                const isChecked = state.config.serviceFieldConfig[key]?.[field.name] ?? false;
+                                return `
+                                    <div class="flex items-center gap-3 py-1.5 px-4" title="${field.description}">
+                                        <input type="checkbox" id="field-${key}-${field.name}" data-service="${key}" data-field="${field.name}" ${isChecked ? 'checked' : ''} ${!isEnabled ? 'disabled' : ''} class="w-4 h-4 rounded text-blue-600 bg-slate-200 dark:bg-slate-600 border-slate-300 dark:border-slate-500 focus:ring-blue-500">
+                                        <label for="field-${key}-${field.name}" class="text-sm text-slate-700 dark:text-slate-300 flex-1">${field.name}</label>
+                                        <span class="font-mono text-xs text-slate-400 dark:text-slate-500">${field.type.split(' ')[0]}</span>
+                                    </div>
+                                `;
+                            }).join('');
+
+                        return `
+                            <details class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg" ${isEnabled ? 'open' : ''}>
+                                <summary class="p-3 cursor-pointer flex justify-between items-center font-semibold">
+                                    <div class="flex items-center gap-3">
+                                        <span class="w-5 h-5 text-slate-600 dark:text-slate-300">${Icons[schema.icon]}</span>
+                                        <span>${schema.label}</span>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" data-service-toggle="${key}" ${isEnabled ? 'checked' : ''}>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </summary>
+                                <div class="border-t border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700/50">
+                                    ${fieldsHtml}
+                                </div>
+                            </details>
+                        `;
+                    }).join('');
+                contentEl.innerHTML = `
+                    <h2 class="text-2xl font-bold mb-4">Службы и Поля</h2>
+                    <p class="mb-6 text-slate-500 dark:text-slate-400">Выберите, какие сервисы и какие конкретные поля вы хотите синхронизировать. Это напрямую влияет на то, какие данные будут храниться в вашей базе.</p>
+                    <div class="space-y-3">${servicesHtml}</div>
+                `;
+                addNextButton();
+                break;
+            }
+             case 'proxy':
+                contentEl.innerHTML = `
+                    <h2 class="text-2xl font-bold mb-4">Настройка Прокси</h2>
+                    <p class="mb-6 text-slate-500 dark:text-slate-400">Прокси-серверы необходимы для обхода региональных ограничений Gemini API. Вы можете управлять ими здесь.</p>
+                     <div class="p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <div class="flex items-center justify-between py-2">
+                            <label for="use-proxy-toggle" class="font-medium text-slate-700 dark:text-slate-300">Использовать прокси-серверы</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="use-proxy-toggle" ${state.config.useProxy ? 'checked' : ''}>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">Требует включенного режима Supabase.</p>
+                        <button data-action="manage-proxies" class="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md font-semibold text-sm transition-colors">
+                            ${Icons.SettingsIcon} <span>Открыть Менеджер прокси</span>
+                        </button>
+                    </div>
+                `;
+                addNextButton();
+                break;
             case 'database':
                 let dbTestStatusHtml;
                 switch(state.dbTestStatus) {
@@ -211,9 +206,8 @@ export function createSetupWizard({ onComplete, googleProvider, supabaseService,
 
                 contentEl.innerHTML = `
                      <h2 class="text-2xl font-bold mb-4">Управляющий воркер</h2>
-                     <p class="mb-2 text-slate-500 dark:text-slate-400">Этот воркер нужен для безопасного обновления схемы вашей базы данных. Следуйте <a href="#" data-action="open-db-guide" class="text-blue-500 hover:underline">инструкции</a>, чтобы создать его.</p>
+                     <p class="mb-2 text-slate-500 dark:text-slate-400">Этот воркер нужен для безопасного обновления схемы вашей базы данных. Если вы настраиваете его впервые, следуйте инструкции.</p>
                      <p class="mb-6 text-xs text-slate-500 dark:text-slate-400">(Если вы не хотите настраивать воркер сейчас, этот шаг можно пропустить и вернуться к нему позже из настроек).</p>
-
                      <div class="p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 space-y-4">
                         <div>
                             <label for="function-url-input" class="font-semibold text-sm">URL функции (db-admin):</label>
@@ -229,6 +223,11 @@ export function createSetupWizard({ onComplete, googleProvider, supabaseService,
                         </div>
                      </div>
                 `;
+                if (state.dbTestStatus === 'ok') {
+                    addNextButton('Далее');
+                } else {
+                    addNextButton('Далее', false, true); // Disabled next button
+                }
                 addNextButton('Пропустить', true);
                 break;
             case 'finish':
@@ -280,6 +279,7 @@ export function createSetupWizard({ onComplete, googleProvider, supabaseService,
                 </header>
                 <main class="flex-1 p-6 overflow-y-auto bg-slate-50 dark:bg-slate-900/70" id="wizard-content"></main>
                 <footer class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center" id="wizard-footer"></footer>
+                <div id="sub-modal-container"></div>
             </div>`;
         renderStepContent();
     };
@@ -293,6 +293,23 @@ export function createSetupWizard({ onComplete, googleProvider, supabaseService,
 
         const tokenInput = wizardElement.querySelector('#admin-token-input');
         if (tokenInput) state.config.adminSecretToken = tokenInput.value.trim();
+        
+        const proxyToggle = wizardElement.querySelector('#use-proxy-toggle');
+        if (proxyToggle) state.config.useProxy = proxyToggle.checked;
+
+        // Collect service and field toggles
+        wizardElement.querySelectorAll('[data-service-toggle]').forEach(toggle => {
+            const serviceKey = toggle.dataset.serviceToggle;
+            state.config.enabledServices[serviceKey] = toggle.checked;
+        });
+        wizardElement.querySelectorAll('input[type="checkbox"][data-service][data-field]').forEach(checkbox => {
+            const service = checkbox.dataset.service;
+            const field = checkbox.dataset.field;
+            if (!state.config.serviceFieldConfig[service]) {
+                state.config.serviceFieldConfig[service] = {};
+            }
+            state.config.serviceFieldConfig[service][field] = checkbox.checked;
+        });
     };
     
     const handleNext = async () => {
@@ -300,9 +317,14 @@ export function createSetupWizard({ onComplete, googleProvider, supabaseService,
         
         let nextStepIndex = state.currentStep + 1;
         
-        // Skip DB worker step if not using Supabase
-        if (nextStepIndex < STEPS.length && STEPS[nextStepIndex].id === 'database' && state.authChoice !== 'supabase') {
-            nextStepIndex++;
+        // Skip Proxy & DB worker steps if not using Supabase
+        while (nextStepIndex < STEPS.length) {
+            const nextStepId = STEPS[nextStepIndex].id;
+            if ((nextStepId === 'database' || nextStepId === 'proxy') && state.authChoice !== 'supabase') {
+                nextStepIndex++;
+            } else {
+                break;
+            }
         }
         
         if (nextStepIndex < STEPS.length) {
@@ -315,8 +337,13 @@ export function createSetupWizard({ onComplete, googleProvider, supabaseService,
         collectInputs();
         let prevStepIndex = state.currentStep - 1;
         
-        if (prevStepIndex >= 0 && STEPS[prevStepIndex].id === 'database' && state.authChoice !== 'supabase') {
-            prevStepIndex--;
+         while (prevStepIndex >= 0) {
+            const prevStepId = STEPS[prevStepIndex].id;
+            if ((prevStepId === 'database' || prevStepId === 'proxy') && state.authChoice !== 'supabase') {
+                prevStepIndex--;
+            } else {
+                break;
+            }
         }
 
         if (prevStepIndex >= 0) {
@@ -405,11 +432,20 @@ export function createSetupWizard({ onComplete, googleProvider, supabaseService,
     };
 
     const handleAction = async (e) => {
-        const target = e.target.closest('[data-action], [data-choice]');
+        const target = e.target.closest('[data-action], [data-choice], [data-service-toggle]');
         if (!target) return;
 
         const action = target.dataset.action;
         const choice = target.dataset.choice;
+        const serviceToggle = target.dataset.serviceToggle;
+
+        if(serviceToggle) {
+             const isChecked = e.target.checked;
+             state.config.enabledServices[serviceToggle] = isChecked;
+             // Enable/disable field checkboxes when service is toggled
+             wizardElement.querySelectorAll(`input[data-service="${serviceToggle}"]`).forEach(el => el.disabled = !isChecked);
+             return;
+        }
 
         if (choice) {
             state.authChoice = choice;
@@ -448,10 +484,21 @@ export function createSetupWizard({ onComplete, googleProvider, supabaseService,
                     state.isLoading = false; render();
                 }
                 break;
+            case 'manage-proxies': {
+                const subModalContainer = wizardElement.querySelector('#sub-modal-container');
+                const manager = createProxyManagerModal({
+                    supabaseService,
+                    apiKey: state.config.geminiApiKey,
+                    onClose: () => subModalContainer.innerHTML = '',
+                });
+                subModalContainer.appendChild(manager);
+                break;
+            }
         }
     };
     
     wizardElement.addEventListener('click', handleAction);
+    wizardElement.addEventListener('change', handleAction); // For toggles
 
     // Initial render / resume
     if (resumeState) {

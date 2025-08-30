@@ -11,6 +11,12 @@ export class SupabaseService {
         this.client = supabase.createClient(supabaseUrl, supabaseAnonKey);
         this.url = supabaseUrl;
         this.anonKey = supabaseAnonKey;
+        this.settings = {}; // Initialize settings object
+    }
+    
+    // Method to update settings from the main app
+    setSettings(settings) {
+        this.settings = settings;
     }
 
     getId() {
@@ -120,610 +126,295 @@ export class SupabaseService {
         }
     }
 
-    async syncContacts(googleContacts) {
-        // Contacts can be fully fetched, so use full sync.
-        return this.#fullSync(
-            'contacts',
-            googleContacts.filter(c => c.names?.[0]?.displayName), // Only sync contacts with names
-            (c, userId) => ({
-                user_id: userId,
-                source_id: c.resourceName.split('/')[1],
-                display_name: c.names?.[0]?.displayName || null,
-                email: c.emailAddresses?.[0]?.value || null,
-                phone: c.phoneNumbers?.[0]?.value || null,
-                avatar_url: c.photos?.[0]?.url || null,
-                addresses: c.addresses,
-                organizations: c.organizations,
-                birthdays: c.birthdays,
-            }),
-            c => c.resourceName.split('/')[1]
-        );
+    async syncCalendarEvents(googleItems) {
+        const formatter = (event, userId) => {
+            const config = this.settings.serviceFieldConfig?.calendar || {};
+            const item = { user_id: userId, source_id: event.id };
+            if (config.title) item.title = event.summary;
+            if (config.description) item.description = event.description;
+            if (config.start_time) item.start_time = event.start?.dateTime || event.start?.date;
+            if (config.end_time) item.end_time = event.end?.dateTime || event.end?.date;
+            if (config.event_link) item.event_link = event.htmlLink;
+            if (config.meet_link) item.meet_link = event.hangoutLink;
+            if (config.attendees) item.attendees = event.attendees;
+            if (config.status) item.status = event.status;
+            if (config.creator_email) item.creator_email = event.creator?.email;
+            if (config.is_all_day) item.is_all_day = !event.start?.dateTime;
+            return item;
+        };
+        await this.#incrementalSync('calendar_events', googleItems, formatter);
+    }
+
+    async syncContacts(googleItems) {
+        const formatter = (contact, userId) => {
+            const config = this.settings.serviceFieldConfig?.contacts || {};
+            const c = contact; // Alias for brevity
+            const item = { user_id: userId, source_id: c.resourceName };
+            if (config.display_name) item.display_name = c.names?.[0]?.displayName;
+            if (config.email) item.email = c.emailAddresses?.[0]?.value;
+            if (config.phone) item.phone = c.phoneNumbers?.[0]?.value;
+            if (config.avatar_url) item.avatar_url = c.photos?.[0]?.url;
+            if (config.addresses) item.addresses = c.addresses;
+            if (config.organizations) item.organizations = c.organizations;
+            if (config.birthdays) item.birthdays = c.birthdays;
+            return item;
+        };
+        const idExtractor = item => item.resourceName;
+        await this.#fullSync('contacts', googleItems, formatter, idExtractor);
+    }
+
+    async syncFiles(googleItems) {
+        const formatter = (file, userId) => {
+            const config = this.settings.serviceFieldConfig?.files || {};
+            const item = { user_id: userId, source_id: file.id };
+            if (config.name) item.name = file.name;
+            if (config.mime_type) item.mime_type = file.mimeType;
+            if (config.url) item.url = file.webViewLink;
+            if (config.icon_link) item.icon_link = file.iconLink;
+            if (config.created_time) item.created_time = file.createdTime;
+            if (config.modified_time) item.modified_time = file.modifiedTime;
+            if (config.viewed_by_me_time) item.viewed_by_me_time = file.viewedByMeTime;
+            if (config.size) item.size = file.size;
+            if (config.owner) item.owner = file.owners?.[0]?.displayName;
+            if (config.last_modifying_user) item.last_modifying_user = file.lastModifyingUser?.displayName;
+            return item;
+        };
+        await this.#fullSync('files', googleItems, formatter);
     }
     
-    async syncFiles(googleFiles) {
-        // Files can be fully fetched, so use full sync.
-        return this.#fullSync(
-            'files',
-            googleFiles,
-            (f, userId) => ({
-                user_id: userId,
-                source_id: f.id,
-                name: f.name,
-                mime_type: f.mimeType,
-                url: f.webViewLink,
-                icon_link: f.iconLink,
-                created_time: f.createdTime,
-                modified_time: f.modifiedTime,
-                viewed_by_me_time: f.viewedByMeTime,
-                size: f.size ? parseInt(f.size, 10) : null,
-                owner: f.owners?.[0]?.displayName || null,
-                permissions: f.permissions,
-                last_modifying_user: f.lastModifyingUser?.displayName,
-            })
-        );
+    async syncTasks(googleItems) {
+        const formatter = (task, userId) => {
+            const config = this.settings.serviceFieldConfig?.tasks || {};
+            const item = { user_id: userId, source_id: task.id };
+            if (config.title) item.title = task.title;
+            if (config.notes) item.notes = task.notes;
+            if (config.due_date) item.due_date = task.due;
+            if (config.status) item.status = task.status;
+            if (config.completed_at) item.completed_at = task.completed;
+            if (config.parent_task_id) item.parent_task_id = task.parent;
+            return item;
+        };
+        await this.#fullSync('tasks', googleItems, formatter);
     }
 
-    async syncCalendarEvents(googleEvents) {
-        // Calendar can have many past events, use incremental sync to avoid deleting them.
-         return this.#incrementalSync(
-            'calendar_events',
-            googleEvents,
-            (e, userId) => ({
-                user_id: userId,
-                source_id: e.id,
-                title: e.summary,
-                description: e.description,
-                start_time: e.start?.dateTime || e.start?.date,
-                end_time: e.end?.dateTime || e.end?.date,
-                event_link: e.htmlLink,
-                meet_link: e.hangoutLink,
-                attendees: e.attendees,
-                status: e.status,
-                creator_email: e.creator?.email,
-                is_all_day: !!e.start?.date && !e.start?.dateTime,
-            })
-        );
+    async syncEmails(googleItems) {
+         const formatter = (email, userId) => {
+            const config = this.settings.serviceFieldConfig?.emails || {};
+            const item = { user_id: userId, source_id: email.id };
+            if (config.thread_id) item.thread_id = email.threadId;
+            if (config.subject) item.subject = email.subject;
+            if (config.snippet) item.snippet = email.snippet;
+            if (config.sender_info) item.sender_info = email.senderInfo;
+            if (config.recipients_info) item.recipients_info = email.recipientsInfo;
+            if (config.received_at) item.received_at = email.receivedAt;
+            if (config.full_body) item.full_body = email.body;
+            if (config.has_attachments) item.has_attachments = email.hasAttachments;
+            if (config.attachments_metadata) item.attachments_metadata = email.attachments;
+            if (config.label_ids) item.label_ids = email.labelIds;
+            if (config.gmail_link) item.gmail_link = email.gmailLink;
+            return item;
+        };
+        await this.#incrementalSync('emails', googleItems, formatter);
     }
 
-    async syncTasks(googleTasks) {
-        // Tasks can be completed and old, use incremental sync.
-         return this.#incrementalSync(
-            'tasks',
-            googleTasks,
-            (t, userId) => ({
-                user_id: userId,
-                source_id: t.id,
-                title: t.title,
-                notes: t.notes,
-                due_date: t.due,
-                status: t.status,
-                completed_at: t.completed,
-                parent_task_id: t.parent,
-            })
-        );
-    }
-
-    async syncEmails(googleEmails) {
+    // --- Search ---
+    async findContacts(query) {
         const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
-        if (!googleEmails || googleEmails.length === 0) return;
-
-        let successCount = 0;
-        let errorCount = 0;
-
-        const formatterFn = (e, userId) => ({
-            user_id: userId,
-            source_id: e.id,
-            thread_id: e.threadId,
-            subject: e.subject,
-            snippet: e.snippet,
-            sender_info: e.senderInfo,
-            recipients_info: e.recipientsInfo,
-            received_at: e.receivedAt,
-            full_body: e.body,
-            has_attachments: e.hasAttachments,
-            attachments_metadata: e.attachments,
-            label_ids: e.labelIds,
-            gmail_link: e.gmailLink,
-        });
-
-        for (const email of googleEmails) {
-            if (!email || !email.id) {
-                console.warn("Skipping invalid email object during sync:", email);
-                errorCount++;
-                continue;
-            }
-            try {
-                const formattedEmail = formatterFn(email, user.id);
-                const { error } = await this.client
-                    .from('emails')
-                    .upsert(formattedEmail, { onConflict: 'user_id,source_id' });
-                
-                if (error) {
-                    throw error;
-                }
-                successCount++;
-            } catch (error) {
-                errorCount++;
-                console.error(`Failed to sync email with source_id: ${email.id}. Error:`, error.message);
-                // Continue to the next email, as requested by the user.
-            }
-        }
-
-        if (errorCount > 0) {
-            console.warn(`Email sync completed with ${errorCount} errors and ${successCount} successes.`);
-        }
-    }
-
-    // --- Data Retrieval (from local cache) ---
-    
-    async getCalendarEvents({ time_min, time_max, max_results = 10 }) {
-        let query = this.client
-            .from('calendar_events')
-            .select('*')
-            .order('start_time', { ascending: true })
-            .gte('start_time', time_min || new Date().toISOString())
-            .limit(max_results);
-            
-        if (time_max) {
-            query = query.lte('start_time', time_max);
-        }
-
-        const { data, error } = await query;
-        if (error) throw error;
-        
-        // Remap to match Google API structure for compatibility with ResultCard
-        return data.map(e => ({
-            id: e.source_id,
-            summary: e.title,
-            description: e.description,
-            htmlLink: e.event_link,
-            hangoutLink: e.meet_link,
-            start: { dateTime: e.start_time },
-            end: { dateTime: e.end_time }
-        }));
-    }
-
-     async getTasks({ max_results = 20 }) {
-        const { data, error } = await this.client
-            .from('tasks')
-            .select('*')
-            .neq('status', 'completed')
-            .order('due_date', { ascending: true, nullsFirst: true })
-            .limit(max_results);
-
-        if (error) throw error;
-        // Remap for compatibility
-        return data.map(t => ({
-            id: t.source_id,
-            title: t.title,
-            notes: t.notes,
-            due: t.due_date,
-            status: t.status
-        }));
-    }
-
-    async findContacts(query) {
-        const { data, error } = await this.client
-            .from('contacts')
-            .select('*')
-            .or(`display_name.ilike.%${query}%,email.ilike.%${query}%`) // Case-insensitive search
-            .limit(10);
-            
+        const { data, error } = await this.client.rpc('search_contacts', { query: query, p_user_id: user.id });
         if (error) throw error;
         return data;
     }
-    
+
     async findDocuments(query) {
-         const { data, error } = await this.client
-            .from('files')
-            .select('*')
-            .ilike('name', `%${query}%`) // Case-insensitive search
-            .order('modified_time', { ascending: false, nullsFirst: false })
-            .limit(10);
-            
+        const { data: { user } } = await this.client.auth.getUser();
+        if (!user) throw new Error("User not authenticated.");
+        const { data, error } = await this.client.from('files').select('name, url:webViewLink, icon_link, id:source_id, modified_time')
+            .eq('user_id', user.id).ilike('name', `%${query}%`).limit(10);
         if (error) throw error;
         return data;
     }
-
-    async getRecentFiles({ max_results = 10 }) {
-        const { data, error } = await this.client
-            .from('files')
-            .select('*')
-            .order('modified_time', { ascending: false, nullsFirst: false })
-            .limit(max_results);
-
-        if (error) throw error;
-        return data;
-    }
-
+    
     // --- Notes ---
     async createNote(details) {
         const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
-        
-        const { data, error } = await this.client
-            .from('notes')
+        const { data, error } = await this.client.from('notes')
             .insert({
                 user_id: user.id,
                 title: details.title,
                 content: details.content,
-            })
-            .select()
-            .single();
-
+            }).select().single();
         if (error) throw error;
         return data;
     }
-
+    
     async findNotes(query) {
-        const { data, error } = await this.client
-            .from('notes')
-            .select('*')
-            .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
+        const { data: { user } } = await this.client.auth.getUser();
+        if (!user) throw new Error("User not authenticated.");
+        const { data, error } = await this.client.from('notes')
+            .select('id, title, created_at, updated_at')
+            .eq('user_id', user.id)
+            .ilike('content', `%${query}%`)
             .limit(10);
-        
         if (error) throw error;
-        return data;
+        return data.map(n => ({ ...n, name: n.title, url: `#note-${n.id}`}));
     }
 
-    // --- Long-term Memory ---
-    async saveMemory(memoryData) {
-        const { data: { user } } = await this.client.auth.getUser();
-        if (!user) throw new Error("User not authenticated.");
-
-        const { error } = await this.client
-            .from('chat_memory')
-            .insert({
-                user_id: user.id,
-                summary: memoryData.summary,
-                keywords: memoryData.keywords,
-            });
-
+    // --- User Profile & Settings ---
+     async getCurrentUserProfile() {
+        const { data, error } = await this.client.rpc('get_or_create_profile');
         if (error) throw error;
-        return { success: true };
+        return data?.[0] || null;
     }
 
-    async recallMemory(query) {
-        const { data, error } = await this.client
-            .from('chat_memory')
-            .select('*')
-            // A simple text search. For more advanced search, pg_vector would be used.
-            .or(`summary.ilike.%${query}%,keywords.cs.{${query}}`)
-            .order('created_at', { ascending: false })
-            .limit(5);
-
-        if (error) throw error;
-        return data;
-    }
-
-    // --- Action Statistics ---
-    async getActionStats() {
-        const { data, error } = await this.client
-            .from('action_stats')
-            .select('function_name, call_count');
-        if (error) {
-            console.error("Error fetching action stats:", error);
-            return {}; // Return empty object on error
-        }
-        // Convert array of objects to a single object like { name: count }
-        return data.reduce((acc, stat) => {
-            acc[stat.function_name] = stat.call_count;
-            return acc;
-        }, {});
-    }
-     async getFullStats() {
-        const { data, error } = await this.client.rpc('get_full_stats');
-        if (error) {
-            console.error("Error fetching full stats:", error);
-            throw error;
-        }
-        return data;
-    }
-
-
-    async incrementActionStat(functionName) {
-        const { error } = await this.client.rpc('increment_stat', { fn_name: functionName });
-        if (error) {
-            console.error(`Failed to increment action stat for "${functionName}":`, error);
-            // Do not throw, this is a non-critical background task.
-        }
-    }
-    
-    // --- User Settings & Profiles ---
     async getUserSettings() {
-        const { data, error } = await this.client
-            .from('user_settings')
-            .select('settings')
-            .maybeSingle(); // Use maybeSingle() to return null instead of error if no row is found.
-        
+        const { data, error } = await this.client.from('user_settings').select('settings').maybeSingle();
         if (error) {
-            console.error('Error fetching user settings:', error);
-            return null;
+             console.warn("Could not fetch user settings:", error.message);
+             return null;
         }
-
-        return data ? data.settings : null;
-    }
-
-    async saveUserSettings(settingsObject) {
-        const { error } = await this.client.rpc('upsert_user_settings', { new_settings: settingsObject });
-        if (error) {
-            console.error('Error saving user settings:', error);
-            throw error;
-        }
-    }
-
-    async deleteUserSettings() {
-        const { data: { user } } = await this.client.auth.getUser();
-        if (!user) throw new Error("User not authenticated.");
-
-        const { error } = await this.client
-            .from('user_settings')
-            .delete()
-            .eq('user_id', user.id);
-
-        if (error) {
-            console.error('Error deleting user settings:', error);
-            throw error;
-        }
-        return { success: true };
-    }
-
-    async getCurrentUserProfile() {
-        const { data: { user } } = await this.client.auth.getUser();
-        if (!user) return null;
-
-        // Call the RPC function to get or create the profile
-        const { data, error } = await this.client.rpc('get_or_create_profile').single();
-
-        if (error) {
-            console.error('Error fetching or creating user profile via RPC:', error);
-            // If the RPC fails, we still try to fallback to auth data as a last resort
-            return {
-                id: user.id,
-                email: user.email,
-                last_sign_in_at: user.last_sign_in_at,
-                full_name: user.user_metadata.full_name,
-                avatar_url: user.user_metadata.avatar_url,
-                role: 'user', // Default role on failure
-            };
-        }
-
-        if (!data) {
-            console.error('Profile RPC returned no data.');
-            return null;
-        }
-        
-        // Combine auth data (for email/last_sign_in) with profile data
-        return {
-            id: user.id,
-            email: user.email,
-            last_sign_in_at: user.last_sign_in_at,
-            full_name: data.full_name || user.user_metadata.full_name,
-            avatar_url: data.avatar_url || user.user_metadata.avatar_url,
-            role: data.role,
-        };
-    }
-
-    async getAllUserProfiles() {
-        const { data, error } = await this.client.rpc('get_all_user_profiles_with_email');
-
-        if (error) {
-            console.error("Error fetching all user profiles via RPC:", error);
-            throw error;
-        }
-        
-        return data;
-    }
-
-    async updateUserRole(targetUserId, newRole) {
-        const { error } = await this.client.rpc('update_user_role', {
-            target_user_id: targetUserId,
-            new_role: newRole,
-        });
-        if (error) {
-            console.error('Error updating user role:', error);
-            throw error;
-        }
-        return { success: true };
+        return data?.settings || null;
     }
     
-    // --- Data Viewer & Testing ---
-    async testConnection() {
-        // A quick, lightweight query to confirm we can reach the database.
-        const { error } = await this.client.from('profiles').select('id', { count: 'exact', head: true });
-        if (error) {
-            console.error("Supabase connection test failed:", error);
-            throw error;
-        }
-        return { success: true };
-    }
-
-    async getSampleData(tableName, limit = 10) {
-        if (!tableName) throw new Error("Table name is required.");
-
-        // Define a list of common timestamp columns to try for ordering
-        const orderColumns = ['updated_at', 'created_at', 'modified_time', 'received_at'];
-
-        let query = this.client.from(tableName).select('*').limit(limit);
-
-        // Try to order by the first available timestamp column
-        for (const col of orderColumns) {
-            const { error } = await this.client.from(tableName).select(col).limit(1);
-            if (!error) {
-                query = query.order(col, { ascending: false, nullsFirst: true });
-                break; // Stop after finding a valid column
-            }
-        }
-        
-        try {
-            const { data, error } = await query;
-            if (error) throw error; // Re-throw to be caught below
-            return { data: data || [] };
-        } catch (error) {
-            console.error(`Error fetching sample data from ${tableName}:`, error);
-            return { error: error.message };
-        }
-    }
-
-    // --- DB Management via Supabase Edge Function ---
-    async executeSqlViaFunction(functionUrl, adminToken, sql) {
-        if (!functionUrl) throw new Error("URL функции не настроен.");
-        if (!adminToken) throw new Error("Токен администратора не предоставлен.");
-        
-        const response = await fetch(functionUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.anonKey}`,
-            },
-            body: JSON.stringify({ sql: sql, admin_token: adminToken }),
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            console.error("Edge function error response:", result);
-            const errorMessage = result.error || result.message || `Edge function failed with status ${response.status}`;
-            throw new Error(errorMessage);
-        }
-
-        return result;
-    }
-
-    async getExistingTables(functionUrl, adminToken) {
-        const sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';";
-        const result = await this.executeSqlViaFunction(functionUrl, adminToken, sql);
-        if (result && result.result && Array.isArray(result.result)) {
-            return result.result.map(row => row.table_name);
-        }
-        return [];
-    }
-
-    async getTableSchema(functionUrl, adminToken, tableName) {
-        const sql = `
-            SELECT column_name, data_type 
-            FROM information_schema.columns 
-            WHERE table_schema = 'public' AND table_name = '${tableName}';
-        `;
-        const result = await this.executeSqlViaFunction(functionUrl, adminToken, sql);
-        if (result && result.result && Array.isArray(result.result)) {
-            return result.result; // Returns [{ column_name, data_type }, ...]
-        }
-        return [];
-    }
-
-
-    // --- Proxy Management ---
-    async getProxies() {
-        const { data, error } = await this.client
-            .from('proxies')
-            .select('*')
-            .order('priority', { ascending: true })
-            .order('created_at', { ascending: true });
-
+    async saveUserSettings(settings) {
+        const { error } = await this.client.rpc('upsert_user_settings', { new_settings: settings });
         if (error) throw error;
-        return data || [];
-    }
-    
-    async getActiveProxies() {
-        const { data, error } = await this.client
-            .from('proxies')
-            .select('*')
-            .eq('is_active', true)
-            .order('priority', { ascending: true });
-
-        if (error) throw error;
-        return data || [];
     }
 
-    async addProxy(proxyData) {
-        const { data: { user } } = await this.client.auth.getUser();
-        if (!user) throw new Error("User not authenticated.");
-        
-        const { data, error } = await this.client
-            .from('proxies')
-            .insert({ 
-                ...proxyData, 
-                user_id: user.id,
-            })
-            .select()
-            .single();
-
-        if (error) {
-            if (error.code === '23505') { // uniqueness violation
-                 throw new Error("Этот URL прокси уже существует в вашем хранилище.");
-            }
-            throw error;
-        }
-        return data;
-    }
-    
-    async updateProxy(id, updateData) {
-        const { data, error } = await this.client
-            .from('proxies')
-            .update({ ...updateData, last_checked_at: new Date().toISOString() })
-            .eq('id', id)
-            .select()
-            .single();
-
-        if (error) throw error;
-        return data;
-    }
-
-    async deleteProxy(id) {
-        const { error } = await this.client
-            .from('proxies')
-            .delete()
-            .eq('id', id);
-
-        if (error) throw error;
-        return { success: true };
-    }
-
-    // --- Chat Analytics ---
+    // --- Chat Logging & Sessions ---
     async createNewSession() {
-        const { data: { user } } = await this.client.auth.getUser();
-        if (!user) throw new Error("User not authenticated.");
-
-        const { data, error } = await this.client
-            .from('sessions')
-            .insert({ user_id: user.id })
-            .select('id')
-            .single();
-        
+        const { data, error } = await this.client.from('sessions').insert({}).select().single();
         if (error) throw error;
         return data.id;
     }
 
     async logChatMessage(message, sessionId) {
-        const { data: { user } } = await this.client.auth.getUser();
-        if (!user || !sessionId) return; // Don't throw, just fail silently.
-
-        const payload = {
-            user_id: user.id,
+         if (!sessionId) {
+            console.warn("Cannot log chat message, session ID is missing.");
+            return;
+        }
+        const { error } = await this.client.from('chat_history').insert({
             session_id: sessionId,
             sender: message.sender,
             text_content: message.text,
-            image_metadata: message.image ? { mimeType: message.image.mimeType } : null,
             card_data: message.card,
-            contextual_actions: message.contextualActions
-        };
-
-        const { error } = await this.client.from('chat_history').insert(payload);
+            contextual_actions: message.contextualActions,
+        });
         if (error) {
             console.error("Failed to log chat message:", error);
         }
     }
     
-    async getChatHistoryForAdmin() {
-        // Use the new, secure RPC function instead of a direct query.
-        const { data, error } = await this.client.rpc('get_chat_history_with_user_info');
-
-        if (error) {
-            console.error("Error fetching chat history via RPC:", error);
-            throw error;
-        }
+    // --- Admin Functions ---
+    async getAllUserProfiles() {
+        const { data, error } = await this.client.rpc('get_all_user_profiles_with_email');
+        if (error) throw error;
         return data;
+    }
+    
+    async updateUserRole(userId, newRole) {
+        const { error } = await this.client.rpc('update_user_role', { target_user_id: userId, new_role: newRole });
+        if (error) throw error;
+    }
+
+    async getChatHistoryForAdmin() {
+         const { data, error } = await this.client.rpc('get_chat_history_with_user_info');
+         if (error) throw error;
+         return data;
+    }
+
+    async getFullStats() {
+        const { data, error } = await this.client.rpc('get_full_stats');
+        if (error) throw error;
+        return data;
+    }
+    
+    async incrementActionStat(functionName) {
+        const { error } = await this.client.rpc('increment_stat', { fn_name: functionName });
+        if(error) console.error("Failed to increment stat:", error.message);
+    }
+    
+    // --- Proxy Management ---
+    async getProxies() {
+        const { data, error } = await this.client.from('proxies').select('*').order('created_at', { ascending: false });
+        if (error) throw error;
+        return data;
+    }
+    
+    async getActiveProxies() {
+        const { data, error } = await this.client.from('proxies').select('*').eq('is_active', true).order('priority');
+        if (error) throw error;
+        return data;
+    }
+
+    async addProxy(proxy) {
+        const { data, error } = await this.client.from('proxies').insert(proxy).select().single();
+        if (error) throw error;
+        return data;
+    }
+
+    async updateProxy(id, updates) {
+        const { data, error } = await this.client.from('proxies').update(updates).eq('id', id).select().single();
+        if (error) throw error;
+        return data;
+    }
+
+    async deleteProxy(id) {
+        const { error } = await this.client.from('proxies').delete().eq('id', id);
+        if (error) throw error;
+    }
+    
+    // --- DB Management ---
+    async executeSqlViaFunction(functionUrl, adminToken, sql) {
+        if (!functionUrl || !adminToken) {
+            throw new Error("Management Worker URL or Admin Token is not configured.");
+        }
+
+        const response = await fetch(functionUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${this.anonKey}`
+            },
+            body: JSON.stringify({
+                sql: sql,
+                admin_token: adminToken,
+            }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || `Server responded with status ${response.status}`);
+        }
+
+        return result;
+    }
+
+    async testConnection() {
+        const { error } = await this.client.from('profiles').select('id').limit(1);
+        if (error) throw error;
+        return true;
+    }
+
+    async getSampleData(tableName) {
+        return this.client.from(tableName).select('*').limit(10).order('created_at', { ascending: false });
+    }
+    
+    async getExistingTables(functionUrl, adminToken) {
+        const sql = "SELECT tablename FROM pg_tables WHERE schemaname = 'public';";
+        const result = await this.executeSqlViaFunction(functionUrl, adminToken, sql);
+        return result.result.map(row => row.tablename);
+    }
+
+    async getTableSchema(functionUrl, adminToken, tableName) {
+         const sql = `
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' AND table_name = '${tableName}';
+        `;
+        const result = await this.executeSqlViaFunction(functionUrl, adminToken, sql);
+        return result.result;
     }
 }
