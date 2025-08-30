@@ -96,7 +96,7 @@ function renderStatsTab() {
     `;
 }
 
-function renderDataManagerTab() {
+function renderSyncTab() {
      return `
         <h3 class="text-xl font-bold">Управление данными</h3>
         <p class="text-sm text-slate-600 dark:text-slate-400 my-4">Откройте "Центр управления данными", чтобы просматривать синхронизированную информацию, запускать синхронизацию вручную и отслеживать статусы.</p>
@@ -182,7 +182,7 @@ export function createProfileModal({ currentUserProfile, supabaseService, onClos
                     contentContainer.innerHTML = renderProfileTab(currentUserProfile);
                     break;
                 case 'sync':
-                    contentContainer.innerHTML = renderDataManagerTab();
+                    contentContainer.innerHTML = renderSyncTab();
                     break;
                 case 'users':
                     const users = await supabaseService.getAllUserProfiles();
