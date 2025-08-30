@@ -1,9 +1,7 @@
 import * as Icons from './icons/Icons.js';
 import { getSettings, saveSettings, getSyncStatus } from '../utils/storage.js';
 import { DB_SCHEMAS } from '../services/supabase/schema.js';
-import { createDbExecutionModal } from './DbExecutionModal.js';
 import { createProxyManagerModal } from './ProxyManagerModal.js';
-import { createMigrationModal } from './MigrationModal.js';
 
 // --- HELPERS ---
 const ROLE_DISPLAY_MAP = {
@@ -176,38 +174,31 @@ function renderSyncTab(tasks, state) {
     `;
 }
 
-function renderSchemaTab(state) {
-    const settings = getSettings();
+function renderSchemaTab() {
     return `
-        <div class="p-4 bg-yellow-100/50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300 rounded-lg">
-            <h4 class="font-bold text-lg">Управление схемой БД и Воркером</h4>
-            <p class="text-sm mt-1">Здесь вы можете настроить "Управляющий воркер", который необходим для безопасного автоматического обновления схемы вашей базы данных, а также вручную запустить миграцию.</p>
+        <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg text-sm text-blue-800 dark:text-blue-200 mb-6">
+            <h3 class="font-bold">Управление схемой БД и Воркером</h3>
+            <p class="mt-1">Для безопасного автоматического обновления схемы базы данных (миграции) необходим "Управляющий воркер". Этот пошаговый мастер поможет вам его настроить.</p>
         </div>
-
-        <div class="mt-6 p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
-             <h4 class="font-semibold text-lg mb-3">Конфигурация Воркера</h4>
-             <p class="text-xs text-slate-500 mb-4">Инструкции по созданию воркера находятся в файле <a href="./DB_WORKER_SETUP.md" target="_blank" class="text-blue-500 hover:underline">DB_WORKER_SETUP.md</a>.</p>
-             <div class="space-y-4">
-                 <div>
-                    <label for="worker-url-input" class="font-medium text-sm">URL Управляющего Воркера</label>
-                    <input type="url" id="worker-url-input" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm font-mono" placeholder="https://....supabase.co/functions/v1/db-admin" value="${settings.managementWorkerUrl || ''}">
-                </div>
-                 <div>
-                    <label for="worker-token-input" class="font-medium text-sm">Секретный токен</label>
-                    <input type="password" id="worker-token-input" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm" value="${settings.adminSecretToken || ''}">
-                </div>
-                <button data-action="save-worker-config" class="w-full mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center justify-center gap-2">Сохранить конфигурацию</button>
-             </div>
+        
+        <div class="text-center">
+            <button data-client-action="open_db_setup_wizard" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center gap-2 mx-auto">
+                ${Icons.WandIcon}
+                <span>Открыть Мастер настройки Воркера</span>
+            </button>
+            <p class="text-xs text-slate-500 mt-3">Мастер проведет вас по всем шагам создания функции в Supabase.</p>
         </div>
-
-        <div class="mt-4 p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
-             <h4 class="font-semibold text-lg mb-3">Действия с БД</h4>
+        
+        <div class="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6">
+             <h4 class="font-semibold text-lg mb-3">Ручная миграция</h4>
+             <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Если автоматическое обновление не удалось, вы всегда можете запустить полную миграцию вручную.</p>
             <button data-client-action="open_migration_modal" class="w-full px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-semibold flex items-center justify-center gap-2">
-                ${Icons.DatabaseIcon} <span>Открыть Мастер Миграции БД</span>
+                ${Icons.DatabaseIcon} <span>Открыть Мастер Ручной Миграции БД</span>
             </button>
         </div>
     `;
 }
+
 
 function renderStatsTab(statsData) {
      if (!statsData || Object.keys(statsData).length === 0) { return `<div class="text-center p-8 text-slate-500 dark:text-slate-400">Нет данных для статистики.</div>`; }
@@ -311,7 +302,7 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
                 case 'apiKeys': contentContainer.innerHTML = renderApiKeysTab(state.apiKeys); break;
                 case 'proxies': contentContainer.innerHTML = renderProxiesTab(); break;
                 case 'sync': contentContainer.innerHTML = renderSyncTab(allSyncTasks, state); break;
-                case 'schema': contentContainer.innerHTML = renderSchemaTab(state); break;
+                case 'schema': contentContainer.innerHTML = renderSchemaTab(); break;
                 case 'stats': contentContainer.innerHTML = renderStatsTab(state.stats); break;
                 case 'history': contentContainer.innerHTML = renderHistoryTab(state.history); break;
             }
@@ -381,15 +372,6 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
                  case 'open-proxy-manager': {
                     const manager = createProxyManagerModal({ supabaseService, onClose: () => subModalContainer.innerHTML = '' });
                     subModalContainer.appendChild(manager);
-                    break;
-                }
-                case 'save-worker-config': {
-                    const settings = getSettings();
-                    settings.managementWorkerUrl = document.getElementById('worker-url-input').value.trim();
-                    settings.adminSecretToken = document.getElementById('worker-token-input').value.trim();
-                    saveSettings(settings);
-                    await supabaseService.saveUserSettings(settings);
-                    alert('Конфигурация воркера сохранена.');
                     break;
                 }
                 case 'test-connection': {

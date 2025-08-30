@@ -2,7 +2,7 @@ import * as Icons from './icons/Icons.js';
 import { getSettings } from '../utils/storage.js';
 import { FULL_MIGRATION_SQL } from '../services/supabase/migrations.js';
 
-export function createMigrationModal({ supabaseService, onOpenSettings }) {
+export function createMigrationModal({ supabaseService }) {
     const modalElement = document.createElement('div');
     modalElement.id = 'migration-modal';
     modalElement.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4 animate-fadeIn';
@@ -44,8 +44,8 @@ export function createMigrationModal({ supabaseService, onOpenSettings }) {
             case 'not-configured':
                 iconHtml = `<div class="mx-auto h-12 w-12 text-yellow-500">${Icons.SettingsIcon}</div>`;
                 titleText = 'Автоматическое обновление не настроено';
-                statusText = 'Для автоматического обновления схемы БД необходимо настроить "Управляющий воркер". Откройте Центр Управления для его настройки.';
-                actionsHtml = `<button data-action="open-settings" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-semibold">Настроить Воркер</button>`;
+                statusText = 'Для автоматического обновления схемы БД необходимо настроить "Управляющий воркер". Запустите мастер настройки, чтобы это исправить.';
+                actionsHtml = `<button data-client-action="open_db_setup_wizard" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-semibold">Запустить Мастер настройки</button>`;
                 break;
         }
 
@@ -96,10 +96,6 @@ export function createMigrationModal({ supabaseService, onOpenSettings }) {
                 break;
             case 'retry':
                 runCheck();
-                break;
-            case 'open-settings':
-                onOpenSettings();
-                modalElement.remove(); // Close this modal to avoid overlap
                 break;
         }
     });

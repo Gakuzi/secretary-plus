@@ -11,6 +11,7 @@ import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadin
 import { createCameraView } from './components/CameraView.js';
 import { createAboutModal } from './components/AboutModal.js';
 import { createMigrationModal } from './components/MigrationModal.js';
+import { createDbSetupWizard } from './components/DbSetupWizard.js';
 import { SettingsIcon, QuestionMarkCircleIcon, UserIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 import { SUPABASE_CONFIG } from './config.js';
@@ -333,11 +334,27 @@ async function handleGlobalClick(event) {
         const action = clientActionButton.dataset.clientAction;
         switch (action) {
             case 'open_settings': showSettingsModal(); break;
-            case 'open_migration_modal':
-                const { element: migrationModal } = createMigrationModal({ supabaseService, onOpenSettings: () => showSettingsModal() });
+            case 'open_migration_modal': {
+                const { element: migrationModal } = createMigrationModal({ supabaseService, onOpenSettings: showSettingsModal });
                 globalModalContainer.innerHTML = '';
                 globalModalContainer.appendChild(migrationModal);
                 break;
+            }
+            case 'open_db_setup_wizard': {
+                // Close any other open modals first
+                modalContainer.innerHTML = '';
+                globalModalContainer.innerHTML = '';
+                const wizard = createDbSetupWizard({
+                    supabaseService: supabaseService,
+                    onComplete: () => {
+                        globalModalContainer.innerHTML = '';
+                        // Optionally reopen settings if needed
+                        showSettingsModal();
+                    }
+                });
+                globalModalContainer.appendChild(wizard);
+                break;
+            }
         }
         return;
     }
