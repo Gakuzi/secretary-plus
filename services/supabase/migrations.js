@@ -420,4 +420,56 @@ BEGIN
   DO UPDATE SET call_count = action_stats.call_count + 1;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Новая RPC функция для безопасного получения истории чата администратором
+CREATE OR REPLACE FUNCTION public.get_chat_history_with_user_info()
+RETURNS TABLE (
+    id BIGINT,
+    user_id UUID,
+    session_id UUID,
+    sender public.chat_sender,
+    text_content TEXT,
+    image_metadata JSONB,
+    card_data JSONB,
+    contextual_actions JSONB,
+    created_at TIMESTAMPTZ,
+    full_name TEXT,
+    avatar_url TEXT,
+    email TEXT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  -- Эта функция может быть вызвана только администратором
+  IF NOT is_admin() THEN
+    RAISE EXCEPTION 'У вас нет прав для выполнения этой операции.';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    h.id,
+    h.user_id,
+    h.session_id,
+    h.sender,
+    h.text_content,
+    h.image_metadata,
+    h.card_data,
+    h.contextual_actions,
+    h.created_at,
+    p.full_name,
+    p.avatar_url,
+    u.email
+  FROM
+    public.chat_history h
+  LEFT JOIN
+    public.profiles p ON h.user_id = p.id
+  LEFT JOIN
+    auth.users u ON h.user_id = u.id
+  ORDER BY
+    h.created_at DESC
+  LIMIT 500;
+END;
+$$;
 `;

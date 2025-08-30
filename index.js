@@ -6,7 +6,7 @@ import { getSettings, saveSettings, getSyncStatus, saveSyncStatus } from './util
 import { createSetupWizard } from './components/SetupWizard.js';
 import { createSettingsModal } from './components/SettingsModal.js';
 import { createProfileModal } from './components/ProfileModal.js';
-import { createStatsModal } from './components/StatsModal.js';
+import { createDataManagerModal } from './components/DataManagerModal.js'; // New import
 import { createHelpModal } from './components/HelpModal.js';
 import { createDbSetupWizard } from './components/DbSetupWizard.js';
 import { createProxySetupWizard } from './components/ProxySetupWizard.js';
@@ -14,7 +14,7 @@ import { createProxyManagerModal } from './components/ProxyManagerModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
-import { SettingsIcon, ChartBarIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
+import { SettingsIcon, DatabaseIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js'; // Updated import
 import { MessageSender } from './types.js';
 import { SUPABASE_CONFIG, GOOGLE_CLIENT_ID } from './config.js';
 import { createMigrationModal } from './components/MigrationModal.js';
@@ -33,7 +33,7 @@ const APP_STRUCTURE_CONTEXT = `
 - services/supabase/migrations.js: SQL-скрипты для автоматического обновления схемы БД.
 - components/SetupWizard.js: Мастер первоначальной настройки.
 - components/SettingsModal.js: Окно для управления настройками после входа.
-- components/ProfileModal.js: Окно профиля, где отображается статус синхронизации.
+- components/DataManagerModal.js: Новый центр управления данными и синхронизацией.
 - components/DbSetupWizard.js: Мастер настройки управляющего воркера для автоматического обновления схемы БД.
 - components/ProxySetupWizard.js: Мастер настройки прокси-воркера для Gemini.
 `;
@@ -68,7 +68,6 @@ let state = {
     userProfile: null,
     supabaseUser: null,
     isLoading: false,
-    actionStats: {},
     lastSeenEmailId: null,
     syncStatus: getSyncStatus(),
     isSyncing: false,
@@ -93,7 +92,7 @@ const serviceProviders = {
 
 // --- DOM ELEMENTS ---
 // These will be populated after the app's structure is rendered.
-let appContainer, authContainer, mainContent, settingsButton, helpButton, statsButton, modalContainer, cameraViewContainer, wizardContainer;
+let appContainer, authContainer, mainContent, settingsButton, helpButton, dataManagerButton, modalContainer, cameraViewContainer, wizardContainer;
 
 // --- ERROR HANDLING ---
 function showSystemError(text) {
@@ -140,7 +139,7 @@ function renderMainContent() {
 
 // --- SYNC LOGIC ---
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
-const syncTasks = [
+export const syncTasks = [
     { name: 'Calendar', label: 'Календарь', icon: 'CalendarIcon', tableName: 'calendar_events', providerFn: () => googleProvider.getCalendarEvents({ showDeleted: true, max_results: 2500 }), supabaseFn: (items) => supabaseService.syncCalendarEvents(items) },
     { name: 'Tasks', label: 'Задачи', icon: 'CheckSquareIcon', tableName: 'tasks', providerFn: () => googleProvider.getTasks({ showCompleted: true, showHidden: true, max_results: 2000 }), supabaseFn: (items) => supabaseService.syncTasks(items) },
     { name: 'Contacts', label: 'Контакты', icon: 'UsersIcon', tableName: 'contacts', providerFn: () => googleProvider.getAllContacts(), supabaseFn: (items) => supabaseService.syncContacts(items) },
@@ -148,25 +147,37 @@ const syncTasks = [
     { name: 'Emails', label: 'Почта', icon: 'EmailIcon', tableName: 'emails', providerFn: () => googleProvider.getRecentEmails({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncEmails(items) },
 ];
 
+async function runSingleSync(taskName) {
+    if (!state.isGoogleConnected || !state.isSupabaseReady || !supabaseService) {
+        throw new Error("Сервисы не готовы для синхронизации.");
+    }
+    const task = syncTasks.find(t => t.name === taskName);
+    if (!task) throw new Error(`Задача синхронизации "${taskName}" не найдена.`);
+
+    try {
+        const items = await task.providerFn();
+        await task.supabaseFn(items);
+        state.syncStatus[task.name] = { lastSync: new Date().toISOString(), error: null };
+    } catch (error) {
+        console.error(`Failed to sync ${task.name}:`, error);
+        state.syncStatus[task.name] = { ...(state.syncStatus[task.name] || {}), error: error.message };
+        throw error; // Re-throw so the caller knows it failed
+    } finally {
+        saveSyncStatus(state.syncStatus);
+    }
+}
+
 async function runAllSyncs() {
     if (state.isSyncing || !state.isGoogleConnected || !state.isSupabaseReady || !supabaseService) return;
     state.isSyncing = true;
     for (const task of syncTasks) {
         try {
-            const items = await task.providerFn();
-            await task.supabaseFn(items);
-            state.syncStatus[task.name] = { lastSync: new Date().toISOString(), error: null };
+            await runSingleSync(task.name);
         } catch (error) {
-            console.error(`Failed to sync ${task.name}:`, error);
-            state.syncStatus[task.name] = { ...(state.syncStatus[task.name] || {}), error: error.message };
+            // Error is already logged and saved by runSingleSync, just continue to the next task.
         }
-        // Save status after each task to ensure progress is not lost if one fails.
-        saveSyncStatus(state.syncStatus);
     }
     state.isSyncing = false;
-    // The profile modal, if open, will need to be re-rendered or have its state updated.
-    // For simplicity, we can just re-open it or rely on its own internal refresh mechanism if it has one.
-    // The current implementation re-renders the sync section on its own.
 }
 
 
@@ -284,7 +295,6 @@ async function handleAuthentication() {
             if (state.isSupabaseReady && supabaseService) {
                 const supabaseProfile = await supabaseService.getCurrentUserProfile();
                 state.userProfile = supabaseProfile || { ...googleProfile, role: 'user' }; // Fallback to Google profile if Supabase profile fails
-                state.actionStats = await supabaseService.getActionStats();
             } else {
                  state.userProfile = googleProfile;
             }
@@ -389,7 +399,6 @@ async function processBotResponse(userMessage, isSilent) {
 
     if (botMessage.functionCallName && supabaseService) {
         supabaseService.incrementActionStat(botMessage.functionCallName);
-        state.actionStats[botMessage.functionCallName] = (state.actionStats[botMessage.functionCallName] || 0) + 1;
     }
 
     if (supabaseService && state.sessionId) {
@@ -640,70 +649,21 @@ async function showProfileModal() {
         if (!currentUserProfile) {
             throw new Error("Не удалось загрузить профиль пользователя.");
         }
-
-        let allUsers = [];
-        let chatHistory = [];
-        const isAdmin = ['admin', 'owner'].includes(currentUserProfile.role);
-        if (state.isSupabaseReady && isAdmin) {
-            allUsers = await supabaseService.getAllUserProfiles();
-            chatHistory = await supabaseService.getChatHistoryForAdmin();
-        }
         
         modalContainer.innerHTML = ''; // Clear loading spinner
-        const modal = createProfileModal(
+        const modal = createProfileModal({
             currentUserProfile,
-            allUsers,
-            chatHistory,
-            state.settings,
-            {
-                onClose: () => { modalContainer.innerHTML = ''; },
-                onSave: async (newSettings) => {
-                    state.settings = newSettings;
-                    if (supabaseService) {
-                        await supabaseService.saveUserSettings(newSettings);
-                    }
-                    saveSettings(newSettings);
-                    googleProvider.setTimezone(newSettings.timezone);
-                    if(newSettings.enableAutoSync) startAutoSync(); else stopAutoSync();
-                    if(newSettings.enableEmailPolling) setupEmailPolling(); else stopEmailPolling();
-                    startAutoProxyTesting(); // Restart proxy testing based on new settings
-                    modalContainer.innerHTML = ''; // Close the modal after saving.
-                },
-                onLogout: handleLogout,
-                onDelete: async () => {
-                    if (confirm('Вы уверены, что хотите удалить все ваши настройки из облака? Это действие необратимо.')) {
-                        await supabaseService.deleteUserSettings();
-                        state.settings.isSupabaseEnabled = false;
-                        saveSettings(state.settings);
-                        window.location.reload();
-                    }
-                },
-                onForceSync: runAllSyncs,
-                onAnalyzeError: async ({ context, error }) => analyzeSyncErrorWithGemini({
-                    errorMessage: error,
-                    context: context,
-                    appStructure: APP_STRUCTURE_CONTEXT,
-                    apiKey: state.settings.geminiApiKey,
-                    proxyUrl: await getActiveProxy(),
-                }),
-                onViewData: async ({ tableName }) => supabaseService.getSampleData(tableName),
-                onLaunchDbWizard: () => {
-                    modalContainer.innerHTML = '';
-                    showDbSetupWizard();
-                },
-                onUpdateUserRole: async (userId, newRole) => {
-                    try {
-                        await supabaseService.updateUserRole(userId, newRole);
-                        await showProfileModal(); // Refresh modal to show changes
-                    } catch (error) {
-                        showSystemError(`Не удалось обновить роль: ${error.message}`);
-                    }
+            onClose: () => { modalContainer.innerHTML = ''; },
+            onLogout: handleLogout,
+            onDelete: async () => {
+                if (confirm('Вы уверены, что хотите удалить все ваши настройки из облака? Это действие необратимо.')) {
+                    await supabaseService.deleteUserSettings();
+                    state.settings.isSupabaseEnabled = false;
+                    saveSettings(state.settings);
+                    window.location.reload();
                 }
             },
-            state.syncStatus,
-            syncTasks,
-            SUPABASE_CONFIG.url
-        );
+        });
         modalContainer.appendChild(modal);
 
     } catch (error) {
@@ -740,10 +700,14 @@ function showHelpModal() {
     modalContainer.appendChild(modal);
 }
 
-function showStatsModal() {
+function showDataManagerModal() {
     modalContainer.innerHTML = '';
-    const modal = createStatsModal(state.actionStats, () => {
-        modalContainer.innerHTML = '';
+    const modal = createDataManagerModal({
+        supabaseService: supabaseService,
+        syncTasks: syncTasks,
+        onClose: () => modalContainer.innerHTML = '',
+        onRunSingleSync: runSingleSync,
+        onRunAllSyncs: runAllSyncs,
     });
     modalContainer.appendChild(modal);
 }
@@ -916,18 +880,18 @@ async function startFullApp() {
     mainContent = document.getElementById('main-content');
     settingsButton = document.getElementById('settings-button');
     helpButton = document.getElementById('help-button');
-    statsButton = document.getElementById('stats-button');
+    dataManagerButton = document.getElementById('data-manager-button');
     modalContainer = document.getElementById('modal-container');
     cameraViewContainer = document.getElementById('camera-view-container');
     wizardContainer = document.getElementById('setup-wizard-container');
 
     // Hook up header button listeners
     settingsButton.innerHTML = SettingsIcon;
-    statsButton.innerHTML = ChartBarIcon;
+    dataManagerButton.innerHTML = DatabaseIcon;
     helpButton.innerHTML = QuestionMarkCircleIcon;
     settingsButton.addEventListener('click', showSettingsModal);
     helpButton.addEventListener('click', showHelpModal);
-    statsButton.addEventListener('click', showStatsModal);
+    dataManagerButton.addEventListener('click', showDataManagerModal);
     
     // Add the global click handler to the body to catch all dynamic actions
     document.body.addEventListener('click', handleGlobalClick);

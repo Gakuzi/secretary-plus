@@ -519,7 +519,17 @@ export class SupabaseService {
         return { success: true };
     }
     
-    // --- Data Viewer ---
+    // --- Data Viewer & Testing ---
+    async testConnection() {
+        // A quick, lightweight query to confirm we can reach the database.
+        const { error } = await this.client.from('profiles').select('id', { count: 'exact', head: true });
+        if (error) {
+            console.error("Supabase connection test failed:", error);
+            throw error;
+        }
+        return { success: true };
+    }
+
     async getSampleData(tableName, limit = 10) {
         if (!tableName) throw new Error("Table name is required.");
 
@@ -676,17 +686,11 @@ export class SupabaseService {
     }
     
     async getChatHistoryForAdmin() {
-        const { data, error } = await this.client
-            .from('chat_history')
-            .select(`
-                *,
-                user:profiles(full_name, avatar_url, users(email))
-            `)
-            .order('created_at', { ascending: false })
-            .limit(500); // Limit to a reasonable number for performance
+        // Use the new, secure RPC function instead of a direct query.
+        const { data, error } = await this.client.rpc('get_chat_history_with_user_info');
 
         if (error) {
-            console.error("Error fetching chat history for admin:", error);
+            console.error("Error fetching chat history via RPC:", error);
             throw error;
         }
         return data;
