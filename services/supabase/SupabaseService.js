@@ -1,22 +1,5 @@
 import { GOOGLE_SCOPES } from '../../constants.js';
 
-// Helper function to safely parse date strings from Gmail API
-function parseGmailDate(dateString) {
-    if (!dateString) return null;
-    try {
-        // Gmail date format can be inconsistent, Date.parse is more robust.
-        const timestamp = Date.parse(dateString);
-        if (isNaN(timestamp)) {
-            console.warn(`Could not parse invalid date string: ${dateString}`);
-            return null;
-        }
-        return new Date(timestamp).toISOString();
-    } catch (e) {
-        console.error(`Error parsing date string: ${dateString}`, e);
-        return null;
-    }
-}
-
 export class SupabaseService {
     constructor(supabaseUrl, supabaseAnonKey) {
         if (!window.supabase) {
@@ -228,12 +211,17 @@ export class SupabaseService {
             (e, userId) => ({
                 user_id: userId,
                 source_id: e.id,
+                thread_id: e.threadId,
                 subject: e.subject,
-                sender: e.from,
                 snippet: e.snippet,
-                received_at: parseGmailDate(e.date),
+                sender_info: e.senderInfo,
+                recipients_info: e.recipientsInfo,
+                received_at: e.receivedAt,
                 full_body: e.body,
+                has_attachments: e.hasAttachments,
                 attachments_metadata: e.attachments,
+                label_ids: e.labelIds,
+                gmail_link: e.gmailLink,
             })
         );
     }

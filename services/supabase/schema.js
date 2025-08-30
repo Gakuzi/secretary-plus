@@ -328,9 +328,23 @@ export const SERVICE_SCHEMAS = {
         tableName: 'emails',
         sql: `
             CREATE TABLE public.emails (
-                id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY, user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-                source_id TEXT NOT NULL, subject TEXT, sender TEXT, snippet TEXT, received_at TIMESTAMPTZ, full_body TEXT,
-                attachments_metadata JSONB, created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now(), UNIQUE (user_id, source_id)
+                id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+                user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+                source_id TEXT NOT NULL,
+                thread_id TEXT,
+                subject TEXT,
+                snippet TEXT,
+                sender_info JSONB,
+                recipients_info JSONB,
+                received_at TIMESTAMPTZ,
+                full_body TEXT,
+                has_attachments BOOLEAN DEFAULT false,
+                attachments_metadata JSONB,
+                label_ids TEXT[],
+                gmail_link TEXT,
+                created_at TIMESTAMPTZ DEFAULT now(),
+                updated_at TIMESTAMPTZ DEFAULT now(),
+                UNIQUE (user_id, source_id)
             );
             COMMENT ON TABLE public.emails IS 'Кэшированные письма из Gmail для быстрого поиска.';
             ALTER TABLE public.emails ENABLE ROW LEVEL SECURITY;

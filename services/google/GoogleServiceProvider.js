@@ -19,6 +19,24 @@ function base64UrlDecode(str) {
     }
 }
 
+// Helper to parse a single email address header (like From)
+function parseSingleEmailAddress(header) {
+    if (!header) return null;
+    const match = header.match(/(.*)<(.*)>/);
+    if (match) {
+        const name = match[1].trim().replace(/^['"]|['"]$/g, '');
+        return { name: name || match[2].trim(), email: match[2].trim() };
+    }
+    return { name: header.trim(), email: header.trim() };
+}
+
+// Helper to parse headers with multiple email addresses (like To, Cc)
+function parseMultipleEmailAddresses(header) {
+    if (!header) return [];
+    // Split by comma, but not inside quotes
+    return header.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/g).map(e => parseSingleEmailAddress(e.trim())).filter(Boolean);
+}
+
 
 // Finds the most appropriate text part from a Gmail message payload
 function getEmailBody(payload) {
@@ -448,84 +466,103 @@ export class GoogleServiceProvider {
         return { success: true, taskId };
     }
 
-    async getRecentEmails({ max_results = 5 }) {
+    async getRecentEmails({ max_results = 50 }) {
         await this.ensureGapiIsReady();
         await this.gapi.client.load('gmail', 'v1');
-
+    
         const listResponse = await this.gapi.client.gmail.users.messages.list({
             userId: 'me',
             maxResults: max_results,
-            q: 'in:inbox -in:draft -in:spam -in:trash',
+            q: 'in:inbox category:primary -in:draft -in:spam -in:trash',
         });
-
+    
         const messages = listResponse.result.messages || [];
         if (messages.length === 0) {
             return [];
         }
-
-        const batch = this.gapi.client.newBatch();
-        messages.forEach(message => {
-            batch.add(this.gapi.client.gmail.users.messages.get({
-                userId: 'me',
-                id: message.id,
-                format: 'full', // Request full payload to get body
-            }));
-        });
-        
-        const batchResponse = await batch;
-        
-        const emails = [];
-        Object.values(batchResponse.result).forEach(res => {
-            // Check if the individual batch item resulted in an error
-            if (res.error) {
-                console.warn('Skipping an email in batch due to Google API error:', res.error);
-                return; // Skip this failed item and continue with the next.
-            }
-
+    
+        const allEmails = [];
+        const CHUNK_SIZE = 100; // Max batch size for Gmail API is 100
+    
+        for (let i = 0; i < messages.length; i += CHUNK_SIZE) {
+            const chunk = messages.slice(i, i + CHUNK_SIZE);
+            const batch = this.gapi.client.newBatch();
+    
+            chunk.forEach(message => {
+                batch.add(this.gapi.client.gmail.users.messages.get({
+                    userId: 'me',
+                    id: message.id,
+                    format: 'full',
+                }));
+            });
+            
             try {
-                const payload = res.result;
-                if (!payload || !payload.id || !payload.payload || !payload.payload.headers) {
-                    console.warn('Skipping a malformed email response from batch.', res);
-                    return; // Skip this one
-                }
-
-                const headers = payload.payload.headers;
-                const getHeader = (name) => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
-
-                const attachments = [];
-                const parts = payload.payload.parts || [];
-                const findAttachments = (parts) => {
-                     for (const part of parts) {
-                        if (part.filename && part.body && part.body.attachmentId) {
-                            attachments.push({
-                                filename: part.filename,
-                                mimeType: part.mimeType,
-                                size: part.body.size,
-                            });
-                        }
-                        if (part.parts) {
-                            findAttachments(part.parts);
-                        }
+                const batchResponse = await batch;
+                const batchResult = batchResponse.result;
+    
+                Object.values(batchResult).forEach(res => {
+                    if (res.error) {
+                        console.warn('Skipping an email in batch due to Google API error:', res.error);
+                        return;
                     }
-                };
-                findAttachments(parts);
-
-                emails.push({
-                    id: payload.id,
-                    snippet: payload.snippet,
-                    subject: getHeader('Subject'),
-                    from: getHeader('From'),
-                    date: getHeader('Date'),
-                    body: getEmailBody(payload.payload), // Extract and decode body
-                    attachments: attachments,
-                    gmailLink: `https://mail.google.com/mail/u/0/#inbox/${payload.id}`
+    
+                    try {
+                        const payload = res.result;
+                        if (!payload || !payload.id || !payload.payload) {
+                            console.warn('Skipping a malformed email response from batch.', res);
+                            return;
+                        }
+    
+                        const headers = payload.payload.headers || [];
+                        const getHeader = (name) => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
+    
+                        const attachments = [];
+                        const findAttachments = (parts) => {
+                             if (!parts) return;
+                             for (const part of parts) {
+                                if (part.filename && part.body && part.body.attachmentId) {
+                                    attachments.push({
+                                        filename: part.filename,
+                                        mimeType: part.mimeType,
+                                        size: part.body.size,
+                                    });
+                                }
+                                if (part.parts) {
+                                    findAttachments(part.parts);
+                                }
+                            }
+                        };
+                        findAttachments(payload.payload.parts);
+    
+                        allEmails.push({
+                            id: payload.id,
+                            threadId: payload.threadId,
+                            snippet: payload.snippet,
+                            subject: getHeader('Subject'),
+                            senderInfo: parseSingleEmailAddress(getHeader('From')),
+                            recipientsInfo: {
+                                to: parseMultipleEmailAddresses(getHeader('To')),
+                                cc: parseMultipleEmailAddresses(getHeader('Cc')),
+                            },
+                            receivedAt: payload.internalDate ? new Date(parseInt(payload.internalDate, 10)).toISOString() : null,
+                            body: getEmailBody(payload.payload),
+                            hasAttachments: attachments.length > 0,
+                            attachments: attachments,
+                            labelIds: payload.labelIds || [],
+                            gmailLink: `https://mail.google.com/mail/u/0/#inbox/${payload.id}`,
+                            from: getHeader('From'),
+                            date: getHeader('Date'),
+                        });
+                    } catch (e) {
+                        console.error(`Error processing an individual email (ID: ${res?.result?.id}) during sync. Skipping it.`, e);
+                    }
                 });
-            } catch (e) {
-                console.error(`Error processing an individual email (ID: ${res?.result?.id}) during sync. Skipping it.`, e);
+            } catch (batchError) {
+                 console.error("A batch request for emails failed:", batchError);
             }
-        });
+        }
         
-        return emails;
+        return allEmails;
     }
 
     async sendEmail(details) {
