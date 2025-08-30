@@ -402,4 +402,3 @@ BEGIN
   DO UPDATE SET call_count = action_stats.call_count + 1;
 END;
 $$ LANGUAGE plpgsql;
-`.trim();
