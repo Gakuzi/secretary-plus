@@ -497,31 +497,14 @@ export class SupabaseService {
     }
 
     async getAllUserProfiles() {
-        const { data, error } = await this.client
-            .from('profiles')
-            .select(`
-                id,
-                full_name,
-                avatar_url,
-                role,
-                users(email, last_sign_in_at)
-            `)
-            .order('role', { ascending: false });
+        const { data, error } = await this.client.rpc('get_all_user_profiles_with_email');
 
         if (error) {
-            console.error("Error fetching all user profiles:", error);
+            console.error("Error fetching all user profiles via RPC:", error);
             throw error;
         }
         
-        // Flatten the response for easier use in the UI
-        return data.map(p => ({
-            id: p.id,
-            full_name: p.full_name || p.users?.email,
-            avatar_url: p.avatar_url,
-            role: p.role,
-            email: p.users?.email,
-            last_sign_in_at: p.users?.last_sign_in_at,
-        }));
+        return data;
     }
 
     async updateUserRole(targetUserId, newRole) {
@@ -604,6 +587,19 @@ export class SupabaseService {
         const result = await this.executeSqlViaFunction(functionUrl, adminToken, sql);
         if (result && result.result && Array.isArray(result.result)) {
             return result.result.map(row => row.table_name);
+        }
+        return [];
+    }
+
+    async getTableSchema(functionUrl, adminToken, tableName) {
+        const sql = `
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' AND table_name = '${tableName}';
+        `;
+        const result = await this.executeSqlViaFunction(functionUrl, adminToken, sql);
+        if (result && result.result && Array.isArray(result.result)) {
+            return result.result; // Returns [{ column_name, data_type }, ...]
         }
         return [];
     }

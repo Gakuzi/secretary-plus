@@ -3,7 +3,7 @@ import { SupabaseService } from '../services/supabase/SupabaseService.js';
 import * as Icons from './icons/Icons.js';
 import { createProxyManagerModal } from './ProxyManagerModal.js';
 
-export function createSetupWizard({ onComplete, onExit, googleProvider, supabaseConfig, googleClientId, resumeState = null }) {
+export function createSetupWizard({ onComplete, onExit, googleProvider, supabaseService, supabaseConfig, googleClientId, resumeState = null }) {
     const wizardElement = document.createElement('div');
     wizardElement.className = 'fixed inset-0 bg-slate-900 z-50 flex items-center justify-center p-4';
     
@@ -15,8 +15,6 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         userProfile: null,
         isLoading: false,
     };
-
-    let supabaseService = null;
 
     if (resumeState) {
         state = { ...state, ...resumeState };
@@ -34,14 +32,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
     let render; // Forward-declare
     let handleNext; // Forward-declare
 
-    const initSupabase = () => {
-        if (!supabaseService && state.authChoice === 'supabase') {
-            supabaseService = new SupabaseService(supabaseConfig.url, supabaseConfig.anonKey);
-        }
-    };
-    
     const showProxyManagerModal = () => {
-        initSupabase();
         if (!supabaseService) {
             alert("Ошибка: Сервис Supabase не инициализирован. Невозможно открыть менеджер прокси.");
             return;
@@ -192,7 +183,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                             <p class="text-sm text-slate-500 dark:text-slate-400">Шаг ${stepIndex + 1} из ${STEPS.length}: ${stepConfig.title}</p>
                         </div>
                     </div>
-                    <button data-action="exit" class="ml-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></button>
+                    <button data-action="exit" class="ml-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></button>
                 </header>
                 <main class="flex-1 p-6 overflow-y-auto bg-slate-50 dark:bg-slate-900/70" id="wizard-content"></main>
                 <footer class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center" id="wizard-footer"></footer>
@@ -225,9 +216,6 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         
         if (nextStepIndex < STEPS.length) {
             state.currentStep = nextStepIndex;
-            if (STEPS[state.currentStep].id === 'proxies' && state.authChoice === 'supabase') {
-                initSupabase();
-            }
             render();
         }
     };
@@ -290,7 +278,12 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         sessionStorage.setItem('wizardState', JSON.stringify(resumeData));
 
         if (state.authChoice === 'supabase') {
-            initSupabase();
+            if (!supabaseService) {
+                alert("Ошибка: сервис Supabase не инициализирован.");
+                state.isLoading = false;
+                render();
+                return;
+            }
             await supabaseService.signInWithGoogle();
             // The browser will redirect, and the main app logic will handle the callback.
         } else {
@@ -305,13 +298,14 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         render();
 
         if (state.authChoice === 'supabase') {
-            initSupabase();
-            const { data: { session } } = await supabaseService.client.auth.getSession();
-            if (session) {
-                googleProvider.setAuthToken(session.provider_token);
-                const cloudSettings = await supabaseService.getUserSettings();
-                if (cloudSettings) {
-                    state.config = { ...state.config, ...cloudSettings };
+            if (supabaseService) {
+                const { data: { session } } = await supabaseService.client.auth.getSession();
+                if (session) {
+                    googleProvider.setAuthToken(session.provider_token);
+                    const cloudSettings = await supabaseService.getUserSettings();
+                    if (cloudSettings) {
+                        state.config = { ...state.config, ...cloudSettings };
+                    }
                 }
             }
         } else {

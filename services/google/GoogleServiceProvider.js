@@ -496,70 +496,92 @@ export class GoogleServiceProvider {
                 }));
             });
             
-            try {
-                const batchResponse = await batch;
-                const batchResult = batchResponse.result;
-    
-                Object.values(batchResult).forEach(res => {
-                    if (res.error) {
-                        console.warn('Skipping an email in batch due to Google API error:', res.error);
+            let attempt = 0;
+            const maxRetries = 3;
+            let batchResponse;
+            let success = false;
+
+            while (attempt < maxRetries && !success) {
+                try {
+                    batchResponse = await batch;
+                    success = true; // If no error, we are successful
+                } catch (batchError) {
+                    attempt++;
+                    if (batchError.status === 429 && attempt < maxRetries) {
+                        const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                        console.warn(`Gmail API rate limit exceeded. Retrying in ${Math.round(delay / 1000)}s... (Attempt ${attempt}/${maxRetries})`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    } else {
+                        console.error("A non-retriable batch request for emails failed:", batchError);
+                        throw batchError; // Re-throw if it's not a rate limit error or retries exhausted
+                    }
+                }
+            }
+            
+            if (!success) {
+                console.error("Batch request for emails failed after multiple retries.");
+                continue; // Skip to the next chunk
+            }
+
+            const batchResult = batchResponse.result;
+
+            Object.values(batchResult).forEach(res => {
+                if (res.error) {
+                    console.warn('Skipping an email in batch due to Google API error:', res.error);
+                    return;
+                }
+
+                try {
+                    const payload = res.result;
+                    if (!payload || !payload.id || !payload.payload) {
+                        console.warn('Skipping a malformed email response from batch.', res);
                         return;
                     }
-    
-                    try {
-                        const payload = res.result;
-                        if (!payload || !payload.id || !payload.payload) {
-                            console.warn('Skipping a malformed email response from batch.', res);
-                            return;
-                        }
-    
-                        const headers = payload.payload.headers || [];
-                        const getHeader = (name) => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
-    
-                        const attachments = [];
-                        const findAttachments = (parts) => {
-                             if (!parts) return;
-                             for (const part of parts) {
-                                if (part.filename && part.body && part.body.attachmentId) {
-                                    attachments.push({
-                                        filename: part.filename,
-                                        mimeType: part.mimeType,
-                                        size: part.body.size,
-                                    });
-                                }
-                                if (part.parts) {
-                                    findAttachments(part.parts);
-                                }
+
+                    const headers = payload.payload.headers || [];
+                    const getHeader = (name) => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
+
+                    const attachments = [];
+                    const findAttachments = (parts) => {
+                         if (!parts) return;
+                         for (const part of parts) {
+                            if (part.filename && part.body && part.body.attachmentId) {
+                                attachments.push({
+                                    filename: part.filename,
+                                    mimeType: part.mimeType,
+                                    size: part.body.size,
+                                });
                             }
-                        };
-                        findAttachments(payload.payload.parts);
-    
-                        allEmails.push({
-                            id: payload.id,
-                            threadId: payload.threadId,
-                            snippet: payload.snippet,
-                            subject: getHeader('Subject'),
-                            senderInfo: parseSingleEmailAddress(getHeader('From')),
-                            recipientsInfo: {
-                                to: parseMultipleEmailAddresses(getHeader('To')),
-                                cc: parseMultipleEmailAddresses(getHeader('Cc')),
-                            },
-                            receivedAt: payload.internalDate ? new Date(parseInt(payload.internalDate, 10)).toISOString() : null,
-                            body: getEmailBody(payload.payload),
-                            hasAttachments: attachments.length > 0,
-                            attachments: attachments,
-                            labelIds: payload.labelIds || [],
-                            gmailLink: `https://mail.google.com/mail/u/0/#inbox/${payload.id}`,
-                            from: getHeader('From'),
-                            date: getHeader('Date'),
-                        });
-                    } catch (e) {
-                        console.error(`Error processing an individual email (ID: ${res?.result?.id}) during sync. Skipping it.`, e);
-                    }
-                });
-            } catch (batchError) {
-                 console.error("A batch request for emails failed:", batchError);
-            }
+                            if (part.parts) {
+                                findAttachments(part.parts);
+                            }
+                        }
+                    };
+                    findAttachments(payload.payload.parts);
+
+                    allEmails.push({
+                        id: payload.id,
+                        threadId: payload.threadId,
+                        snippet: payload.snippet,
+                        subject: getHeader('Subject'),
+                        senderInfo: parseSingleEmailAddress(getHeader('From')),
+                        recipientsInfo: {
+                            to: parseMultipleEmailAddresses(getHeader('To')),
+                            cc: parseMultipleEmailAddresses(getHeader('Cc')),
+                        },
+                        receivedAt: payload.internalDate ? new Date(parseInt(payload.internalDate, 10)).toISOString() : null,
+                        body: getEmailBody(payload.payload),
+                        hasAttachments: attachments.length > 0,
+                        attachments: attachments,
+                        labelIds: payload.labelIds || [],
+                        gmailLink: `https://mail.google.com/mail/u/0/#inbox/${payload.id}`,
+                        from: getHeader('From'),
+                        date: getHeader('Date'),
+                    });
+                } catch (e) {
+                    console.error(`Error processing an individual email (ID: ${res?.result?.id}) during sync. Skipping it.`, e);
+                }
+            });
         }
         
         return allEmails;

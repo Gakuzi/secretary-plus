@@ -939,6 +939,39 @@ async function startFullApp() {
 }
 
 /**
+ * Ensures all external libraries loaded from CDN are available before starting the app.
+ * @returns {Promise<void>} A promise that resolves when all libraries are loaded.
+ */
+function waitForExternalLibs() {
+    return new Promise((resolve, reject) => {
+        const timeout = 10000; // 10 seconds
+        const interval = 100;
+        let elapsed = 0;
+
+        const check = () => {
+            if (window.google && window.gapi && window.supabase && window.pdfjsLib && window.Chart) {
+                resolve();
+            } else {
+                elapsed += interval;
+                if (elapsed >= timeout) {
+                    const missing = [
+                        !window.google && 'Google Identity',
+                        !window.gapi && 'Google API Client',
+                        !window.supabase && 'Supabase Client',
+                        !window.pdfjsLib && 'PDF.js',
+                        !window.Chart && 'Chart.js'
+                    ].filter(Boolean);
+                    reject(new Error(`Не удалось загрузить внешние библиотеки: ${missing.join(', ')}`));
+                } else {
+                    setTimeout(check, interval);
+                }
+            }
+        };
+        check();
+    });
+}
+
+/**
  * Main entry point. Decides whether to handle an auth callback or start the app normally.
  */
 async function main() {
@@ -996,8 +1029,14 @@ async function main() {
     }
 }
 
-
-main().catch(error => {
-    console.error("An unhandled error occurred during app startup:", error);
-    document.body.innerHTML = `<div class="p-4 text-red-500">A critical error occurred. Please check the console.</div>`;
-});
+// Wait for external libraries to load, then run the main application logic.
+waitForExternalLibs()
+    .then(main)
+    .catch(error => {
+        console.error("An unhandled error occurred during app startup:", error);
+        document.body.innerHTML = `<div class="p-4 bg-red-100 text-red-800 rounded-md m-4">
+            <h3 class="font-bold">Критическая ошибка при запуске</h3>
+            <p>${error.message}</p>
+            <p class="mt-2 text-sm">Проверьте подключение к интернету, отключите блокировщики рекламы и попробуйте <a href="${window.location.pathname}" class="underline">перезагрузить страницу</a>.</p>
+        </div>`;
+    });

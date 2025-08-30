@@ -760,31 +760,51 @@ export async function analyzeSyncErrorWithGemini({ errorMessage, context, appStr
 }
 
 /**
- * Pings a proxy to see if it can reach the Gemini API.
+ * Pings a proxy to see if it can reach the Gemini API using a direct fetch call.
  */
 export async function testProxyConnection({ proxyUrl, apiKey }) {
     if (!proxyUrl) return { status: 'error', message: 'URL не указан' };
     if (!apiKey) return { status: 'error', message: 'Ключ Gemini API отсутствует' };
-    
-    const startTime = Date.now();
-    try {
-        const clientOptions = { apiKey, apiEndpoint: proxyUrl.replace(/^https?:\/\//, '') };
-        const ai = new GoogleGenAI(clientOptions);
-        
-        // Use a lightweight, fast model info request to test connectivity
-        await ai.models.generateContent({ model: GEMINI_MODEL, contents: 'test' });
 
+    const startTime = Date.now();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
+
+    try {
+        const testUrl = `${proxyUrl.replace(/\/$/, '')}/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+        
+        const response = await fetch(testUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: "test" }] }] }),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
         const speed = Date.now() - startTime;
-        return { status: 'ok', message: 'Соединение успешно', speed };
+
+        if (response.ok) {
+            return { status: 'ok', message: 'Соединение успешно', speed };
+        } else {
+            const errorData = await response.json();
+            let message = `Ошибка ${response.status}: ${errorData?.error?.message || response.statusText}`;
+            if (response.status === 400 && errorData?.error?.message?.includes('API key not valid')) {
+                message = 'Неверный ключ Gemini API';
+            }
+             if (response.status === 429) {
+                message = 'Превышен лимит запросов';
+            }
+            return { status: 'error', message, speed: null };
+        }
     } catch (error) {
+        clearTimeout(timeoutId);
         console.warn(`Proxy test failed for ${proxyUrl}:`, error);
         let message = 'Неизвестная ошибка';
-        if (error.message.includes('API key not valid')) {
-            message = 'Неверный ключ Gemini API';
-        } else if (error.message.includes('fetch failed') || error.message.includes('network error')) {
+        if (error.name === 'AbortError') {
+            message = 'Тайм-аут соединения (10с)';
+        } else if (error instanceof TypeError) {
+            // This often indicates a network error (CORS, DNS, etc.)
             message = 'Сетевая ошибка или недоступен';
-        } else if (error.message.includes('429')) {
-             message = 'Превышен лимит запросов';
         } else {
             message = error.message;
         }

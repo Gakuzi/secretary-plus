@@ -1,6 +1,6 @@
 import * as Icons from './icons/Icons.js';
 import { getSyncStatus } from '../utils/storage.js';
-import { SERVICE_SCHEMAS } from '../services/supabase/schema.js';
+import { SERVICE_SCHEMAS, generateCreateTableSql } from '../services/supabase/schema.js';
 import { createDbExecutionModal } from './DbExecutionModal.js';
 
 function createDataViewerModal(title, data, error, onClose) {
@@ -134,52 +134,84 @@ function renderSyncTab(syncTasks, state) {
 }
 
 function renderSchemaTab(state) {
-    let autoCheckHtml = '';
     if (state.isCheckingSchema) {
-        autoCheckHtml = `<div class="flex justify-center items-center h-full p-8"><div class="animate-spin h-8 w-8 border-4 border-slate-300 border-t-transparent rounded-full"></div></div>`;
-    } else if (state.schemaError) {
-        autoCheckHtml = `<div class="p-4 bg-red-100 text-red-800 rounded-md"><strong>Ошибка проверки схемы:</strong> ${state.schemaError}</div>`;
-    } else if (!state.generatedSql) {
-        autoCheckHtml = `
+        return `<div class="flex justify-center items-center h-full p-8"><div class="animate-spin h-8 w-8 border-4 border-slate-300 border-t-transparent rounded-full"></div></div>`;
+    }
+    
+    if (state.schemaError) {
+        return `<div class="p-4 bg-red-100 text-red-800 rounded-md"><strong>Ошибка проверки схемы:</strong> ${state.schemaError}</div>`;
+    }
+    
+    const servicesHtml = Object.entries(SERVICE_SCHEMAS).map(([key, schema]) => {
+        const tableStatus = state.schemaStatus[schema.tableName];
+        if (!tableStatus) return ''; // Should not happen if checkSchema ran
+
+        const fieldsHtml = schema.fields.map(field => `
+            <li class="flex items-center gap-2 text-sm py-1">
+                 <input type="checkbox" id="field-${schema.tableName}-${field.name}" data-table="${schema.tableName}" data-field="${field.name}" ${tableStatus.columns[field.name] ? 'checked' : ''} class="w-4 h-4 rounded text-blue-600 bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 focus:ring-blue-500">
+                 <label for="field-${schema.tableName}-${field.name}" class="flex-1 text-slate-700 dark:text-slate-300">${field.name}</label>
+                 <span class="font-mono text-xs text-slate-500 dark:text-slate-400">${field.type}</span>
+            </li>
+        `).join('');
+
+        let statusIndicator = '';
+        if (tableStatus.status === 'ok') {
+            statusIndicator = `<span class="text-xs font-semibold text-green-600 dark:text-green-400">✓ OK</span>`;
+        } else if (tableStatus.status === 'missing_columns') {
+            statusIndicator = `<span class="text-xs font-semibold text-yellow-600 dark:text-yellow-400">! Частично</span>`;
+        } else {
+            statusIndicator = `<span class="text-xs font-semibold text-red-600 dark:text-red-400">✗ Отсутствует</span>`;
+        }
+        
+        return `
+            <details class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" ${tableStatus.status !== 'ok' ? 'open' : ''}>
+                <summary class="p-3 cursor-pointer flex justify-between items-center font-semibold">
+                    <div class="flex items-center gap-3">
+                        <span class="w-5 h-5 text-slate-600 dark:text-slate-300">${Icons[schema.icon]}</span>
+                        <span>${schema.label} (${schema.tableName})</span>
+                    </div>
+                    ${statusIndicator}
+                </summary>
+                <div class="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                    <div class="flex justify-end mb-2">
+                        <button class="text-xs font-semibold text-blue-500 hover:underline" data-action="select-recommended" data-table="${schema.tableName}">Выбрать рекомендуемые</button>
+                    </div>
+                    <ul class="space-y-1">${fieldsHtml}</ul>
+                </div>
+            </details>
+        `;
+    }).join('');
+    
+    let overallStatusHtml = '';
+    if (!state.generatedSql) {
+        overallStatusHtml = `
             <div class="p-6 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-lg text-center">
                 <div class="w-12 h-12 flex items-center justify-center mx-auto bg-green-100 dark:bg-green-800 rounded-full text-green-600 dark:text-green-300">${Icons.CheckSquareIcon}</div>
                 <h4 class="mt-4 text-lg font-bold text-green-800 dark:text-green-200">Схема базы данных в порядке</h4>
-                <p class="mt-1 text-sm text-green-700 dark:text-green-300">Все таблицы, необходимые для включенных служб, уже существуют.</p>
+                <p class="mt-1 text-sm text-green-700 dark:text-green-300">Все необходимые таблицы и столбцы существуют.</p>
             </div>
         `;
     } else {
-        autoCheckHtml = `
-            <div class="p-4 bg-yellow-100/50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300 rounded-md text-sm">
-                <h4 class="font-bold">Требуется создание таблиц</h4>
-                <p>Для некоторых включенных служб отсутствуют таблицы в базе данных. Нажмите кнопку ниже, чтобы сгенерировать и выполнить SQL-скрипт для их создания.</p>
+        overallStatusHtml = `
+             <div class="p-4 bg-yellow-100/50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300 rounded-md">
+                <h4 class="font-bold text-lg">Требуются изменения в схеме</h4>
+                <p class="text-sm mt-1">Система обнаружила отсутствующие таблицы или столбцы. Сгенерирован SQL-скрипт для их создания. Проверьте его и нажмите "Применить изменения".</p>
             </div>
-            <button data-action="force-migrate" class="mt-4 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center justify-center gap-2">
+            <div>
+                <label for="sql-script-area" class="font-semibold text-sm mt-4 block mb-1">Сгенерированный SQL-скрипт:</label>
+                <textarea id="sql-script-area" class="w-full h-40 mt-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 font-mono text-xs" readonly>${state.generatedSql}</textarea>
+            </div>
+            <button data-action="apply-schema-changes" class="mt-4 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center justify-center gap-2">
                 ${Icons.WandIcon}
-                <span>Создать недостающие таблицы</span>
+                <span>Применить изменения</span>
             </button>
         `;
     }
-
-
+    
     return `
-        <div class="space-y-6">
-            <div>
-                <h3 class="font-semibold text-lg text-slate-900 dark:text-slate-100">Автоматическая проверка схемы</h3>
-                <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Система автоматически проверяет наличие необходимых таблиц для всех включенных служб.</p>
-                ${autoCheckHtml}
-            </div>
-
-            <div class="mt-6 pt-6 border-t border-slate-300 dark:border-slate-700">
-                <h3 class="font-semibold text-lg text-slate-900 dark:text-slate-100">Редактор и Миграция БД</h3>
-                <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Если вы столкнулись с ошибками, связанными со структурой БД (например, 'column not found'), вы можете запустить полную миграцию. Это пересоздаст все таблицы данных до последней актуальной версии.</p>
-                <div class="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-200 rounded-md text-sm">
-                    <strong>Внимание:</strong> Это действие удалит все кэшированные данные (контакты, файлы и т.д.) и синхронизирует их заново.
-                </div>
-                <button data-action="force-migrate" class="mt-4 w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold flex items-center justify-center gap-2">
-                    ${Icons.AlertTriangleIcon}
-                    <span>Запустить Редактор миграции</span>
-                </button>
-            </div>
+        <div class="space-y-4">
+             ${overallStatusHtml}
+            <div class="space-y-2">${servicesHtml}</div>
         </div>
     `;
 }
@@ -194,17 +226,18 @@ export function createDataManagerModal({ supabaseService, syncTasks, settings, o
         testStatus: 'idle', // idle, ok, error
         syncStatus: getSyncStatus(),
         isSyncingAll: false,
-        syncingSingle: null, // Holds the name of the task being synced
+        syncingSingle: null,
+        // Schema tab state
         isCheckingSchema: true,
         schemaError: null,
-        existingTables: [],
+        schemaStatus: {}, // { tableName: { status: 'ok' | 'missing_columns' | 'missing', columns: { colName: true, ... } } }
         generatedSql: '',
     };
     
     const render = () => {
         const TABS = [
             { id: 'sync', label: 'Статус синхронизации' },
-            { id: 'schema', label: 'Схема БД' },
+            { id: 'schema', label: 'Менеджер Схемы' },
         ];
         
         modalOverlay.innerHTML = `
@@ -229,10 +262,36 @@ export function createDataManagerModal({ supabaseService, syncTasks, settings, o
         `;
     };
 
+    const generateSqlFromState = () => {
+        let sql = '';
+        for (const schema of Object.values(SERVICE_SCHEMAS)) {
+            const status = state.schemaStatus[schema.tableName];
+            if (!status) continue;
+            
+            const selectedFields = schema.fields.filter(field => {
+                const checkbox = modalOverlay.querySelector(`#field-${schema.tableName}-${field.name}`);
+                return checkbox && checkbox.checked;
+            });
+
+            if (status.status === 'missing') {
+                if (selectedFields.length > 0) {
+                     sql += generateCreateTableSql(schema, selectedFields) + '\n\n';
+                }
+            } else if (status.status === 'missing_columns') {
+                const missingFields = selectedFields.filter(field => !status.columns[field.name]);
+                if (missingFields.length > 0) {
+                    sql += `-- Изменения для таблицы: ${schema.tableName}\n`;
+                    sql += `ALTER TABLE public.${schema.tableName}\n`;
+                    sql += missingFields.map(field => `    ADD COLUMN IF NOT EXISTS ${field.name} ${field.type}`).join(',\n') + ';\n\n';
+                }
+            }
+        }
+        state.generatedSql = sql.trim();
+    };
+
     const checkSchema = async () => {
         state.isCheckingSchema = true;
         state.schemaError = null;
-        state.generatedSql = '';
         render();
 
         if (!settings.managementWorkerUrl || !settings.adminSecretToken) {
@@ -243,116 +302,118 @@ export function createDataManagerModal({ supabaseService, syncTasks, settings, o
         }
 
         try {
-            const tables = await supabaseService.getExistingTables(settings.managementWorkerUrl, settings.adminSecretToken);
-            state.existingTables = tables;
+            const existingTables = await supabaseService.getExistingTables(settings.managementWorkerUrl, settings.adminSecretToken);
             
-            let missingSql = '';
-            for (const [key, schema] of Object.entries(SERVICE_SCHEMAS)) {
-                if (settings.enabledServices[key] && !tables.includes(schema.tableName)) {
-                    missingSql += `-- Схема для: ${schema.label}\n${schema.sql}\n\n`;
+            for (const schema of Object.values(SERVICE_SCHEMAS)) {
+                if (!existingTables.includes(schema.tableName)) {
+                    state.schemaStatus[schema.tableName] = { status: 'missing', columns: {} };
+                } else {
+                    const columns = await supabaseService.getTableSchema(settings.managementWorkerUrl, settings.adminSecretToken, schema.tableName);
+                    const existingColumns = columns.reduce((acc, col) => ({ ...acc, [col.column_name]: true }), {});
+                    const hasMissing = schema.fields.some(f => !existingColumns[f.name]);
+                    state.schemaStatus[schema.tableName] = {
+                        status: hasMissing ? 'missing_columns' : 'ok',
+                        columns: existingColumns
+                    };
                 }
             }
-            state.generatedSql = missingSql.trim();
         } catch (error) {
             state.schemaError = error.message;
         } finally {
             state.isCheckingSchema = false;
+            generateSqlFromState();
             render();
         }
     };
 
     const handleAction = async (e) => {
         const target = e.target.closest('[data-action]');
-        if (!target) {
-            if (e.target.closest('[data-tab-id]')) {
-                state.currentTab = e.target.closest('[data-tab-id]').dataset.tabId;
-                if(state.currentTab === 'schema') checkSchema();
-                render();
-            } else if (e.target === modalOverlay || !e.target.closest('#data-manager-content')) {
-                onClose();
-            }
-            return;
-        }
-
-        const action = target.dataset.action;
-        const subModalContainer = modalOverlay.querySelector('#sub-modal-container');
-
-        switch(action) {
-            case 'close': onClose(); break;
-            case 'test-connection': {
-                state.isTestingConnection = true;
-                state.testStatus = 'idle';
-                render();
-                try {
-                    await supabaseService.testConnection();
-                    state.testStatus = 'ok';
-                } catch (error) {
-                    state.testStatus = 'error';
-                    console.error('Connection test failed', error);
-                } finally {
-                    state.isTestingConnection = false;
-                    render();
-                }
-                break;
-            }
-            case 'run-all-syncs': {
-                state.isSyncingAll = true;
-                render();
-                try {
-                    await onRunAllSyncs();
-                } catch (err) { /* no-op */ }
-                finally {
-                    state.isSyncingAll = false;
-                    state.syncStatus = getSyncStatus();
-                    render();
-                }
-                break;
-            }
-            case 'run-single-sync': {
-                const taskName = target.dataset.taskName;
-                state.syncingSingle = taskName;
-                render();
-                try {
-                    await onRunSingleSync(taskName);
-                } catch (err) { /* no-op */ }
-                finally {
-                    state.syncingSingle = null;
-                    state.syncStatus = getSyncStatus();
-                    render();
-                }
-                break;
-            }
-            case 'view-data': {
-                const tableName = target.dataset.tableName;
-                const label = target.dataset.label;
-                subModalContainer.innerHTML = `<div class="fixed inset-0 bg-black/10 flex items-center justify-center z-[53]"><div class="animate-spin h-8 w-8 border-4 border-white border-t-transparent rounded-full"></div></div>`;
-                const { data, error } = await supabaseService.getSampleData(tableName);
-                const modal = createDataViewerModal(label, data, error ? error.message : null, () => subModalContainer.innerHTML = '');
-                subModalContainer.innerHTML = '';
-                subModalContainer.appendChild(modal);
-                break;
-            }
-            case 'force-migrate': {
-                if (!settings.managementWorkerUrl || !settings.adminSecretToken) {
-                     alert("Управляющий воркер не настроен. Запустите мастер настройки в Настройках > База данных.");
-                     return;
-                }
-                const execModal = createDbExecutionModal({
-                    onExecute: async (sql) => {
-                         return await supabaseService.executeSqlViaFunction(settings.managementWorkerUrl, settings.adminSecretToken, sql);
-                    },
-                    onClose: () => {
-                        subModalContainer.innerHTML = '';
+        if (target) {
+            const action = target.dataset.action;
+            const subModalContainer = modalOverlay.querySelector('#sub-modal-container');
+    
+            switch(action) {
+                case 'close': onClose(); break;
+                case 'test-connection': {
+                    state.isTestingConnection = true; state.testStatus = 'idle'; render();
+                    try {
+                        await supabaseService.testConnection(); state.testStatus = 'ok';
+                    } catch (error) {
+                        state.testStatus = 'error'; console.error('Connection test failed', error);
+                    } finally {
+                        state.isTestingConnection = false; render();
                     }
-                });
-                subModalContainer.innerHTML = '';
-                subModalContainer.appendChild(execModal);
-                break;
+                    break;
+                }
+                case 'run-all-syncs': {
+                    state.isSyncingAll = true; render();
+                    try { await onRunAllSyncs(); } catch (err) {}
+                    finally { state.isSyncingAll = false; state.syncStatus = getSyncStatus(); render(); }
+                    break;
+                }
+                case 'run-single-sync': {
+                    const taskName = target.dataset.taskName;
+                    state.syncingSingle = taskName; render();
+                    try { await onRunSingleSync(taskName); } catch (err) {}
+                    finally { state.syncingSingle = null; state.syncStatus = getSyncStatus(); render(); }
+                    break;
+                }
+                case 'view-data': {
+                    const tableName = target.dataset.tableName;
+                    const label = target.dataset.label;
+                    subModalContainer.innerHTML = `<div class="fixed inset-0 bg-black/10 flex items-center justify-center z-[53]"><div class="animate-spin h-8 w-8 border-4 border-white border-t-transparent rounded-full"></div></div>`;
+                    const { data, error } = await supabaseService.getSampleData(tableName);
+                    const modal = createDataViewerModal(label, data, error ? error.message : null, () => subModalContainer.innerHTML = '');
+                    subModalContainer.innerHTML = '';
+                    subModalContainer.appendChild(modal);
+                    break;
+                }
+                case 'select-recommended': {
+                    const tableName = target.dataset.table;
+                    const schema = Object.values(SERVICE_SCHEMAS).find(s => s.tableName === tableName);
+                    if (schema) {
+                        schema.fields.forEach(field => {
+                            const checkbox = modalOverlay.querySelector(`#field-${tableName}-${field.name}`);
+                            if (checkbox) checkbox.checked = field.recommended;
+                        });
+                        generateSqlFromState();
+                        render();
+                    }
+                    break;
+                }
+                case 'apply-schema-changes': {
+                    const execModal = createDbExecutionModal({
+                        onExecute: async (sql) => {
+                            return await supabaseService.executeSqlViaFunction(settings.managementWorkerUrl, settings.adminSecretToken, sql);
+                        },
+                        onClose: () => {
+                            subModalContainer.innerHTML = '';
+                            checkSchema(); // Re-check the schema after closing the execution modal
+                        }
+                    });
+                    execModal.querySelector('#sql-script-area').value = state.generatedSql;
+                    subModalContainer.innerHTML = '';
+                    subModalContainer.appendChild(execModal);
+                    break;
+                }
             }
+        } else if (e.target.closest('[data-tab-id]')) {
+            state.currentTab = e.target.closest('[data-tab-id]').dataset.tabId;
+            if(state.currentTab === 'schema') checkSchema();
+            render();
+        } else if (e.target === modalOverlay || !e.target.closest('#data-manager-content')) {
+            onClose();
         }
     };
-
+    
     modalOverlay.addEventListener('click', handleAction);
+    modalOverlay.addEventListener('change', (e) => {
+        if (e.target.closest('input[type="checkbox"]')) {
+            generateSqlFromState();
+            render();
+        }
+    });
+
     render();
     return modalOverlay;
 }

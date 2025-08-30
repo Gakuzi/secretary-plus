@@ -249,6 +249,23 @@ BEGIN
   ORDER BY h.created_at DESC LIMIT 500;
 END;
 $$;
+
+-- Новая RPC функция для безопасного получения профилей всех пользователей администратором
+CREATE OR REPLACE FUNCTION public.get_all_user_profiles_with_email()
+RETURNS TABLE (
+    id UUID, full_name TEXT, avatar_url TEXT, role public.user_role, email TEXT, last_sign_in_at TIMESTAMPTZ
+) LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+    IF NOT is_admin() THEN
+        RAISE EXCEPTION 'У вас нет прав для выполнения этой операции.';
+    END IF;
+    RETURN QUERY
+    SELECT p.id, p.full_name, p.avatar_url, p.role, u.email, u.last_sign_in_at
+    FROM public.profiles p
+    JOIN auth.users u ON p.id = u.id
+    ORDER BY p.role, p.full_name;
+END;
+$$;
 `;
 
 export const SERVICE_SCHEMAS = {
@@ -256,117 +273,131 @@ export const SERVICE_SCHEMAS = {
         label: 'Календарь',
         icon: 'CalendarIcon',
         tableName: 'calendar_events',
-        sql: `
-            CREATE TABLE public.calendar_events (
-                id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY, user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-                source_id TEXT NOT NULL, title TEXT, description TEXT, start_time TIMESTAMPTZ, end_time TIMESTAMPTZ,
-                event_link TEXT, meet_link TEXT, attendees JSONB, status TEXT, creator_email TEXT, is_all_day BOOLEAN DEFAULT FALSE,
-                created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now(), UNIQUE (user_id, source_id)
-            );
-            COMMENT ON TABLE public.calendar_events IS 'Кэшированные события из Google Calendar.';
-            ALTER TABLE public.calendar_events ENABLE ROW LEVEL SECURITY;
-            DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.calendar_events;
-            CREATE POLICY "Enable all access for authenticated users" ON public.calendar_events FOR ALL TO authenticated USING (auth.uid() = user_id);
-            CREATE TRIGGER on_calendar_events_update BEFORE UPDATE ON public.calendar_events FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
-        `
+        fields: [
+            { name: 'source_id', type: 'TEXT', recommended: true },
+            { name: 'title', type: 'TEXT', recommended: true },
+            { name: 'description', type: 'TEXT', recommended: true },
+            { name: 'start_time', type: 'TIMESTAMPTZ', recommended: true },
+            { name: 'end_time', type: 'TIMESTAMPTZ', recommended: true },
+            { name: 'event_link', type: 'TEXT', recommended: true },
+            { name: 'meet_link', type: 'TEXT', recommended: true },
+            { name: 'attendees', type: 'JSONB', recommended: false },
+            { name: 'status', type: 'TEXT', recommended: false },
+            { name: 'creator_email', type: 'TEXT', recommended: false },
+            { name: 'is_all_day', type: 'BOOLEAN', recommended: true },
+        ]
     },
     contacts: {
         label: 'Контакты',
         icon: 'UsersIcon',
         tableName: 'contacts',
-        sql: `
-            CREATE TABLE public.contacts (
-                id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY, user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-                source_id TEXT NOT NULL, display_name TEXT, email TEXT, phone TEXT, avatar_url TEXT, addresses JSONB, organizations JSONB,
-                birthdays JSONB, created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now(), UNIQUE (user_id, source_id)
-            );
-            COMMENT ON TABLE public.contacts IS 'Кэшированные контакты из Google Contacts.';
-            ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
-            DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.contacts;
-            CREATE POLICY "Enable all access for authenticated users" ON public.contacts FOR ALL TO authenticated USING (auth.uid() = user_id);
-            CREATE TRIGGER on_contacts_update BEFORE UPDATE ON public.contacts FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
-        `
+        fields: [
+            { name: 'source_id', type: 'TEXT', recommended: true },
+            { name: 'display_name', type: 'TEXT', recommended: true },
+            { name: 'email', type: 'TEXT', recommended: true },
+            { name: 'phone', type: 'TEXT', recommended: true },
+            { name: 'avatar_url', type: 'TEXT', recommended: true },
+            { name: 'addresses', type: 'JSONB', recommended: false },
+            { name: 'organizations', type: 'JSONB', recommended: false },
+            { name: 'birthdays', type: 'JSONB', recommended: false },
+        ]
     },
     files: {
         label: 'Файлы',
         icon: 'FileIcon',
         tableName: 'files',
-        sql: `
-            CREATE TABLE public.files (
-                id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY, user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-                source_id TEXT NOT NULL, name TEXT, mime_type TEXT, url TEXT, icon_link TEXT, created_time TIMESTAMPTZ, modified_time TIMESTAMPTZ,
-                viewed_by_me_time TIMESTAMPTZ, size BIGINT, owner TEXT, last_modifying_user TEXT, permissions JSONB,
-                created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now(), UNIQUE (user_id, source_id)
-            );
-            COMMENT ON TABLE public.files IS 'Кэшированная мета-информация о файлах из Google Drive.';
-            ALTER TABLE public.files ENABLE ROW LEVEL SECURITY;
-            DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.files;
-            CREATE POLICY "Enable all access for authenticated users" ON public.files FOR ALL TO authenticated USING (auth.uid() = user_id);
-            CREATE TRIGGER on_files_update BEFORE UPDATE ON public.files FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
-        `
+        fields: [
+            { name: 'source_id', type: 'TEXT', recommended: true },
+            { name: 'name', type: 'TEXT', recommended: true },
+            { name: 'mime_type', type: 'TEXT', recommended: true },
+            { name: 'url', type: 'TEXT', recommended: true },
+            { name: 'icon_link', type: 'TEXT', recommended: true },
+            { name: 'created_time', type: 'TIMESTAMPTZ', recommended: true },
+            { name: 'modified_time', type: 'TIMESTAMPTZ', recommended: true },
+            { name: 'viewed_by_me_time', type: 'TIMESTAMPTZ', recommended: false },
+            { name: 'size', type: 'BIGINT', recommended: false },
+            { name: 'owner', type: 'TEXT', recommended: false },
+            { name: 'last_modifying_user', type: 'TEXT', recommended: false },
+            { name: 'permissions', type: 'JSONB', recommended: false },
+        ]
     },
     tasks: {
         label: 'Задачи',
         icon: 'CheckSquareIcon',
         tableName: 'tasks',
-        sql: `
-            CREATE TABLE public.tasks (
-                id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY, user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-                source_id TEXT NOT NULL, title TEXT, notes TEXT, due_date TIMESTAMPTZ, status TEXT, completed_at TIMESTAMPTZ,
-                parent_task_id TEXT, created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now(), UNIQUE (user_id, source_id)
-            );
-            COMMENT ON TABLE public.tasks IS 'Кэшированные задачи из Google Tasks.';
-            ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
-            DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.tasks;
-            CREATE POLICY "Enable all access for authenticated users" ON public.tasks FOR ALL TO authenticated USING (auth.uid() = user_id);
-            CREATE TRIGGER on_tasks_update BEFORE UPDATE ON public.tasks FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
-        `
+        fields: [
+            { name: 'source_id', type: 'TEXT', recommended: true },
+            { name: 'title', type: 'TEXT', recommended: true },
+            { name: 'notes', type: 'TEXT', recommended: true },
+            { name: 'due_date', type: 'TIMESTAMPTZ', recommended: true },
+            { name: 'status', type: 'TEXT', recommended: true },
+            { name: 'completed_at', type: 'TIMESTAMPTZ', recommended: false },
+            { name: 'parent_task_id', type: 'TEXT', recommended: false },
+        ]
     },
     emails: {
         label: 'Почта',
         icon: 'EmailIcon',
         tableName: 'emails',
-        sql: `
-            CREATE TABLE public.emails (
-                id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-                user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-                source_id TEXT NOT NULL,
-                thread_id TEXT,
-                subject TEXT,
-                snippet TEXT,
-                sender_info JSONB,
-                recipients_info JSONB,
-                received_at TIMESTAMPTZ,
-                full_body TEXT,
-                has_attachments BOOLEAN DEFAULT false,
-                attachments_metadata JSONB,
-                label_ids TEXT[],
-                gmail_link TEXT,
-                created_at TIMESTAMPTZ DEFAULT now(),
-                updated_at TIMESTAMPTZ DEFAULT now(),
-                UNIQUE (user_id, source_id)
-            );
-            COMMENT ON TABLE public.emails IS 'Кэшированные письма из Gmail для быстрого поиска.';
-            ALTER TABLE public.emails ENABLE ROW LEVEL SECURITY;
-            DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.emails;
-            CREATE POLICY "Enable all access for authenticated users" ON public.emails FOR ALL TO authenticated USING (auth.uid() = user_id);
-            CREATE TRIGGER on_emails_update BEFORE UPDATE ON public.emails FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
-        `
+        fields: [
+            { name: 'source_id', type: 'TEXT', recommended: true },
+            { name: 'thread_id', type: 'TEXT', recommended: true },
+            { name: 'subject', type: 'TEXT', recommended: true },
+            { name: 'snippet', type: 'TEXT', recommended: true },
+            { name: 'sender_info', type: 'JSONB', recommended: true },
+            { name: 'recipients_info', type: 'JSONB', recommended: false },
+            { name: 'received_at', type: 'TIMESTAMPTZ', recommended: true },
+            { name: 'full_body', type: 'TEXT', recommended: true },
+            { name: 'has_attachments', type: 'BOOLEAN', recommended: true },
+            { name: 'attachments_metadata', type: 'JSONB', recommended: false },
+            { name: 'label_ids', type: 'TEXT[]', recommended: false },
+            { name: 'gmail_link', type: 'TEXT', recommended: true },
+        ]
     },
     notes: {
         label: 'Заметки',
         icon: 'FileIcon',
         tableName: 'notes',
-        sql: `
-            CREATE TABLE public.notes (
-                id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY, user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-                title TEXT, content TEXT, created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now()
-            );
-            COMMENT ON TABLE public.notes IS 'Заметки, созданные пользователем внутри приложения.';
-            ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
-            DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.notes;
-            CREATE POLICY "Enable all access for authenticated users" ON public.notes FOR ALL TO authenticated USING (auth.uid() = user_id);
-            CREATE TRIGGER on_notes_update BEFORE UPDATE ON public.notes FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
-        `
+        fields: [
+            { name: 'title', type: 'TEXT', recommended: true },
+            { name: 'content', type: 'TEXT', recommended: true },
+        ]
     }
 };
+
+/**
+ * Dynamically generates a CREATE TABLE SQL statement from a schema definition.
+ */
+export function generateCreateTableSql(schema, selectedFields) {
+    if (!schema || !selectedFields || selectedFields.length === 0) return '';
+    
+    const fieldsSql = selectedFields.map(field => `    ${field.name} ${field.type}`).join(',\n');
+    
+    // Base columns that are always present
+    const baseColumns = `
+        id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+        user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    `;
+    const uniqueConstraint = schema.fields.some(f => f.name === 'source_id') 
+        ? ',\n    UNIQUE (user_id, source_id)' 
+        : '';
+    const closingColumns = `
+        created_at TIMESTAMPTZ DEFAULT now(),
+        updated_at TIMESTAMPTZ DEFAULT now()${uniqueConstraint}
+    `;
+
+    const fullSql = `
+CREATE TABLE public.${schema.tableName} (
+${baseColumns}
+${fieldsSql},
+${closingColumns}
+);
+
+COMMENT ON TABLE public.${schema.tableName} IS 'Таблица для службы: ${schema.label}.';
+ALTER TABLE public.${schema.tableName} ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.${schema.tableName};
+CREATE POLICY "Enable all access for authenticated users" ON public.${schema.tableName} FOR ALL TO authenticated USING (auth.uid() = user_id);
+CREATE TRIGGER on_${schema.tableName}_update BEFORE UPDATE ON public.${schema.tableName} FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+    `;
+    return fullSql.trim();
+}
