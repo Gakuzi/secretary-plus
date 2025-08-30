@@ -487,7 +487,7 @@ export class SupabaseService {
                 full_name,
                 avatar_url,
                 role,
-                user_data:users(email, last_sign_in_at)
+                users(email, last_sign_in_at)
             `)
             .order('role', { ascending: false });
 
@@ -499,11 +499,11 @@ export class SupabaseService {
         // Flatten the response for easier use in the UI
         return data.map(p => ({
             id: p.id,
-            full_name: p.full_name || p.user_data?.email,
+            full_name: p.full_name || p.users?.email,
             avatar_url: p.avatar_url,
             role: p.role,
-            email: p.user_data?.email,
-            last_sign_in_at: p.user_data?.last_sign_in_at,
+            email: p.users?.email,
+            last_sign_in_at: p.users?.last_sign_in_at,
         }));
     }
 
@@ -680,7 +680,7 @@ export class SupabaseService {
             .from('chat_history')
             .select(`
                 *,
-                user:profiles(full_name, avatar_url, user_data:users(email))
+                user:profiles(full_name, avatar_url, users(email))
             `)
             .order('created_at', { ascending: false })
             .limit(500); // Limit to a reasonable number for performance

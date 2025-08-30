@@ -366,7 +366,7 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
                 <details class="bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
                     <summary class="p-3 cursor-pointer font-medium flex justify-between items-center">
                         <div>
-                            <span>${user.user_data?.email || 'Неизвестный пользователь'}</span>
+                            <span>${user.users?.email || 'Неизвестный пользователь'}</span>
                             <span class="ml-2 text-xs text-slate-500">${sessionDate}</span>
                         </div>
                          <span class="text-xs text-slate-400">Сессия: ${sessionId.slice(0,8)}...</span>

@@ -732,7 +732,10 @@ function showHelpModal() {
             }
         },
         onLaunchDbWizard: showDbSetupWizard,
-        onLaunchProxyWizard: showProxySetupWizard
+        onLaunchProxyWizard: () => showProxySetupWizard({
+            supabaseService: supabaseService,
+            onClose: () => { wizardContainer.innerHTML = ''; }
+        })
     });
     modalContainer.appendChild(modal);
 }
@@ -802,10 +805,11 @@ function showDbExecutionModal() {
     modalContainer.appendChild(modal);
 }
 
-function showProxySetupWizard() {
+function showProxySetupWizard({ supabaseService, onClose }) {
      wizardContainer.innerHTML = '';
      const wizard = createProxySetupWizard({
-        onClose: () => { wizardContainer.innerHTML = ''; },
+        supabaseService: supabaseService,
+        onClose: onClose,
      });
      wizardContainer.appendChild(wizard);
 }
