@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
     
     if (userError || !user) {
-      return sendResponse({ error: \`Authentication failed: \${userError?.message}\` }, 401);
+      return sendResponse({ error: 'Authentication failed: ' + (userError ? userError.message : 'Unknown reason') }, 401);
     }
 
     const { data: userProfile, error: profileError } = await supabaseAdmin
@@ -65,14 +65,14 @@ Deno.serve(async (req) => {
 
     if (rpcExecError) {
       console.error('SQL Execution Error:', rpcExecError);
-      return sendResponse({ error: \`SQL execution failed: \${rpcExecError.message}\` }, 500);
+      return sendResponse({ error: 'SQL execution failed: ' + rpcExecError.message }, 500);
     }
 
     return sendResponse({ message: 'SQL executed successfully' }, 200);
 
   } catch (e) {
     console.error('Unexpected error:', e);
-    return sendResponse({ error: \`Internal Server Error: \${e.message}\` }, 500);
+    return sendResponse({ error: 'Internal Server Error: ' + e.message }, 500);
   }
 });`;
 
