@@ -707,10 +707,14 @@ export const callGemini = async ({
         
     } catch (error) {
         console.error("Gemini API call failed:", error);
+        let errorMessage = error.message || 'Неизвестная ошибка';
+        if (String(errorMessage).includes('429')) {
+             errorMessage = "Вы превысили дневной лимит запросов к Gemini API (ошибка 429). Попробуйте позже или проверьте ваш тарифный план.";
+        }
         return {
             id: Date.now().toString(),
             sender: MessageSender.SYSTEM,
-            text: `Не удалось связаться с Gemini API: ${error.message}. Проверьте ключ API и настройки прокси.`,
+            text: `Не удалось связаться с Gemini API. ${errorMessage}`,
         };
     }
 };
@@ -796,7 +800,7 @@ export async function testProxyConnection({ proxyUrl, apiKey }) {
         if (message.includes('API key not valid')) {
             message = 'Неверный ключ Gemini API';
         } else if (message.includes('429')) {
-            message = 'Превышен лимит запросов';
+            message = 'Превышен лимит запросов (429)';
         } else if (error instanceof TypeError) { // Often indicates CORS, DNS, or SSL issues
             message = 'Сетевая ошибка или неверный сертификат (CORS/SSL)';
         }

@@ -284,7 +284,12 @@ export class SupabaseService {
 
     // --- Chat Logging & Sessions ---
     async createNewSession() {
-        const { data, error } = await this.client.from('sessions').insert({}).select().single();
+        const { data: { user } } = await this.client.auth.getUser();
+        if (!user) {
+            console.warn("createNewSession called without an authenticated user.");
+            throw new Error("Не удалось создать сессию: пользователь не аутентифицирован.");
+        }
+        const { data, error } = await this.client.from('sessions').insert({ user_id: user.id }).select().single();
         if (error) throw error;
         return data.id;
     }

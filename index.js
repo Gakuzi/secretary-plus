@@ -269,6 +269,7 @@ async function startNewChatSession() {
             state.sessionId = await supabaseService.createNewSession();
         } catch (error) {
             console.error("Failed to create new chat session:", error);
+            showSystemError(error.message)
             state.sessionId = null; // Ensure it's null on failure
         }
     }
@@ -894,10 +895,11 @@ async function startFullApp(initialSession = null) {
     state.settings = settings; // Update global state
     if(supabaseService) supabaseService.setSettings(state.settings);
 
-    // Condition to show the initial setup wizard
-    const shouldShowWizard = !settings.geminiApiKey;
+    // CRITICAL FIX: The wizard must be shown if EITHER the API key is missing
+    // OR if there is a saved wizard state from an interrupted session (e.g., OAuth redirect).
+    const shouldShowWizard = !settings.geminiApiKey || savedWizardState;
 
-    if (shouldShowWizard || savedWizardState) {
+    if (shouldShowWizard) {
         wizardContainer.innerHTML = '';
         const wizard = createSetupWizard({
             onComplete: async (newSettings) => {
@@ -1021,9 +1023,6 @@ async function main() {
             // Clean the URL from auth tokens after successful sign-in
             window.history.replaceState(null, '', window.location.pathname + window.location.search);
             
-            // CRITICAL FIX: DO NOT remove wizard state here. The wizard will handle it upon completion.
-            // This was the primary cause of the wizard restarting.
-
         } catch (error) {
             console.error("OAuth Callback Error:", error);
              loadingOverlay.innerHTML = `
