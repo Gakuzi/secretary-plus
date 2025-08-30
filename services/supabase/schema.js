@@ -275,7 +275,7 @@ BEGIN
         RAISE EXCEPTION 'У вас нет прав для выполнения этой операции.';
     END IF;
     RETURN QUERY
-    SELECT p.id, p.full_name, p.avatar_url, p.role, u.email, u.last_sign_in_at
+    SELECT p.id, p.full_name, p.avatar_url, p.role, u.email::text, u.last_sign_in_at
     FROM public.profiles p
     JOIN auth.users u ON p.id = u.id
     ORDER BY p.role, p.full_name;
