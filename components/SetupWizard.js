@@ -37,6 +37,7 @@ export function createSetupWizard({ onComplete, googleProvider, supabaseService,
     ];
     
     const saveStateToSession = () => {
+        collectInputs(); // Ensure the latest data from inputs is saved
         sessionStorage.setItem('wizardState', JSON.stringify(state));
     };
 
@@ -55,11 +56,13 @@ export function createSetupWizard({ onComplete, googleProvider, supabaseService,
             backBtn.dataset.action = 'back';
             footerEl.appendChild(backBtn);
         } else {
-            const exitBtn = document.createElement('button');
-            exitBtn.className = 'px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md text-sm font-semibold';
-            exitBtn.textContent = 'Выйти';
-            exitBtn.dataset.action = 'exit';
-            footerEl.appendChild(exitBtn);
+            // Special home button to exit wizard forcefully
+            const homeBtn = document.createElement('button');
+            homeBtn.className = 'p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600';
+            homeBtn.innerHTML = Icons.HomeIcon;
+            homeBtn.title = 'Выйти из мастера настройки';
+            homeBtn.dataset.action = 'exit_force';
+            wizardElement.querySelector('#wizard-header-left').prepend(homeBtn);
         }
         
         const addNextButton = (text = 'Далее', isSkip = false, disabled = false) => {
@@ -374,16 +377,14 @@ export function createSetupWizard({ onComplete, googleProvider, supabaseService,
         }
         
         state.isLoading = false;
-        saveStateToSession();
         render(); // Re-render with profile or cleared state
-        if (state.isAuthenticated) {
-            setTimeout(handleNext, 500);
-        }
     };
 
     const handleLogin = async () => {
         state.isLoading = true;
         render();
+        
+        // CRITICAL: Save state BEFORE redirecting.
         saveStateToSession();
         
         if (state.authChoice === 'supabase') {
@@ -459,8 +460,18 @@ export function createSetupWizard({ onComplete, googleProvider, supabaseService,
             case 'back': handleBack(); break;
             case 'login': await handleLogin(); break;
             case 'exit': 
-                sessionStorage.removeItem('wizardState');
-                onComplete(getSettings()); // Exit with old settings
+                if (getSettings().geminiApiKey) {
+                     sessionStorage.removeItem('wizardState');
+                     onComplete(getSettings()); // Exit with old settings
+                } else {
+                    alert("Необходимо завершить настройку.");
+                }
+                break;
+            case 'exit_force':
+                 if (confirm("Вы уверены, что хотите прервать настройку? Прогресс будет потерян.")) {
+                    sessionStorage.removeItem('wizardState');
+                    window.location.reload();
+                 }
                 break;
             case 'finish': 
                 collectInputs();

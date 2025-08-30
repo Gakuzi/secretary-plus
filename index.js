@@ -11,7 +11,7 @@ import { createProxyManagerModal } from './components/ProxyManagerModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
-import { SettingsIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
+import { SettingsIcon, QuestionMarkCircleIcon, HomeIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 import { SUPABASE_CONFIG, GOOGLE_CLIENT_ID } from './config.js';
 import { createMigrationModal } from './components/MigrationModal.js';
@@ -325,6 +325,7 @@ async function handleLogout() {
     clearGoogleToken();
     localStorage.removeItem('secretary-plus-settings-v4');
     localStorage.removeItem('secretary-plus-sync-status-v1');
+    sessionStorage.removeItem('wizardState');
     window.location.reload();
 }
 
@@ -844,7 +845,7 @@ async function checkDatabaseSchema() {
  * Renders the main application UI, hooks up event listeners, and decides
  * whether to show the setup wizard or the main chat interface.
  */
-async function startFullApp(initialSession = null) {
+async function startFullApp(session = null) {
     // Populate global DOM element variables
     appContainer = document.getElementById('app');
     authContainer = document.getElementById('auth-container');
@@ -868,19 +869,12 @@ async function startFullApp(initialSession = null) {
     const savedWizardState = sessionStorage.getItem('wizardState');
 
     // **Cloud-first settings & session check**
-    let session = initialSession;
     if (settings.isSupabaseEnabled && supabaseService) {
-        if (!session) {
-            const { data } = await supabaseService.client.auth.getSession();
-            session = data.session;
-        }
-
-        if (session) {
+        if (session) { // A session was passed from the main() redirect handler
             state.supabaseUser = session.user;
             googleProvider.setAuthToken(session.provider_token);
             const cloudSettings = await supabaseService.getUserSettings();
             if (cloudSettings && cloudSettings.geminiApiKey) {
-                settings = getSettings(); // get fresh defaults
                 // Deep merge settings
                 Object.assign(settings, cloudSettings);
                 saveSettings(settings);
@@ -906,12 +900,11 @@ async function startFullApp(initialSession = null) {
                 state.settings = newSettings;
                 saveSettings(newSettings);
                 wizardContainer.innerHTML = '';
-                // Instead of reloading, re-initialize services and render main content
                 await initializeAppServices();
                 renderMainContent();
             },
             googleProvider,
-            supabaseService: supabaseService, // Pass the single global instance
+            supabaseService,
             googleClientId: GOOGLE_CLIENT_ID,
             resumeState: savedWizardState ? JSON.parse(savedWizardState) : null
         });
@@ -980,65 +973,45 @@ function waitForExternalLibs() {
  * Main entry point. Decides whether to handle an auth callback or start the app normally.
  */
 async function main() {
+    // This is the primary logic to handle OAuth redirects on static pages.
     const isAuthCallback = window.location.hash.includes('access_token');
     let session = null;
 
-    // If we are returning from an OAuth flow, handle it robustly.
     if (isAuthCallback) {
-        const loadingOverlay = document.createElement('div');
-        loadingOverlay.className = 'fixed inset-0 bg-slate-900/80 flex items-center justify-center z-50 text-white';
-        loadingOverlay.innerHTML = '<span>Завершение входа...</span>';
-        document.body.appendChild(loadingOverlay);
-
-        try {
-            // Check session storage to see which flow we're in, defaulting based on initial settings
-            const savedWizardState = sessionStorage.getItem('wizardState');
-            const authChoice = savedWizardState ? JSON.parse(savedWizardState).authChoice : (getSettings().isSupabaseEnabled ? 'supabase' : 'direct');
-
-            if (authChoice === 'supabase' && supabaseService) {
-                session = await new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => {
-                        reject(new Error("Аутентификация заняла слишком много времени. Пожалуйста, попробуйте снова."));
-                    }, 15000);
-
+        // If it's a Supabase callback, Supabase's JS library handles the hash automatically.
+        // We just need to wait for the SIGNED_IN event to get the session.
+        if (supabaseService) {
+            ({ data: { session } } = await supabaseService.client.auth.getSession());
+            // If the session is not immediately available, we listen for the auth state change.
+            if (!session) {
+                session = await new Promise((resolve) => {
                     const { data: { subscription } } = supabaseService.onAuthStateChange((event, session) => {
-                        // We wait for the SIGNED_IN event which confirms the session is established.
                         if (event === 'SIGNED_IN' && session) {
-                            clearTimeout(timeout);
                             subscription.unsubscribe();
                             resolve(session);
                         }
                     });
                 });
-            } else { // Handle direct Google auth redirect
-                const params = new URLSearchParams(window.location.hash.substring(1));
-                const accessToken = params.get('access_token');
-                if (accessToken) {
-                    saveGoogleToken(accessToken);
-                } else {
-                    console.warn("OAuth callback detected, but no access token found for direct Google auth.");
-                }
             }
-
-            // Clean the URL from auth tokens after successful sign-in
-            window.history.replaceState(null, '', window.location.pathname + window.location.search);
-            
-        } catch (error) {
-            console.error("OAuth Callback Error:", error);
-             loadingOverlay.innerHTML = `
-                <div class="flex flex-col items-center justify-center text-center p-4">
-                    <p class="font-bold text-red-400">Ошибка аутентификации</p>
-                    <p class="mt-2">${error.message}</p>
-                    <a href="${window.location.pathname}" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded">Попробовать снова</a>
-                </div>`;
-            return; // Stop execution on auth error
-        } finally {
-            if (document.body.contains(loadingOverlay)) {
-                 loadingOverlay.remove();
+        } else {
+            // Handle direct Google auth.
+            const params = new URLSearchParams(window.location.hash.substring(1));
+            const accessToken = params.get('access_token');
+            if (accessToken) {
+                saveGoogleToken(accessToken);
             }
         }
+        // CRITICAL: Clean the URL to prevent re-processing the hash on subsequent reloads.
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    } else {
+        // On a normal page load, just check if a session already exists.
+        if (supabaseService) {
+            const { data } = await supabaseService.client.auth.getSession();
+            session = data.session;
+        }
     }
-    // Whether it was a callback or a normal load, start the full app logic.
+
+    // Now, with any existing or newly acquired session, start the app.
     await startFullApp(session);
 }
 
