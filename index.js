@@ -6,7 +6,6 @@ import { getSettings, saveSettings, getSyncStatus, saveSyncStatus } from './util
 import { createSetupWizard } from './components/SetupWizard.js';
 import { createSettingsModal } from './components/SettingsModal.js';
 import { createProfileModal } from './components/ProfileModal.js';
-import { createDataManagerModal } from './components/DataManagerModal.js'; // New import
 import { createHelpModal } from './components/HelpModal.js';
 import { createDbSetupWizard } from './components/DbSetupWizard.js';
 import { createProxySetupWizard } from './components/ProxySetupWizard.js';
@@ -14,7 +13,7 @@ import { createProxyManagerModal } from './components/ProxyManagerModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
-import { SettingsIcon, DatabaseIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js'; // Updated import
+import { SettingsIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 import { SUPABASE_CONFIG, GOOGLE_CLIENT_ID } from './config.js';
 import { createMigrationModal } from './components/MigrationModal.js';
@@ -33,7 +32,6 @@ const APP_STRUCTURE_CONTEXT = `
 - services/supabase/migrations.js: SQL-скрипты для автоматического обновления схемы БД.
 - components/SetupWizard.js: Мастер первоначальной настройки.
 - components/SettingsModal.js: Окно для управления настройками после входа.
-- components/DataManagerModal.js: Новый центр управления данными и синхронизацией.
 - components/DbSetupWizard.js: Мастер настройки управляющего воркера для автоматического обновления схемы БД.
 - components/ProxySetupWizard.js: Мастер настройки прокси-воркера для Gemini.
 `;
@@ -92,7 +90,7 @@ const serviceProviders = {
 
 // --- DOM ELEMENTS ---
 // These will be populated after the app's structure is rendered.
-let appContainer, authContainer, mainContent, settingsButton, helpButton, dataManagerButton, modalContainer, cameraViewContainer, wizardContainer;
+let appContainer, authContainer, mainContent, settingsButton, helpButton, modalContainer, cameraViewContainer, wizardContainer;
 
 // --- ERROR HANDLING ---
 function showSystemError(text) {
@@ -605,7 +603,6 @@ function showSettingsModal() {
     modalContainer.innerHTML = '';
     const modal = createSettingsModal({
         settings: state.settings,
-        supabaseService: supabaseService,
         onClose: () => { modalContainer.innerHTML = ''; },
         onSave: async (newSettings) => {
             state.settings = newSettings;
@@ -644,25 +641,16 @@ async function showProfileModal() {
     modalContainer.innerHTML = `<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"><div class="animate-spin h-10 w-10 border-4 border-white border-t-transparent rounded-full"></div></div>`;
 
     try {
-        const currentUserProfile = state.isSupabaseReady ? await supabaseService.getCurrentUserProfile() : state.userProfile;
-        
-        if (!currentUserProfile) {
+        if (!state.userProfile) {
             throw new Error("Не удалось загрузить профиль пользователя.");
         }
         
         modalContainer.innerHTML = ''; // Clear loading spinner
         const modal = createProfileModal({
-            currentUserProfile,
+            currentUserProfile: state.userProfile,
+            supabaseService: supabaseService,
             onClose: () => { modalContainer.innerHTML = ''; },
             onLogout: handleLogout,
-            onDelete: async () => {
-                if (confirm('Вы уверены, что хотите удалить все ваши настройки из облака? Это действие необратимо.')) {
-                    await supabaseService.deleteUserSettings();
-                    state.settings.isSupabaseEnabled = false;
-                    saveSettings(state.settings);
-                    window.location.reload();
-                }
-            },
         });
         modalContainer.appendChild(modal);
 
@@ -696,18 +684,6 @@ function showHelpModal() {
             supabaseService: supabaseService,
             onClose: () => { wizardContainer.innerHTML = ''; }
         })
-    });
-    modalContainer.appendChild(modal);
-}
-
-function showDataManagerModal() {
-    modalContainer.innerHTML = '';
-    const modal = createDataManagerModal({
-        supabaseService: supabaseService,
-        syncTasks: syncTasks,
-        onClose: () => modalContainer.innerHTML = '',
-        onRunSingleSync: runSingleSync,
-        onRunAllSyncs: runAllSyncs,
     });
     modalContainer.appendChild(modal);
 }
@@ -748,7 +724,7 @@ function showDbExecutionModal() {
     modalContainer.innerHTML = ''; // Clear other modals
     const modal = createDbExecutionModal({
         sqlScript: FULL_MIGRATION_SQL,
-        onExecute: async () => {
+        onExecute: async (sql) => {
             if (!state.settings.managementWorkerUrl || !state.settings.adminSecretToken) {
                 throw new Error("Управляющий воркер не настроен. Запустите мастер настройки БД в Настройках.");
             }
@@ -758,7 +734,7 @@ function showDbExecutionModal() {
             return await supabaseService.executeSqlViaFunction(
                 state.settings.managementWorkerUrl,
                 state.settings.adminSecretToken,
-                FULL_MIGRATION_SQL
+                sql
             );
         },
         onClose: () => {
@@ -880,18 +856,15 @@ async function startFullApp() {
     mainContent = document.getElementById('main-content');
     settingsButton = document.getElementById('settings-button');
     helpButton = document.getElementById('help-button');
-    dataManagerButton = document.getElementById('data-manager-button');
     modalContainer = document.getElementById('modal-container');
     cameraViewContainer = document.getElementById('camera-view-container');
     wizardContainer = document.getElementById('setup-wizard-container');
 
     // Hook up header button listeners
     settingsButton.innerHTML = SettingsIcon;
-    dataManagerButton.innerHTML = DatabaseIcon;
     helpButton.innerHTML = QuestionMarkCircleIcon;
     settingsButton.addEventListener('click', showSettingsModal);
     helpButton.addEventListener('click', showHelpModal);
-    dataManagerButton.addEventListener('click', showDataManagerModal);
     
     // Add the global click handler to the body to catch all dynamic actions
     document.body.addEventListener('click', handleGlobalClick);

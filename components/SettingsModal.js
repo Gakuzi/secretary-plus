@@ -1,7 +1,7 @@
 import { getSettings, saveSettings } from '../utils/storage.js';
 import * as Icons from './icons/Icons.js';
 
-export function createSettingsModal({ settings, supabaseService, onClose, onSave, onLaunchDbWizard, onLaunchProxyManager, onLaunchDbExecutionModal }) {
+export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizard, onLaunchProxyManager, onLaunchDbExecutionModal }) {
     const modalElement = document.createElement('div');
     modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
     
@@ -134,7 +134,6 @@ export function createSettingsModal({ settings, supabaseService, onClose, onSave
                 break;
             }
             case 'manage-proxies':
-                onClose(); // Close settings modal before opening proxy manager
                 onLaunchProxyManager();
                 break;
             case 'launch-db-wizard':
