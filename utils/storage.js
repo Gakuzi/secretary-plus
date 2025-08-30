@@ -22,6 +22,15 @@ const defaultSettings = {
     },
     useProxy: false,
     customProxyPrompt: '', // For user-editable proxy search prompt
+    // New setting to control which services are active
+    enabledServices: {
+        calendar: true,
+        tasks: true,
+        contacts: true,
+        files: true,
+        emails: true,
+        notes: true,
+    }
 };
 
 export function getSettings() {
@@ -29,9 +38,10 @@ export function getSettings() {
         const savedSettings = localStorage.getItem(SETTINGS_KEY);
         if (savedSettings) {
             const parsed = JSON.parse(savedSettings);
-            // Ensure serviceMap and timezone exist and have all keys
+            // Ensure all nested objects exist and have default keys
             const serviceMap = { ...defaultSettings.serviceMap, ...(parsed.serviceMap || {}) };
-            return { ...defaultSettings, ...parsed, serviceMap };
+            const enabledServices = { ...defaultSettings.enabledServices, ...(parsed.enabledServices || {}) };
+            return { ...defaultSettings, ...parsed, serviceMap, enabledServices };
         }
     } catch (error) {
         console.error("Failed to parse settings from localStorage", error);
@@ -56,6 +66,7 @@ export function saveSettings(settings) {
             serviceMap: settings.serviceMap,
             useProxy: settings.useProxy,
             customProxyPrompt: settings.customProxyPrompt,
+            enabledServices: settings.enabledServices, // Save the new setting
         };
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
     } catch (error)

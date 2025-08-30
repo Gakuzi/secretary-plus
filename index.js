@@ -17,9 +17,9 @@ import { SettingsIcon, QuestionMarkCircleIcon } from './components/icons/Icons.j
 import { MessageSender } from './types.js';
 import { SUPABASE_CONFIG, GOOGLE_CLIENT_ID } from './config.js';
 import { createMigrationModal } from './components/MigrationModal.js';
-import { createDbExecutionModal } from './components/DbExecutionModal.js';
 import { FULL_MIGRATION_SQL } from './services/supabase/migrations.js';
 import { createDataManagerModal } from './components/DataManagerModal.js';
+import { SERVICE_SCHEMAS } from './services/supabase/schema.js';
 
 
 // --- UTILITY ---
@@ -138,20 +138,25 @@ function renderMainContent() {
 
 // --- SYNC LOGIC ---
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
-export const syncTasks = [
-    { name: 'Calendar', label: 'Календарь', icon: 'CalendarIcon', tableName: 'calendar_events', providerFn: () => googleProvider.getCalendarEvents({ showDeleted: true, max_results: 2500 }), supabaseFn: (items) => supabaseService.syncCalendarEvents(items) },
-    { name: 'Tasks', label: 'Задачи', icon: 'CheckSquareIcon', tableName: 'tasks', providerFn: () => googleProvider.getTasks({ showCompleted: true, showHidden: true, max_results: 2000 }), supabaseFn: (items) => supabaseService.syncTasks(items) },
-    { name: 'Contacts', label: 'Контакты', icon: 'UsersIcon', tableName: 'contacts', providerFn: () => googleProvider.getAllContacts(), supabaseFn: (items) => supabaseService.syncContacts(items) },
-    { name: 'Files', label: 'Файлы', icon: 'FileIcon', tableName: 'files', providerFn: () => googleProvider.getAllFiles(), supabaseFn: (items) => supabaseService.syncFiles(items) },
-    { name: 'Emails', label: 'Почта', icon: 'EmailIcon', tableName: 'emails', providerFn: () => googleProvider.getRecentEmails({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncEmails(items) },
+const ALL_SYNC_TASKS = [
+    { name: 'Calendar', serviceKey: 'calendar', label: 'Календарь', icon: 'CalendarIcon', tableName: 'calendar_events', providerFn: () => googleProvider.getCalendarEvents({ showDeleted: true, max_results: 2500 }), supabaseFn: (items) => supabaseService.syncCalendarEvents(items) },
+    { name: 'Tasks', serviceKey: 'tasks', label: 'Задачи', icon: 'CheckSquareIcon', tableName: 'tasks', providerFn: () => googleProvider.getTasks({ showCompleted: true, showHidden: true, max_results: 2000 }), supabaseFn: (items) => supabaseService.syncTasks(items) },
+    { name: 'Contacts', serviceKey: 'contacts', label: 'Контакты', icon: 'UsersIcon', tableName: 'contacts', providerFn: () => googleProvider.getAllContacts(), supabaseFn: (items) => supabaseService.syncContacts(items) },
+    { name: 'Files', serviceKey: 'files', label: 'Файлы', icon: 'FileIcon', tableName: 'files', providerFn: () => googleProvider.getAllFiles(), supabaseFn: (items) => supabaseService.syncFiles(items) },
+    { name: 'Emails', serviceKey: 'emails', label: 'Почта', icon: 'EmailIcon', tableName: 'emails', providerFn: () => googleProvider.getRecentEmails({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncEmails(items) },
+    { name: 'Notes', serviceKey: 'notes', label: 'Заметки', icon: 'FileIcon', tableName: 'notes', providerFn: null, supabaseFn: null }, // Placeholder for UI
 ];
+
+function getEnabledSyncTasks() {
+    return ALL_SYNC_TASKS.filter(task => state.settings.enabledServices[task.serviceKey]);
+}
 
 async function runSingleSync(taskName) {
     if (!state.isGoogleConnected || !state.isSupabaseReady || !supabaseService) {
         throw new Error("Сервисы не готовы для синхронизации.");
     }
-    const task = syncTasks.find(t => t.name === taskName);
-    if (!task) throw new Error(`Задача синхронизации "${taskName}" не найдена.`);
+    const task = getEnabledSyncTasks().find(t => t.name === taskName);
+    if (!task || !task.providerFn) throw new Error(`Задача синхронизации "${taskName}" не найдена или не настроена.`);
 
     try {
         const items = await task.providerFn();
@@ -169,7 +174,8 @@ async function runSingleSync(taskName) {
 async function runAllSyncs() {
     if (state.isSyncing || !state.isGoogleConnected || !state.isSupabaseReady || !supabaseService) return;
     state.isSyncing = true;
-    for (const task of syncTasks) {
+    for (const task of getEnabledSyncTasks()) {
+        if (!task.providerFn) continue; // Skip tasks without a provider function (like Notes)
         try {
             await runSingleSync(task.name);
         } catch (error) {
@@ -632,10 +638,6 @@ function showSettingsModal() {
              modalContainer.innerHTML = ''; // Close settings before opening wizard
              showDbSetupWizard();
         },
-        onLaunchDbExecutionModal: () => {
-            modalContainer.innerHTML = ''; // Close settings
-            showDbExecutionModal();
-        },
         onLaunchProxyManager: () => {
             modalContainer.innerHTML = ''; // Close settings before opening manager
             showProxyManagerModal();
@@ -660,7 +662,7 @@ async function showProfileModal() {
         const modal = createProfileModal({
             currentUserProfile: state.userProfile,
             supabaseService: supabaseService,
-            syncTasks: syncTasks,
+            syncTasks: getEnabledSyncTasks(),
             onClose: () => { modalContainer.innerHTML = ''; },
             onLogout: handleLogout,
             onRunSingleSync: runSingleSync,
@@ -734,31 +736,6 @@ function showDbSetupWizard() {
      wizardContainer.appendChild(wizard);
 }
 
-function showDbExecutionModal() {
-    modalContainer.innerHTML = ''; // Clear other modals
-    const modal = createDbExecutionModal({
-        sqlScript: FULL_MIGRATION_SQL,
-        onExecute: async (sql) => {
-            if (!state.settings.managementWorkerUrl || !state.settings.adminSecretToken) {
-                throw new Error("Управляющий воркер не настроен. Запустите мастер настройки БД в Настройках.");
-            }
-            if (!supabaseService) {
-                 await initializeSupabase();
-            }
-            return await supabaseService.executeSqlViaFunction(
-                state.settings.managementWorkerUrl,
-                state.settings.adminSecretToken,
-                sql
-            );
-        },
-        onClose: () => {
-            modalContainer.innerHTML = '';
-            // It might be good to reload or re-sync after a successful migration
-        }
-    });
-    modalContainer.appendChild(modal);
-}
-
 function showProxySetupWizard({ supabaseService, onClose }) {
      wizardContainer.innerHTML = '';
      const wizard = createProxySetupWizard({
@@ -781,7 +758,8 @@ function showDataManagerModal() {
     modalContainer.innerHTML = '';
     const manager = createDataManagerModal({
         supabaseService: supabaseService,
-        syncTasks: syncTasks,
+        syncTasks: getEnabledSyncTasks(),
+        settings: state.settings,
         onClose: () => { modalContainer.innerHTML = ''; },
         onRunSingleSync: runSingleSync,
         onRunAllSyncs: runAllSyncs,

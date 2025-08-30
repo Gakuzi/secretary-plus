@@ -582,6 +582,15 @@ export class SupabaseService {
         return result;
     }
 
+    async getExistingTables(functionUrl, adminToken) {
+        const sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';";
+        const result = await this.executeSqlViaFunction(functionUrl, adminToken, sql);
+        if (result && result.result && Array.isArray(result.result)) {
+            return result.result.map(row => row.table_name);
+        }
+        return [];
+    }
+
 
     // --- Proxy Management ---
     async getProxies() {

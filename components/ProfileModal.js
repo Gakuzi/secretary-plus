@@ -150,6 +150,9 @@ function renderStatsTab() {
 }
 
 function renderSyncTab(syncTasks, syncStatus, isSyncingAll, syncingSingle) {
+    if (syncTasks.length === 0) {
+        return `<div class="text-center p-8 text-slate-500 dark:text-slate-400">Нет включенных служб для синхронизации. Включите их в <button data-action="open-settings" class="text-blue-500 hover:underline">Настройках</button>.</div>`;
+    }
     const syncItemsHtml = syncTasks.map(task => {
         const lastSyncData = syncStatus[task.name];
         let statusText = 'Никогда';
@@ -378,7 +381,11 @@ export function createProfileModal({ currentUserProfile, supabaseService, syncTa
                     const taskName = target.dataset.taskName;
                     state.syncingSingle = taskName;
                     switchTab('sync');
-                    await onRunSingleSync(taskName);
+                    try {
+                        await onRunSingleSync(taskName);
+                    } catch(err) {
+                        // error is handled inside, just need to update UI
+                    }
                     state.syncingSingle = null;
                     switchTab('sync');
                     break;
@@ -391,6 +398,12 @@ export function createProfileModal({ currentUserProfile, supabaseService, syncTa
                     const viewerModal = createDataViewerModal(label, data, error ? error.message : null, () => subModalContainer.innerHTML = '');
                     subModalContainer.innerHTML = '';
                     subModalContainer.appendChild(viewerModal);
+                    break;
+                }
+                case 'open-settings': {
+                    // This is a special action to bridge modals. We assume the main `showSettingsModal` is available globally.
+                    onClose(); // Close the current modal first
+                    document.querySelector('#settings-button').click(); // Then open the settings modal
                     break;
                 }
             }

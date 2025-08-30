@@ -1,22 +1,38 @@
 import { getSettings, saveSettings } from '../utils/storage.js';
 import * as Icons from './icons/Icons.js';
+import { SERVICE_SCHEMAS } from '../services/supabase/schema.js';
 
-export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizard, onLaunchProxyManager, onLaunchDbExecutionModal, onLaunchDataManager }) {
+
+export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizard, onLaunchProxyManager, onLaunchDataManager }) {
     const modalElement = document.createElement('div');
     modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
     
     const render = () => {
+        const servicesHtml = Object.entries(SERVICE_SCHEMAS).map(([key, schema]) => `
+            <div class="flex items-center justify-between py-2 border-b border-slate-200 dark:border-slate-700 last:border-b-0">
+                <label for="service-toggle-${key}" class="font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                    <span class="w-5 h-5">${Icons[schema.icon] || ''}</span>
+                    <span>${schema.label}</span>
+                </label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="service-toggle-${key}" data-service-key="${key}" ${settings.enabledServices[key] ? 'checked' : ''} ${!settings.isSupabaseEnabled ? 'disabled' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        `).join('');
+
         modalElement.innerHTML = `
-            <div id="settings-content" class="bg-white dark:bg-slate-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-lg shadow-xl">
+            <div id="settings-content" class="bg-white dark:bg-slate-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-lg shadow-xl">
                 <header class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
                     <h2 class="text-xl sm:text-2xl font-bold flex items-center gap-2">${Icons.SettingsIcon} Настройки</h2>
                     <button data-action="close" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Закрыть настройки">&times;</button>
                 </header>
 
                 <main class="flex-1 flex flex-col sm:flex-row overflow-hidden bg-slate-50 dark:bg-slate-900/70">
-                    <aside class="w-full sm:w-52 border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-slate-700 p-2 sm:p-4 flex-shrink-0 bg-white dark:bg-slate-800">
+                    <aside class="w-full sm:w-56 border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-slate-700 p-2 sm:p-4 flex-shrink-0 bg-white dark:bg-slate-800">
                          <nav class="flex flex-row sm:flex-col sm:space-y-2 w-full justify-around">
                             <a href="#connections" class="settings-tab-button text-center sm:text-left active" data-tab="connections">Подключения</a>
+                            <a href="#services" class="settings-tab-button text-center sm:text-left" data-tab="services">Службы</a>
                             <a href="#database" class="settings-tab-button text-center sm:text-left" data-tab="database">База данных</a>
                             <a href="#about" class="settings-tab-button text-center sm:text-left" data-tab="about">О приложении</a>
                         </nav>
@@ -51,32 +67,32 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
                             </div>
                         </div>
 
+                        <!-- Services Tab -->
+                        <div id="tab-services" class="settings-tab-content hidden space-y-6">
+                            <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Службы для синхронизации</h3>
+                                <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Выберите, какие данные вы хотите синхронизировать с Supabase для быстрого поиска и анализа. Отключение службы не удалит уже синхронизированные данные.</p>
+                                <div class="divide-y divide-slate-200 dark:divide-slate-700">${servicesHtml}</div>
+                            </div>
+                        </div>
+
                         <!-- Database Tab -->
                         <div id="tab-database" class="settings-tab-content hidden space-y-6">
                              <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Управление Базой Данных</h3>
-                                <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Для автоматического обновления схемы базы данных используется **Управляющий воркер**. Если вы столкнулись с ошибками синхронизации, запустите мастер для его настройки или проверки.</p>
-                                <button data-action="launch-db-wizard" class="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2">
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Центр управления данными</h3>
+                                <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Просмотр кэшированных данных, статусы, ручной запуск синхронизации и управление схемой базы данных.</p>
+                                <button data-action="launch-data-manager" class="w-full px-4 py-2 bg-slate-500 hover:bg-slate-600 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2 ${!settings.isSupabaseEnabled ? 'opacity-50 cursor-not-allowed' : ''}" ${!settings.isSupabaseEnabled ? 'disabled' : ''}>
                                     ${Icons.DatabaseIcon}
+                                    <span>Открыть Центр управления</span>
+                                </button>
+                             </div>
+                             <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Управляющий воркер</h3>
+                                <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Для автоматического обновления схемы базы данных используется **Управляющий воркер**. Если вы столкнулись с ошибками, запустите мастер для его настройки или проверки.</p>
+                                <button data-action="launch-db-wizard" class="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2">
+                                    ${Icons.WandIcon}
                                     <span>Запустить мастер настройки воркера</span>
                                 </button>
-
-                                <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                                    <h4 class="font-semibold text-slate-800 dark:text-slate-200">Редактор и Миграция</h4>
-                                    <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Если воркер уже настроен, вы можете принудительно выполнить полную миграцию для обновления схемы или внести ручные изменения в SQL-скрипт.</p>
-                                    <button data-action="launch-db-execution" class="w-full px-4 py-2 bg-slate-500 hover:bg-slate-600 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2 ${!settings.managementWorkerUrl || !settings.adminSecretToken ? 'opacity-50 cursor-not-allowed' : ''}" ${!settings.managementWorkerUrl || !settings.adminSecretToken ? 'disabled' : ''}>
-                                        ${Icons.CodeIcon}
-                                        <span>Открыть SQL-редактор</span>
-                                    </button>
-                                </div>
-                                <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                                    <h4 class="font-semibold text-slate-800 dark:text-slate-200">Центр управления данными</h4>
-                                    <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Просмотр кэшированных данных, статусы и ручной запуск синхронизации.</p>
-                                    <button data-action="launch-data-manager" class="w-full px-4 py-2 bg-slate-500 hover:bg-slate-600 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2 ${!settings.isSupabaseEnabled ? 'opacity-50 cursor-not-allowed' : ''}" ${!settings.isSupabaseEnabled ? 'disabled' : ''}>
-                                        ${Icons.DatabaseIcon}
-                                        <span>Открыть Центр управления</span>
-                                    </button>
-                                </div>
                             </div>
                         </div>
 
@@ -138,6 +154,10 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
                 const newSettings = { ...settings };
                 newSettings.geminiApiKey = modalElement.querySelector('#geminiApiKey').value.trim();
                 newSettings.useProxy = modalElement.querySelector('#use-proxy-toggle').checked;
+                // Collect service toggles
+                modalElement.querySelectorAll('[data-service-key]').forEach(toggle => {
+                    newSettings.enabledServices[toggle.dataset.serviceKey] = toggle.checked;
+                });
                 onSave(newSettings);
                 break;
             }
@@ -146,9 +166,6 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
                 break;
             case 'launch-db-wizard':
                 onLaunchDbWizard();
-                break;
-            case 'launch-db-execution':
-                onLaunchDbExecutionModal();
                 break;
             case 'launch-data-manager':
                 onLaunchDataManager();
