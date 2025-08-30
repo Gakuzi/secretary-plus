@@ -521,7 +521,8 @@ async function startAuthenticatedSession(session) {
         try {
             await supabaseService.checkSchemaVersion();
         } catch (schemaError) {
-            const isSchemaError = schemaError.message.includes('relation') || schemaError.message.includes('does not exist') || schemaError.message.includes('Could not find the function');
+            // Check if it's a "relation does not exist" type of error, which indicates a schema issue.
+            const isSchemaError = schemaError.message.includes('relation') || schemaError.message.includes('does not exist') || schemaError.message.includes('could not find the function');
             
             if (isAdminOrOwner && isSchemaError) {
                  addMessageToChat({
@@ -649,20 +650,19 @@ async function main() {
     }
     
     supabaseService.onAuthStateChange(async (event, session) => {
-        if (session && !state.userProfile) {
+        if (event === 'SIGNED_IN' && session) {
             await startAuthenticatedSession(session);
-        } else if (session && state.userProfile) {
-            googleProvider.setAuthToken(session.provider_token);
-        } else if (!session && state.userProfile) {
+        } else if (event === 'TOKEN_REFRESHED' && session) {
+             googleProvider.setAuthToken(session.provider_token);
+        } else if (event === 'SIGNED_OUT') {
             state.userProfile = null;
             state.isLoading = false;
             stopEmailPolling();
             stopAutoSync();
             showWelcomeScreen();
         } else if (!session && !state.userProfile) {
-            if (!document.querySelector('.welcome-screen-container')) {
-                showWelcomeScreen();
-            }
+            // Initial load without a session
+            showWelcomeScreen();
         }
     });
 }

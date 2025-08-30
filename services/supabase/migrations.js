@@ -2,24 +2,17 @@
 // и создает политики, гарантирующие, что пользователи могут получить доступ только к своим собственным данным.
 import { DB_SCHEMAS, SHARED_SQL, generateCreateTableSql } from './schema.js';
 
-// Dynamically generate CREATE TABLE statements for all services using only recommended fields.
+// Dynamically generate CREATE TABLE statements for all services using all defined fields.
 const fullSchemaSql = Object.values(DB_SCHEMAS)
-    .filter(schema => schema.isEditable) // Only create tables for user-editable data, not system tables like profiles
-    .map(schema => {
-        // Filter for fields marked as recommended for the initial setup
-        const recommendedFields = schema.fields;
-        // Only generate a script if there are fields to create
-        if (recommendedFields.length > 0) {
-            return generateCreateTableSql(schema, recommendedFields);
-        }
-        return '';
-    }).join('\n\n');
+    .filter(schema => schema.isEditable) // Only create tables for user-editable data
+    .map(schema => generateCreateTableSql(schema, schema.fields))
+    .join('\n\n');
 
 export const FULL_MIGRATION_SQL = `
--- This is a full migration script that DROPS existing tables.
--- It's intended for initial setup or a complete schema reset.
+-- Это полный скрипт миграции, который УДАЛЯЕТ существующие таблицы.
+-- Предназначен для первоначальной настройки или полного сброса схемы.
 
--- Drop existing tables to start fresh. System tables (profiles, settings, etc.) are preserved by SHARED_SQL logic.
+-- Удаляем существующие таблицы для чистого старта. Системные таблицы (profiles и т.д.) сохраняются логикой в SHARED_SQL.
 DROP TABLE IF EXISTS public.calendar_events CASCADE;
 DROP TABLE IF EXISTS public.contacts CASCADE;
 DROP TABLE IF EXISTS public.files CASCADE;
@@ -30,11 +23,14 @@ DROP TABLE IF EXISTS public.chat_memory CASCADE;
 DROP TABLE IF EXISTS public.chat_history CASCADE;
 DROP TABLE IF EXISTS public.sessions CASCADE;
 DROP TABLE IF EXISTS public.action_stats CASCADE;
+DROP TABLE IF EXISTS public.user_settings CASCADE;
+DROP TABLE IF EXISTS public.shared_proxies CASCADE;
+DROP TABLE IF EXISTS public.shared_gemini_keys CASCADE;
 
--- Recreate shared schema components (types, system tables, functions)
+
+-- Пересоздаем общие компоненты схемы (типы, системные таблицы, функции)
 ${SHARED_SQL}
 
--- Recreate service-specific tables with all fields
+-- Пересоздаем таблицы для сервисов со всеми полями
 ${fullSchemaSql}
-
 `;

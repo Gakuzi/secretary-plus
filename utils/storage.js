@@ -1,8 +1,8 @@
 import { DB_SCHEMAS } from '../services/supabase/schema.js';
 
-const SETTINGS_KEY = 'secretary-plus-settings-v4';
+const SETTINGS_KEY = 'secretary-plus-settings-v5';
 const SYNC_STATUS_KEY = 'secretary-plus-sync-status-v1';
-const GOOGLE_TOKEN_KEY = 'secretary-plus-google-token-v1';
+
 
 // Helper to build the default field config based on recommended fields from the schema
 const buildDefaultFieldConfig = () => {
@@ -28,6 +28,7 @@ const defaultSettings = {
     // New settings for the DB Management Worker
     managementWorkerUrl: '',
     adminSecretToken: '',
+    customProxyPrompt: '',
     serviceMap: {
         calendar: 'google',
         tasks: 'google',
@@ -53,19 +54,23 @@ export function getSettings() {
         const savedSettings = localStorage.getItem(SETTINGS_KEY);
         if (savedSettings) {
             const parsed = JSON.parse(savedSettings);
-            // Ensure all nested objects exist and have default keys
-            const serviceMap = { ...defaultSettings.serviceMap, ...(parsed.serviceMap || {}) };
-            const enabledServices = { ...defaultSettings.enabledServices, ...(parsed.enabledServices || {}) };
-            const serviceFieldConfig = { ...defaultSettings.serviceFieldConfig };
-            // Deep merge for serviceFieldConfig
+            // Deep merge to ensure all keys from default settings are present
+            const merged = {
+                ...defaultSettings,
+                ...parsed,
+                serviceMap: { ...defaultSettings.serviceMap, ...(parsed.serviceMap || {}) },
+                enabledServices: { ...defaultSettings.enabledServices, ...(parsed.enabledServices || {}) },
+                serviceFieldConfig: { ...defaultSettings.serviceFieldConfig }
+            };
+             // Deep merge for serviceFieldConfig
             if (parsed.serviceFieldConfig) {
-                for (const serviceKey in serviceFieldConfig) {
+                for (const serviceKey in merged.serviceFieldConfig) {
                     if (parsed.serviceFieldConfig[serviceKey]) {
-                        serviceFieldConfig[serviceKey] = { ...serviceFieldConfig[serviceKey], ...parsed.serviceFieldConfig[serviceKey] };
+                        merged.serviceFieldConfig[serviceKey] = { ...merged.serviceFieldConfig[serviceKey], ...parsed.serviceFieldConfig[serviceKey] };
                     }
                 }
             }
-            return { ...defaultSettings, ...parsed, serviceMap, enabledServices, serviceFieldConfig };
+            return merged;
         }
     } catch (error) {
         console.error("Failed to parse settings from localStorage", error);
@@ -75,48 +80,10 @@ export function getSettings() {
 
 export function saveSettings(settings) {
     try {
-        // Create a clean settings object to save, removing legacy fields
-        const settingsToSave = {
-            timezone: settings.timezone,
-            enableEmailPolling: settings.enableEmailPolling,
-            enableAutoSync: settings.enableAutoSync,
-            managementWorkerUrl: settings.managementWorkerUrl,
-            adminSecretToken: settings.adminSecretToken,
-            serviceMap: settings.serviceMap,
-            enabledServices: settings.enabledServices, // Save the new setting
-            serviceFieldConfig: settings.serviceFieldConfig, // Save the new field config
-        };
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     } catch (error)
     {
         console.error("Failed to save settings to localStorage", error);
-    }
-}
-
-// --- Direct Google Auth Token ---
-
-export function getGoogleToken() {
-    try {
-        return localStorage.getItem(GOOGLE_TOKEN_KEY);
-    } catch (error) {
-        console.error("Failed to get Google token from localStorage", error);
-        return null;
-    }
-}
-
-export function saveGoogleToken(token) {
-    try {
-        localStorage.setItem(GOOGLE_TOKEN_KEY, token);
-    } catch (error) {
-        console.error("Failed to save Google token to localStorage", error);
-    }
-}
-
-export function clearGoogleToken() {
-    try {
-        localStorage.removeItem(GOOGLE_TOKEN_KEY);
-    } catch (error) {
-        console.error("Failed to remove Google token from localStorage", error);
     }
 }
 

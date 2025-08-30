@@ -27,9 +27,14 @@ export class SupabaseService {
 
     // --- Auth ---
     async signInWithGoogle() {
-        // Dynamically construct the redirect URL to ensure it works correctly
-        // on different hosting environments (like GitHub Pages subdirectories).
-        const redirectUrl = `${window.location.origin}${window.location.pathname}`;
+        // Dynamically construct a clean redirect URL to ensure it works correctly
+        // on different hosting environments (like GitHub Pages subdirectories) and
+        // avoids mismatches due to 'index.html'.
+        let path = window.location.pathname;
+        if (path.endsWith('index.html')) {
+            path = path.substring(0, path.lastIndexOf('/') + 1);
+        }
+        const redirectUrl = `${window.location.origin}${path}`;
 
         const { error } = await this.client.auth.signInWithOAuth({
             provider: 'google',

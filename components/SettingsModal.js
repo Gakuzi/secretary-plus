@@ -1,13 +1,13 @@
 import * as Icons from './icons/Icons.js';
 import { getSettings, saveSettings, getSyncStatus } from '../utils/storage.js';
-import { DB_SCHEMAS } from '../services/supabase/schema.js';
 import { createProxyManagerModal } from './ProxyManagerModal.js';
+import { createMigrationModal } from './MigrationModal.js';
+import { createDbSetupWizard } from './DbSetupWizard.js';
 
 // --- HELPERS ---
 const ROLE_DISPLAY_MAP = {
     owner: { text: 'Владелец', class: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' },
     admin: { text: 'Администратор', class: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200' },
-    manager: { text: 'Менеджер', class: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
     user: { text: 'Пользователь', class: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200' }
 };
 
@@ -24,7 +24,7 @@ const ACTION_NAMES = {
 };
 
 const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#ef4444', '#f97316', '#eab308', '#6366f1', '#ec4899', '#06b6d4', '#22c55e', '#a855f7', '#f43f5e'];
-const ROLES = ['owner', 'admin', 'manager', 'user'];
+const ROLES = ['owner', 'admin', 'user'];
 const maskApiKey = (key) => (!key || key.length < 10) ? 'Неверный ключ' : `${key.substring(0, 5)}...${key.substring(key.length - 4)}`;
 
 // --- TAB RENDERERS ---
@@ -42,12 +42,12 @@ function renderErrorTab(errorMessage) {
 }
 
 
-function renderUsersTab(users, currentUserId) {
+function renderUsersTab(users, currentUserId, currentUserRole) {
     const usersHtml = users.map(user => {
         const roleInfo = ROLE_DISPLAY_MAP[user.role] || ROLE_DISPLAY_MAP.user;
         const lastSignIn = user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString('ru-RU') : 'Никогда';
         
-        const canChangeRole = user.role !== 'owner';
+        const canChangeRole = currentUserRole === 'owner' && user.id !== currentUserId;
         const roleSelector = canChangeRole ? `
             <select data-action="change-role" data-user-id="${user.id}" class="bg-transparent text-xs p-1 rounded border border-slate-300 dark:border-slate-600 focus:ring-blue-500 focus:border-blue-500">
                 ${ROLES.map(role => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${ROLE_DISPLAY_MAP[role].text}</option>`).join('')}
@@ -269,20 +269,21 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
 
         try {
             switch(tabId) {
-                case 'users': state.users = await supabaseService.getAllUserProfiles(); break;
+                case 'users': 
+                    const [users, currentUser] = await Promise.all([
+                        supabaseService.getAllUserProfiles(),
+                        supabaseService.getCurrentUserProfile()
+                    ]);
+                    state.users = users;
+                    state.currentUserRole = currentUser.role;
+                    break;
                 case 'apiKeys': state.apiKeys = await supabaseService.getAllSharedGeminiKeysForAdmin(); break;
                 case 'history': state.history = await supabaseService.getChatHistoryForAdmin(); break;
                 case 'stats': state.stats = await supabaseService.getFullStats(); break;
             }
         } catch (error) {
             console.error(`Failed to load data for tab ${tabId}:`, error);
-            const isSchemaError = error.message.includes('relation') || error.message.includes('does not exist') || error.message.includes('Could not find the function');
-            if (isSchemaError) {
-                state.error = error.message;
-            } else {
-                 // For non-schema errors, just log it, as the UI won't crash.
-                console.error("An unexpected error occurred in settings:", error);
-            }
+            state.error = error.message;
         } finally {
             state.isLoading = false;
             render();
@@ -299,7 +300,7 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
             contentContainer.innerHTML = renderErrorTab(state.error);
         } else {
             switch (state.currentTab) {
-                case 'users': contentContainer.innerHTML = renderUsersTab(state.users, supabaseService.client.auth.getUser().id); break;
+                case 'users': contentContainer.innerHTML = renderUsersTab(state.users, supabaseService.client.auth.getUser().id, state.currentUserRole); break;
                 case 'apiKeys': contentContainer.innerHTML = renderApiKeysTab(state.apiKeys); break;
                 case 'proxies': contentContainer.innerHTML = renderProxiesTab(); break;
                 case 'sync': contentContainer.innerHTML = renderSyncTab(allSyncTasks, state); break;
@@ -421,12 +422,19 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
             const keyId = keyFieldTarget.closest('[data-key-id]').dataset.keyId;
             const field = keyFieldTarget.dataset.field;
             let value = keyFieldTarget.type === 'checkbox' ? keyFieldTarget.checked : keyFieldTarget.value;
-            const updates = { [field]: field === 'priority' ? (parseInt(value, 10) || 0) : value };
-            try { 
-                await supabaseService.updateSharedGeminiKey(keyId, updates); 
-            } catch (err) { 
-                 alert(`Ошибка обновления ключа: ${err.message}`);
-                await switchTab('apiKeys'); 
+            if (field === 'priority' || field === 'description') {
+                 // Debounce input updates
+                clearTimeout(keyFieldTarget.debounceTimer);
+                keyFieldTarget.debounceTimer = setTimeout(async () => {
+                    const updates = { [field]: field === 'priority' ? (parseInt(value, 10) || 0) : value };
+                    try { await supabaseService.updateSharedGeminiKey(keyId, updates); } 
+                    catch (err) { alert(`Ошибка обновления ключа: ${err.message}`); await switchTab('apiKeys'); }
+                }, 500);
+            } else {
+                 // Update checkbox immediately
+                 const updates = { [field]: value };
+                 try { await supabaseService.updateSharedGeminiKey(keyId, updates); } 
+                 catch (err) { alert(`Ошибка обновления ключа: ${err.message}`); await switchTab('apiKeys'); }
             }
         }
     });
