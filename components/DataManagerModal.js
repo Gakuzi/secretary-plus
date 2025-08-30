@@ -234,7 +234,7 @@ export function createDataManagerModal({ supabaseService, syncTasks, settings, o
         render();
 
         try {
-            const tables = await supabaseService.getExistingTables();
+            const tables = await supabaseService.getExistingTables(settings.managementWorkerUrl, settings.adminSecretToken);
             state.existingTables = tables;
             
             let missingSql = '';
