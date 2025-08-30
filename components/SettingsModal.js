@@ -71,17 +71,23 @@ function renderUsersTab(users, currentUserId, currentUserRole) {
     return `<div class="space-y-3">${usersHtml}</div>`;
 }
 
-function renderApiKeysTab(keys) {
-    // Defensive check to prevent crash on null/undefined data
-    if (!keys) {
-        return '<p class="text-center text-slate-500 dark:text-slate-400">Не удалось загрузить ключи. Попробуйте обновить вкладку.</p>';
-    }
+function renderApiKeysTab(keys, state) {
+    const statusHtml = state.apiKeyStatus.message 
+        ? `<div class="p-3 rounded-md mb-4 text-sm ${state.apiKeyStatus.type === 'success' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200' : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200'}">${state.apiKeyStatus.message}</div>` 
+        : '';
 
     const keysHtml = keys.map(key => `
-        <div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3" data-key-id="${key.id}">
-            <div class="flex items-center justify-between">
-                <p class="font-mono text-sm font-semibold text-slate-700 dark:text-slate-200">${maskApiKey(key.api_key)}</p>
-                <div class="flex items-center gap-2">
+        <div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4 border border-slate-200 dark:border-slate-700" data-key-id="${key.id}">
+            <div class="flex items-start justify-between">
+                <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-slate-800 dark:text-slate-100 truncate pr-2">${key.description || 'Без описания'}</p>
+                    <p class="font-mono text-sm text-slate-500">${maskApiKey(key.api_key)}</p>
+                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                        Приоритет: <input type="number" value="${key.priority}" data-action="update-key-field" data-field="priority" class="bg-transparent w-16 p-0 border-0 border-b border-dotted border-slate-400 focus:ring-0 focus:border-slate-500">
+                        &bull; Добавлен: ${new Date(key.created_at).toLocaleDateString()}
+                    </p>
+                </div>
+                <div class="flex items-center gap-4 flex-shrink-0">
                     <label class="toggle-switch">
                         <input type="checkbox" data-action="update-key-field" data-field="is_active" ${key.is_active ? 'checked' : ''}>
                         <span class="toggle-slider"></span>
@@ -89,38 +95,47 @@ function renderApiKeysTab(keys) {
                     <button data-action="delete-key" data-key-id="${key.id}" class="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full">${Icons.TrashIcon.replace(/width="24" height="24"/g, 'width="16" height="16"')}</button>
                 </div>
             </div>
-            <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div>
-                    <label class="font-medium text-xs text-slate-500">Описание</label>
-                    <input type="text" value="${key.description || ''}" data-action="update-key-field" data-field="description" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-1.5 text-sm" placeholder="Например, 'Основной ключ'">
-                </div>
-                <div>
-                    <label class="font-medium text-xs text-slate-500">Приоритет</label>
-                    <input type="number" value="${key.priority}" data-action="update-key-field" data-field="priority" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-1.5 text-sm" placeholder="0">
-                </div>
-            </div>
         </div>
     `).join('');
 
+    const addButtonText = state.isAddingKey ? `<div class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>` : 'Добавить ключ';
+
     return `
-        <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg text-sm text-blue-800 dark:text-blue-200 mb-6">
+        <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg text-sm text-blue-800 dark:text-blue-200 mb-4">
             <h3 class="font-bold">Управление общим пулом ключей Gemini API</h3>
             <p class="mt-1">Добавленные здесь ключи будут использоваться всеми пользователями системы. Ассистент будет автоматически переключаться между активными ключами (начиная с наименьшего приоритета) в случае, если один из них исчерпает лимиты.</p>
         </div>
-        <div class="space-y-3 mb-6">${keys.length > 0 ? keysHtml : '<p class="text-center text-slate-500">Нет добавленных ключей.</p>'}</div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Все ключи надежно хранятся в базе данных Supabase. Это ваш интерфейс для управления ими.</p>
+        
+        ${statusHtml}
+
+        <div class="space-y-3 mb-6">${keys.length > 0 ? keysHtml : '<p class="text-center text-slate-500 py-4">Нет добавленных ключей.</p>'}</div>
+        
         <div class="p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
             <h4 class="font-semibold text-lg mb-3">Добавить новый ключ</h4>
             <div class="space-y-3">
-                <div> <label class="font-medium text-sm">API Ключ</label> <input type="password" id="new-key-input" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm" placeholder="Введите полный ключ API..."> </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <div> <label class="font-medium text-sm">Описание</label> <input type="text" id="new-key-desc-input" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm" placeholder="Например, 'Резервный ключ'"> </div>
-                     <div> <label class="font-medium text-sm">Приоритет</label> <input type="number" id="new-key-priority-input" value="10" class="w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm"> </div>
+                <div>
+                    <label class="font-medium text-sm">API Ключ</label>
+                    <input type="password" id="new-key-input" class="w-full mt-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm" placeholder="Введите полный ключ API...">
                 </div>
-                <button data-action="add-key" class="w-full mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center justify-center gap-2">Добавить ключ</button>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div>
+                        <label class="font-medium text-sm">Описание</label>
+                        <input type="text" id="new-key-desc-input" class="w-full mt-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm" placeholder="Например, 'Резервный ключ'">
+                     </div>
+                     <div>
+                        <label class="font-medium text-sm">Приоритет</label>
+                        <input type="number" id="new-key-priority-input" value="10" class="w-full mt-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm">
+                     </div>
+                </div>
+                <button data-action="add-key" class="w-full mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center justify-center gap-2 transition-opacity disabled:opacity-70" ${state.isAddingKey ? 'disabled' : ''}>
+                    ${addButtonText}
+                </button>
             </div>
         </div>
     `;
 }
+
 
 function renderProxiesTab() {
     return `
@@ -249,6 +264,8 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
         history: [],
         stats: null,
         apiKeys: [],
+        apiKeyStatus: { type: '', message: '' },
+        isAddingKey: false,
         isTestingConnection: false,
         testStatus: 'idle',
         syncStatus: getSyncStatus(),
@@ -270,6 +287,7 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
         state.currentTab = tabId;
         state.isLoading = true;
         state.error = null;
+        state.apiKeyStatus = { type: '', message: '' }; // Clear status on any tab switch
         render();
 
         try {
@@ -306,7 +324,7 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
         } else {
             switch (state.currentTab) {
                 case 'users': contentContainer.innerHTML = renderUsersTab(state.users, supabaseService.client.auth.getUser().id, state.currentUserRole); break;
-                case 'apiKeys': contentContainer.innerHTML = renderApiKeysTab(state.apiKeys); break;
+                case 'apiKeys': contentContainer.innerHTML = renderApiKeysTab(state.apiKeys, state); break;
                 case 'proxies': contentContainer.innerHTML = renderProxiesTab(); break;
                 case 'sync': contentContainer.innerHTML = renderSyncTab(allSyncTasks, state); break;
                 case 'schema': contentContainer.innerHTML = renderSchemaTab(); break;
@@ -364,29 +382,50 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
                 case 'close': onClose(); break;
                 case 'delete-key': {
                     const keyId = target.dataset.keyId;
-                    if (confirm('Удалить этот ключ?')) {
+                    if (confirm('Удалить этот ключ? Это действие необратимо.')) {
+                        state.apiKeyStatus = { type: '', message: '' };
+                        render();
                         try {
                             await supabaseService.deleteSharedGeminiKey(keyId);
-                            await switchTab('apiKeys');
+                            state.apiKeyStatus = { type: 'success', message: 'Ключ успешно удален.' };
+                            state.apiKeys = await supabaseService.getAllSharedGeminiKeysForAdmin();
                         } catch (err) {
-                            alert(`Не удалось удалить ключ: ${err.message}`);
+                            state.apiKeyStatus = { type: 'error', message: `Ошибка удаления: ${err.message}` };
+                        } finally {
+                            render();
                         }
                     }
                     break;
                 }
                 case 'add-key': {
+                    state.isAddingKey = true;
+                    state.apiKeyStatus = { type: '', message: '' };
+                    render();
+
                     const apiKey = modalElement.querySelector('#new-key-input').value.trim();
                     const description = modalElement.querySelector('#new-key-desc-input').value.trim();
                     const priority = parseInt(modalElement.querySelector('#new-key-priority-input').value, 10);
+                    
                     if (!apiKey) {
-                        alert('Ключ API не может быть пустым.');
+                        state.apiKeyStatus = { type: 'error', message: 'Ключ API не может быть пустым.' };
+                        state.isAddingKey = false;
+                        render();
                         return;
                     }
                     try {
                         await supabaseService.addSharedGeminiKey({ apiKey, description, priority });
-                        await switchTab('apiKeys');
+                        state.apiKeyStatus = { type: 'success', message: 'Ключ успешно добавлен!' };
+                        state.apiKeys = await supabaseService.getAllSharedGeminiKeysForAdmin();
                     } catch (err) {
-                        alert(`Не удалось добавить ключ: ${err.message}`);
+                        state.apiKeyStatus = { type: 'error', message: `Ошибка: ${err.message}` };
+                    } finally {
+                        state.isAddingKey = false;
+                        render();
+                        if (state.apiKeyStatus.type === 'success') {
+                             modalElement.querySelector('#new-key-input').value = '';
+                             modalElement.querySelector('#new-key-desc-input').value = '';
+                             modalElement.querySelector('#new-key-priority-input').value = '10';
+                        }
                     }
                     break;
                 }
@@ -432,7 +471,7 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
                     await switchTab('users'); 
                 }
             } else {
-                await switchTab('users');
+                await switchTab('users'); 
             }
         }
 
@@ -443,22 +482,24 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
             let value = keyFieldTarget.type === 'checkbox' ? keyFieldTarget.checked : keyFieldTarget.value;
             
             const performUpdate = async () => {
+                state.apiKeyStatus = { type: '', message: '' };
+                render();
                 const updates = { [field]: field === 'priority' ? (parseInt(value, 10) || 0) : value };
                 try {
                     await supabaseService.updateSharedGeminiKey(keyId, updates);
+                    state.apiKeyStatus = { type: 'success', message: 'Ключ обновлен.' };
                 } catch (err) {
-                    alert(`Ошибка обновления ключа: ${err.message}`);
-                    // Revert UI on failure by reloading the tab data
-                    await switchTab('apiKeys');
+                    state.apiKeyStatus = { type: 'error', message: `Ошибка обновления: ${err.message}` };
+                    await switchTab('apiKeys'); // Revert UI on failure
+                } finally {
+                    render();
                 }
             };
 
             if (field === 'priority' || field === 'description') {
-                 // Debounce input updates
-                clearTimeout(keyFieldTarget.debounceTimer);
-                keyFieldTarget.debounceTimer = setTimeout(performUpdate, 500);
+                 clearTimeout(keyFieldTarget.debounceTimer);
+                 keyFieldTarget.debounceTimer = setTimeout(performUpdate, 800);
             } else {
-                 // Update checkbox immediately
                  await performUpdate();
             }
         }
