@@ -548,61 +548,25 @@ function renderMainApp() {
     mainContent.appendChild(chatContainer);
 }
 
-/**
- * Checks for schema errors and prompts admin for migration if needed.
- * @returns {Promise<boolean>} - Returns true if a migration prompt was shown, false otherwise.
- */
-async function checkSchemaAndPromptMigration() {
-    const userRole = state.userProfile?.role;
-    const isAdminOrOwner = userRole === 'admin' || userRole === 'owner';
-
-    if (!isAdminOrOwner) {
-        return false;
-    }
-
-    try {
-        // A lightweight check for a table that is part of the new schema.
-        await supabaseService.checkSchemaVersion();
-        return false; // Schema is OK.
-    } catch (error) {
-         if (error.message.includes('relation') && error.message.includes('does not exist')) {
-            const { element: migrationModal } = createMigrationModal({
-                supabaseService,
-                onOpenSettings: () => showSettingsModal(),
-            });
-            globalModalContainer.innerHTML = '';
-            globalModalContainer.appendChild(migrationModal);
-            return true; // Migration prompt is now showing.
-        } else {
-             // A different kind of error occurred, show it normally.
-             showSystemError(`Не удалось проверить версию базы данных: ${error.message}`);
-             return false;
-        }
-    }
-}
-
 
 /**
  * Initializes all services for an authenticated session.
  */
 async function startAuthenticatedSession(session) {
-    // The ONLY guard needed is the global isLoading flag to prevent re-entry.
     if (state.isLoading) return;
     state.isLoading = true;
 
     try {
-        // 1. Verify we can get a user profile before rendering the main app.
+        // 1. Fetch user profile and Google token first.
         const userProfile = await supabaseService.getCurrentUserProfile();
         if (!userProfile) {
-            throw new Error("Профиль пользователя не найден в базе данных. Возможно, он не был создан при первой регистрации.");
+            throw new Error("Профиль пользователя не найден в базе данных.");
         }
         state.userProfile = userProfile;
-
-        // 2. Set Google token and initialize Google services
         googleProvider.setAuthToken(session.provider_token);
         await googleProvider.loadGapiClient();
 
-        // 3. Fetch cloud settings and merge with local
+        // 2. Fetch cloud settings and merge with local.
         const cloudSettings = await supabaseService.getUserSettings();
         if (cloudSettings) {
             state.settings = { ...getSettings(), ...cloudSettings };
@@ -611,37 +575,37 @@ async function startAuthenticatedSession(session) {
         supabaseService.setSettings(state.settings);
         googleProvider.setTimezone(state.settings.timezone);
         
-        // 4. Render the main application structure FIRST.
+        // 3. Render the main application structure FIRST. This provides a stable UI.
         renderMainApp();
         renderAuth(state.userProfile);
 
-        // 5. Check database schema and prompt for migration if needed.
-        // If it returns true, it means a modal is showing, so we stop further execution.
-        if (await checkSchemaAndPromptMigration()) {
-            state.isLoading = false;
-            return;
-        }
-        
-        // 6. Fetch shared resource pools (keys and proxies)
+        // 4. CRITICAL: Perform all schema-dependent initializations in one block.
+        // This is the single point of failure that will trigger the migration modal.
         try {
+            await supabaseService.checkSchemaVersion(); // Lightweight check for a new table
             state.keyPool = await supabaseService.getSharedGeminiKeys();
             state.proxyPool = await supabaseService.getSharedProxies();
-        } catch (poolError) {
-            console.error("Failed to load shared resource pools:", poolError);
-            const isSchemaError = poolError.message.includes('relation') && poolError.message.includes('does not exist');
-
+        } catch (schemaError) {
+            const isAdminOrOwner = state.userProfile?.role === 'admin' || state.userProfile?.role === 'owner';
+            const isSchemaError = schemaError.message.includes('relation') || schemaError.message.includes('does not exist') || schemaError.message.includes('Could not find the function');
+            
             if (isAdminOrOwner && isSchemaError) {
-                const { element: migrationModal } = createMigrationModal({ supabaseService, onOpenSettings: () => showSettingsModal() });
+                // HALT execution and show migration modal for admins.
+                const { element: migrationModal } = createMigrationModal({
+                    supabaseService,
+                    onOpenSettings: () => showSettingsModal(),
+                });
                 globalModalContainer.innerHTML = '';
                 globalModalContainer.appendChild(migrationModal);
                 state.isLoading = false;
-                return;
+                return; // Stop further initialization.
             } else {
-                showSystemError("Не удалось загрузить конфигурацию. Некоторые функции могут быть недоступны.");
+                // For non-admins or non-schema errors, show a simple error.
+                throw new Error("Не удалось загрузить конфигурацию. Некоторые функции могут быть недоступны.");
             }
         }
         
-        // 7. Configure UI based on user role
+        // 5. If schema is OK, proceed with normal setup.
         const isAdminOrOwner = userProfile.role === 'admin' || userProfile.role === 'owner';
         const settingsBtn = document.getElementById('settings-button');
         
@@ -649,17 +613,22 @@ async function startAuthenticatedSession(session) {
             settingsBtn.style.display = isAdminOrOwner ? 'block' : 'none';
         }
 
-        // 8. Start background services
+        // 6. Start background services.
         await startNewChatSession();
         startAutoSync();
         setupEmailPolling();
 
     } catch (error) {
         console.error("Critical error during session start, signing out:", error);
-        alert(`Критическая ошибка: не удалось запустить сессию. Выполняется выход для повторной попытки.\n\nДетали: ${error.message}`);
-        await handleLogout();
+        // If the error happens before the main app is rendered, show an alert.
+        if (!document.getElementById('app')) {
+             alert(`Критическая ошибка: не удалось запустить сессию. Выполняется выход.\n\nДетали: ${error.message}`);
+             await handleLogout();
+        } else {
+            // If the app is rendered, show the error in the chat.
+            showSystemError(error.message);
+        }
     } finally {
-        // 9. Mark loading as complete
         state.isLoading = false;
     }
 }
