@@ -282,12 +282,7 @@ async function handleAuthentication() {
         if (session) {
             state.supabaseUser = session.user;
             googleProvider.setAuthToken(session.provider_token);
-            // Fetch and apply cloud settings
-            const cloudSettings = await supabaseService.getUserSettings();
-            if (cloudSettings) {
-                state.settings = { ...state.settings, ...cloudSettings };
-                saveSettings(state.settings);
-            }
+            // Cloud settings are now handled by the "cloud-first" logic in startFullApp
         }
     } else {
         // Handle direct Google auth: load token from localStorage if it exists
