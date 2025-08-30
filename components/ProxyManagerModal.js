@@ -84,30 +84,145 @@ function createAiSettingsModal(currentPrompt, onSave, onClose) {
 }
 
 
-function createAiThinkingModal(onClose) {
-     const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-[52] p-4';
-    modal.innerHTML = `
-         <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl p-6 m-4 flex flex-col max-h-[80vh] animate-fadeIn">
-            <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
-                <div class="animate-spin h-5 w-5 border-2 border-current border-t-transparent rounded-full"></div>
-                <span>ИИ в процессе...</span>
-            </h3>
-            <div id="ai-thinking-log" class="flex-1 space-y-4 overflow-y-auto bg-slate-100 dark:bg-slate-900 p-3 rounded-md text-sm">
-                <p class="text-slate-500">Ожидание ответа от Gemini...</p>
+/**
+ * A new, dedicated modal for the AI proxy finding process, providing full transparency.
+ */
+function createAiFinderModal({ supabaseService, existingProxies, onComplete }) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-[52] p-4';
+
+    let state = {
+        status: 'running', // 'running', 'success', 'error'
+        systemPrompt: '',
+        rawResponse: '',
+        foundProxies: [], // { url, location, status: 'idle' | 'testing' | 'ok' | 'error', isAdded: false }
+    };
+
+    const render = () => {
+        let resultsHtml = '';
+        if (state.status === 'success') {
+            if (state.foundProxies.length > 0) {
+                 resultsHtml = `
+                    <div class="flex justify-between items-center mb-2">
+                         <h4 class="font-semibold text-slate-800 dark:text-slate-100">Найдено прокси: ${state.foundProxies.length}</h4>
+                         <button data-action="add-all" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold">Добавить все</button>
+                    </div>
+                    <div class="space-y-2 border border-slate-200 dark:border-slate-700 rounded-md p-2 max-h-48 overflow-y-auto">
+                        ${state.foundProxies.map((p, index) => `
+                            <div class="flex items-center justify-between gap-2 p-1.5 bg-slate-50 dark:bg-slate-800/50 rounded">
+                                <div class="flex-1 min-w-0">
+                                    <p class="font-mono text-xs truncate">${p.url}</p>
+                                    <p class="text-xs text-slate-500">${p.location}</p>
+                                </div>
+                                <div class="flex items-center gap-1 flex-shrink-0">
+                                    <button data-action="test" data-index="${index}" class="px-2 py-1 text-xs bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded font-semibold ${p.status === 'testing' ? 'animate-pulse' : ''}">${p.status === 'ok' ? '✓' : (p.status === 'error' ? '✗' : 'Тест')}</button>
+                                    <button data-action="add" data-index="${index}" class="px-2 py-1 text-xs bg-green-500 hover:bg-green-600 text-white rounded font-semibold disabled:opacity-50" ${p.isAdded ? 'disabled' : ''}>${p.isAdded ? 'Добавлен' : 'Добавить'}</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else {
+                 resultsHtml = `<p class="text-center font-semibold text-yellow-500 p-4">ИИ не нашел новых прокси-серверов.</p>`;
+            }
+        }
+
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-3xl flex flex-col max-h-[90vh] animate-fadeIn">
+                <header class="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                    <h3 class="text-lg font-bold flex items-center gap-2">
+                        ${state.status === 'running' ? `<div class="animate-spin h-5 w-5 border-2 border-current border-t-transparent rounded-full"></div>` : Icons.WandIcon}
+                        <span>Поиск прокси с помощью ИИ</span>
+                    </h3>
+                    <button data-action="close" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">&times;</button>
+                </header>
+                <main class="flex-1 p-4 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                        <h4 class="font-semibold text-slate-800 dark:text-slate-100">Лог выполнения</h4>
+                        <div class="h-full p-3 bg-slate-900 text-slate-200 rounded-md font-mono text-xs space-y-4 overflow-y-auto">
+                           <div>
+                                <p class="text-indigo-400 font-bold mb-1">&gt; Системный промпт:</p>
+                                <pre class="whitespace-pre-wrap text-slate-400">${state.systemPrompt || 'Ожидание...'}</pre>
+                           </div>
+                           <div>
+                                <p class="text-green-400 font-bold mb-1">&gt; Ответ от Gemini:</p>
+                                <pre class="whitespace-pre-wrap ${state.status === 'error' ? 'text-red-400' : 'text-slate-300'}">${state.rawResponse || 'Ожидание...'}</pre>
+                           </div>
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        ${resultsHtml}
+                    </div>
+                </main>
             </div>
-            <div class="mt-4 flex justify-end">
-                 <button data-action="close" class="px-4 py-2 bg-slate-500 hover:bg-slate-600 text-white rounded-md text-sm font-semibold">Закрыть</button>
-            </div>
-        </div>
-    `;
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal || e.target.closest('[data-action="close"]')) {
-            onClose();
+        `;
+    };
+
+    const run = async () => {
+        try {
+            const currentSettings = getSettings();
+            if (!currentSettings.geminiApiKey) {
+                throw new Error("Ключ Gemini API не указан в настройках.");
+            }
+            const result = await findProxiesWithGemini({
+                apiKey: currentSettings.geminiApiKey,
+                existingProxies: existingProxies,
+                customPrompt: currentSettings.customProxyPrompt,
+            });
+            state.status = 'success';
+            state.systemPrompt = result.systemPrompt;
+            state.rawResponse = result.rawResponse;
+            state.foundProxies = result.parsedData.map(p => ({ ...p, status: 'idle', isAdded: false }));
+        } catch (err) {
+            state.status = 'error';
+            state.systemPrompt = state.systemPrompt || 'Не удалось отправить промпт.';
+            state.rawResponse = err.message;
+        } finally {
+            render();
+        }
+    };
+    
+    modal.addEventListener('click', async (e) => {
+        const target = e.target.closest('[data-action]');
+        if (!target) {
+             if (e.target === modal) onComplete();
+             return;
+        }
+        const action = target.dataset.action;
+        const index = parseInt(target.dataset.index, 10);
+
+        switch(action) {
+            case 'close': onComplete(); break;
+            case 'add':
+            case 'add-all': {
+                const proxiesToAdd = action === 'add-all' ? state.foundProxies.filter(p => !p.isAdded) : [state.foundProxies[index]];
+                for (const proxy of proxiesToAdd) {
+                     try {
+                        await supabaseService.addProxy({ url: proxy.url, geolocation: proxy.location, is_active: false });
+                        proxy.isAdded = true;
+                     } catch(err) { alert(`Не удалось добавить ${proxy.url}: ${err.message}`); }
+                }
+                render();
+                break;
+            }
+            case 'test': {
+                const proxy = state.foundProxies[index];
+                proxy.status = 'testing';
+                render();
+                const currentSettings = getSettings();
+                const result = await testProxyConnection({ proxyUrl: proxy.url, apiKey: currentSettings.geminiApiKey });
+                proxy.status = result.status;
+                render();
+                break;
+            }
         }
     });
+
+    render();
+    run();
     return modal;
 }
+
 
 
 // --- MAIN COMPONENT ---
@@ -288,41 +403,15 @@ export function createProxyManagerModal({ supabaseService, onClose }) {
                 break;
             }
             case 'find-ai': {
-                const thinkingModal = createAiThinkingModal(() => thinkingModal.remove());
-                subModalContainer.appendChild(thinkingModal);
-                const logContainer = thinkingModal.querySelector('#ai-thinking-log');
-
-                state.isLoading = true;
-                render();
-                try {
-                    const existingUrls = state.storageProxies.map(p => p.url);
-                    const currentSettings = getSettings();
-                    const result = await findProxiesWithGemini({ 
-                        apiKey: currentSettings.geminiApiKey, 
-                        existingProxies: existingUrls,
-                        customPrompt: currentSettings.customProxyPrompt,
-                    });
-                    
-                    logContainer.innerHTML = `
-                        <div class="space-y-2">
-                            <div><strong class="text-indigo-400">Системный промпт:</strong><pre class="mt-1 text-xs whitespace-pre-wrap font-mono">${result.systemPrompt}</pre></div>
-                            <div><strong class="text-indigo-400">Ответ от Gemini (JSON):</strong><pre class="mt-1 text-xs whitespace-pre-wrap font-mono">${result.rawResponse}</pre></div>
-                        </div>
-                    `;
-
-                    if (result.parsedData.length > 0) {
-                        const newProxies = result.parsedData.map(p => ({ url: p.url, geolocation: p.location, is_active: false }));
-                        await supabaseService.client.from('proxies').upsert(newProxies, { onConflict: 'user_id,url', ignoreDuplicates: true });
-                        await loadProxies();
-                    } else {
-                         logContainer.innerHTML += `<p class="mt-4 font-bold text-yellow-400">ИИ не нашел новых прокси-серверов.</p>`;
-                    }
-                } catch(err) {
-                    logContainer.innerHTML = `<p class="text-red-400"><strong>Ошибка:</strong> ${err.message}</p>`;
-                } finally {
-                    state.isLoading = false;
-                    render();
-                }
+                const finderModal = createAiFinderModal({
+                    supabaseService,
+                    existingProxies: state.storageProxies.map(p => p.url),
+                    onComplete: () => {
+                        finderModal.remove();
+                        loadProxies(); // Refresh the main list after the finder closes
+                    },
+                });
+                subModalContainer.appendChild(finderModal);
                 break;
             }
             case 'toggle-activation':

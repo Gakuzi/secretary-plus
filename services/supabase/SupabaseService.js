@@ -409,11 +409,11 @@ export class SupabaseService {
         const { data, error } = await this.client
             .from('user_settings')
             .select('settings')
-            .single();
+            .maybeSingle(); // Use maybeSingle() to return null instead of error if no row is found.
         
-        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found, which is ok
+        if (error) {
             console.error('Error fetching user settings:', error);
-            return null; // Return null instead of throwing, so app can proceed with defaults
+            return null;
         }
 
         return data ? data.settings : null;
