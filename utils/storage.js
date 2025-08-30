@@ -1,5 +1,3 @@
-
-
 const SETTINGS_KEY = 'secretary-plus-settings-v4';
 const SYNC_STATUS_KEY = 'secretary-plus-sync-status-v1';
 

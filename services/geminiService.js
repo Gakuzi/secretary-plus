@@ -848,7 +848,7 @@ export async function findProxiesWithGemini({ apiKey, existingProxies = [], cust
             },
         });
 
-        const rawResponse = response.text;
+        const rawResponse = response.text.trim();
         const parsedData = JSON.parse(rawResponse);
         
         return { parsedData, systemPrompt, rawResponse };

@@ -1,6 +1,4 @@
 import * as Icons from './icons/Icons.js';
-import { getSettings } from '../utils/storage.js';
-import { SUPABASE_CONFIG } from '../config.js';
 
 // --- EMBEDDED CONTENT ---
 
@@ -30,7 +28,7 @@ function markdownToHTML(text) {
 }
 
 
-export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchWizard, onLaunchDbWizard, onLaunchProxyWizard }) {
+export function createHelpModal({ onClose, analyzeErrorFn, onRelaunchWizard, onLaunchDbWizard, onLaunchProxyWizard }) {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
     
@@ -44,33 +42,20 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
             <main class="flex-1 flex flex-col sm:flex-row overflow-hidden bg-slate-50 dark:bg-slate-900/70">
                 <!-- Mobile Tabs -->
                 <nav class="sm:hidden flex-shrink-0 border-b border-slate-200 dark:border-slate-700 p-2 flex items-center justify-around gap-1 text-xs bg-white dark:bg-slate-800">
-                    <a href="#about" class="settings-tab-button text-center flex-1" data-tab="about">О приложении</a>
                     <a href="#instructions" class="settings-tab-button text-center flex-1" data-tab="instructions">Инструкции</a>
                     <a href="#error-analysis" class="settings-tab-button text-center flex-1" data-tab="error-analysis">Анализ</a>
                     <a href="#tools" class="settings-tab-button text-center flex-1" data-tab="tools">Инструменты</a>
-                    <a href="#contact" class="settings-tab-button text-center flex-1" data-tab="contact">Связь</a>
                 </nav>
                 <!-- Desktop Sidebar -->
                 <aside class="hidden sm:flex w-52 border-r border-slate-200 dark:border-slate-700 p-4 flex-shrink-0 bg-white dark:bg-slate-800">
                     <nav class="flex flex-col space-y-2 w-full">
-                        <a href="#about" class="settings-tab-button text-left" data-tab="about">О приложении</a>
                         <a href="#instructions" class="settings-tab-button text-left" data-tab="instructions">Инструкции</a>
                         <a href="#error-analysis" class="settings-tab-button active text-left" data-tab="error-analysis">Анализ ошибок</a>
                         <a href="#tools" class="settings-tab-button text-left" data-tab="tools">Инструменты</a>
-                        <a href="#contact" class="settings-tab-button text-left" data-tab="contact">Связь с автором</a>
                     </nav>
                 </aside>
                 <div class="flex-1 p-4 sm:p-6 overflow-y-auto" id="help-tabs-content">
                     
-                    <!-- About Tab -->
-                     <div id="tab-about" class="settings-tab-content hidden prose prose-invert max-w-none text-slate-700 dark:text-slate-300">
-                        <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Что такое "Секретарь+"?</h2>
-                        <p>
-                           **Секретарь+** — это интеллектуальный веб-ассистент, созданный для централизации и управления вашей цифровой продуктивностью. Используя мощь Gemini от Google и облачную платформу Supabase, приложение предоставляет единый разговорный интерфейс для взаимодействия с вашими календарями, контактами, документами и другими сервисами.
-                        </p>
-                        ${markdownToHTML(README_CONTENT)}
-                    </div>
-
                     <!-- Error Analysis Tab -->
                     <div id="tab-error-analysis" class="settings-tab-content space-y-6">
                         <div class="p-4 bg-white dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -113,16 +98,6 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                     <!-- Tools Tab -->
                     <div id="tab-tools" class="settings-tab-content hidden space-y-6">
                          <div class="p-4 bg-white dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">Управление Базой Данных</h3>
-                             <p class="text-sm text-slate-600 dark:text-slate-400 mt-1 mb-4">
-                                Если вы столкнулись с ошибками синхронизации, вам может потребоваться настроить или проверить "Управляющий воркер", который отвечает за обновление схемы БД.
-                            </p>
-                             <button data-action="launch-db-wizard" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold transition-colors">
-                                ${Icons.SettingsIcon}
-                                <span>Запустить мастер настройки БД</span>
-                            </button>
-                        </div>
-                         <div class="p-4 bg-white dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
                             <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">Сброс и повторная настройка</h3>
                             <p class="text-sm text-slate-600 dark:text-slate-400 mt-1 mb-4">
                                 Если вы хотите начать настройку с самого начала или считаете, что допустили ошибку, вы можете перезапустить мастер.
@@ -139,23 +114,6 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
                             </button>
                         </div>
                     </div>
-                    
-                    <!-- Contact Tab -->
-                    <div id="tab-contact" class="settings-tab-content hidden space-y-6">
-                        <div class="p-4 bg-white dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">Обратная связь</h3>
-                            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1 mb-4">Если у вас есть вопросы, предложения или вы столкнулись с ошибкой, которую не удалось решить, вы можете связаться с автором напрямую.</p>
-                            <a href="https://t.me/eklimov" target="_blank" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-md font-semibold transition-colors">
-                                ${Icons.TelegramIcon.replace('fill="currentColor"', 'fill="white"')}
-                                <span>Написать в Telegram</span>
-                            </a>
-                             <p class="text-xs text-slate-500 mt-4 text-center">
-                                Автор: Климов Евгений
-                            </p>
-                        </div>
-                    </div>
-
-
                 </div>
             </main>
         </div>
@@ -170,14 +128,12 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
 
         const launchDbWizardButton = e.target.closest('[data-action="launch-db-wizard"]');
         if (launchDbWizardButton) {
-            onClose(); // Close help modal before opening wizard
             onLaunchDbWizard();
             return;
         }
 
         const launchProxyWizardButton = e.target.closest('[data-action="launch-proxy-wizard"]');
         if (launchProxyWizardButton) {
-            onClose(); // Close help modal before opening wizard
             onLaunchProxyWizard();
             return;
         }
@@ -231,11 +187,12 @@ export function createHelpModal({ onClose, settings, analyzeErrorFn, onRelaunchW
         handleAction(e);
     });
     
-    // Default to 'error-analysis' tab
+    // Default to 'instructions' tab
+    const defaultTab = 'instructions';
     modalOverlay.querySelectorAll('.settings-tab-button').forEach(btn => btn.classList.remove('active'));
-    modalOverlay.querySelectorAll(`.settings-tab-button[data-tab="error-analysis"]`).forEach(btn => btn.classList.add('active'));
+    modalOverlay.querySelectorAll(`.settings-tab-button[data-tab="${defaultTab}"]`).forEach(btn => btn.classList.add('active'));
     modalOverlay.querySelectorAll('.settings-tab-content').forEach(content => {
-        content.classList.toggle('hidden', content.id !== 'tab-error-analysis');
+        content.classList.toggle('hidden', content.id !== `tab-${defaultTab}`);
     });
 
     return modalOverlay;

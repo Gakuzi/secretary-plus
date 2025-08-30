@@ -242,7 +242,7 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
                 <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 text-center">
                     <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Синхронизация отключена</h3>
                     <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 mb-4">Для использования облачной синхронизации данных необходимо включить режим "Supabase" в настройках.</p>
-                    <a href="#settings" data-client-action="open_settings_from_profile" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold text-sm">Перейти в настройки</a>
+                     <button data-client-action="open_settings" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold text-sm">Перейти в настройки</button>
                 </div>`;
             return;
         }
@@ -258,8 +258,8 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
                     <div class="flex items-start gap-3">
                         <div class="w-5 h-5 flex-shrink-0 mt-0.5">${Icons.AlertTriangleIcon}</div>
                         <div>
-                            <p class="font-bold">Обнаружена критическая ошибка синхронизации!</p>
-                            <p class="text-sm mt-1 mb-3">Вероятно, структура вашей базы данных устарела. Это может произойти после обновления приложения. Пожалуйста, обновите схему с помощью мастера, чтобы исправить проблему.</p>
+                            <p class="font-bold">Обнаружена критическая ошибка!</p>
+                            <p class="text-sm mt-1 mb-3">Структура вашей базы данных устарела, что блокирует синхронизацию и сохранение настроек. Это может произойти после обновления приложения. Пожалуйста, обновите схему с помощью мастера, чтобы исправить проблему.</p>
                             <button data-action="launch-db-wizard" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-semibold">Запустить мастер настройки БД</button>
                         </div>
                     </div>
@@ -397,7 +397,7 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
     };
     
     const handleAction = async (e) => {
-        const target = e.target.closest('[data-action]');
+        const target = e.target.closest('[data-action], [data-client-action]');
         if (!target) {
              if (!e.target.closest('#profile-modal-content')) {
                 onClose();
@@ -406,6 +406,13 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
         }
 
         const action = target.dataset.action;
+        const clientAction = target.dataset.clientAction;
+
+        if(clientAction === 'open_settings') {
+            // This is a special case to call an action from index.js
+            // The global click handler will pick this up.
+            return;
+        }
 
         // Tab switching
         if (target.matches('.profile-tab-button')) {
@@ -420,7 +427,6 @@ export function createProfileModal(currentUserProfile, allUsers, chatHistory, se
             case 'logout': onLogout(); break;
             case 'delete': onDelete(); break;
             case 'launch-db-wizard': 
-                onClose();
                 onLaunchDbWizard(); 
                 break;
             case 'toggle-danger-zone':
