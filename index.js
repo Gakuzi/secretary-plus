@@ -590,7 +590,11 @@ async function startAuthenticatedSession(session) {
         state.proxyPool = await supabaseService.getSharedProxies();
     } catch (poolError) {
         console.error("Failed to load shared resource pools:", poolError);
-        showSystemError("Не удалось загрузить конфигурацию. Некоторые функции могут быть недоступны.");
+        if (poolError.message && poolError.message.includes('Could not find the table')) {
+             showSystemError("Не удалось загрузить конфигурацию: схема базы данных устарела. Пожалуйста, обновите ее, используя скрипт из SETUP.md.");
+        } else {
+            showSystemError("Не удалось загрузить конфигурацию. Некоторые функции могут быть недоступны.");
+        }
     }
     
     // 6. Configure UI based on user role
@@ -639,17 +643,17 @@ function waitForExternalLibs() {
 
         const check = () => {
             // Check for all required global objects from CDNs
-            if (window.google && window.google.accounts && window.supabase && window.pdfjsLib && window.Chart) {
+            if (window.google && window.google.accounts && window.gapi && window.supabase && window.pdfjsLib && window.Chart) {
                 resolve();
             } else {
                 elapsed += interval;
                 if (elapsed >= timeout) {
                     let missing = [];
-                    if (!window.google || !window.google.accounts) missing.push("Google API");
+                    if (!window.google || !window.google.accounts || !window.gapi) missing.push("Google API");
                     if (!window.supabase) missing.push("Supabase Client");
                     if (!window.pdfjsLib) missing.push("PDF.js");
                     if (!window.Chart) missing.push("Chart.js");
-                    reject(new Error(`Не удалось загрузить внешние библиотеки: ${missing.join(', ')}`));
+                    reject(new Error(`Критическая ошибка при запуске: не удалось загрузить внешние библиотеки: ${missing.join(', ')}.\n\nПроверьте подключение к интернету, отключите блокировщики рекламы и попробуйте перезагрузить страницу.`));
                 } else {
                     setTimeout(check, interval);
                 }
