@@ -261,14 +261,14 @@ export function createDbSetupWizard({ supabaseService, onComplete }) {
     const handleAction = async (e) => {
         const target = e.target.closest('[data-action]');
         if (!target) {
-            if (e.target === wizardElement) onClose();
+            if (e.target === wizardElement) onComplete();
             return;
         }
 
         const action = target.dataset.action;
 
         switch(action) {
-            case 'close': onClose(); break;
+            case 'close': onComplete(); break;
             case 'next': state.currentStep++; render(); break;
             case 'back': state.currentStep--; render(); break;
             case 'copy':
