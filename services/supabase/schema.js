@@ -6,7 +6,7 @@ export const SHARED_SQL = `
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
-        CREATE TYPE public.user_role AS ENUM ('owner', 'admin', 'manager', 'user');
+        CREATE TYPE public.user_role AS ENUM ('owner', 'admin', 'user');
     END IF;
 END$$;
 

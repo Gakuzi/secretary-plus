@@ -349,10 +349,11 @@ async function handleSendMessage(prompt, image = null) {
             text: prompt,
             image: image
         };
-        // CRITICAL FIX: Add user's message to chat immediately and unconditionally
+
+        // CRITICAL FIX: Add user's message to chat immediately and unconditionally.
         // This ensures the message appears even if the bot fails.
-        addMessageToChat(userMessage);
         state.messages.push(userMessage);
+        addMessageToChat(userMessage);
 
         if (supabaseService && state.sessionId) {
             // Don't await, let it log in the background
@@ -361,7 +362,7 @@ async function handleSendMessage(prompt, image = null) {
 
         renderContextualActions([]);
         
-        // Process the bot response. Any errors inside are now caught.
+        // Now, process the bot response. Any errors inside are now caught by processBotResponse.
         await processBotResponse(userMessage, false);
 
     } catch (error) {
@@ -448,7 +449,10 @@ async function handleGlobalClick(event) {
         switch (action) {
             case 'open_settings': showSettingsModal(); break;
             case 'open_migration_modal': {
-                const { element: migrationModal } = createMigrationModal({ supabaseService });
+                const { element: migrationModal } = createMigrationModal({
+                    supabaseService,
+                    onClose: () => { globalModalContainer.innerHTML = ''; }
+                });
                 globalModalContainer.innerHTML = '';
                 globalModalContainer.appendChild(migrationModal);
                 break;
