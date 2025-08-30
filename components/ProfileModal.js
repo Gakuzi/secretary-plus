@@ -213,7 +213,8 @@ export function createProfileModal({ currentUserProfile, supabaseService, onClos
                 case 'logout': onLogout(); break;
                 case 'open-data-manager':
                     onLaunchDataManager();
-                    onClose(); // Close the profile modal after launching the data manager
+                    // CRITICAL FIX: Do NOT close this modal. The launching function handles clearing the container.
+                    // onClose(); 
                     break;
                 case 'delete-settings':
                     if (confirm('Вы уверены, что хотите удалить все ваши настройки из облака? Это действие необратимо.')) {
