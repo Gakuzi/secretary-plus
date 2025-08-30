@@ -594,7 +594,8 @@ async function startAuthenticatedSession(session) {
     }
     
     // 6. Configure UI based on user role
-    const isAdminOrOwner = state.userProfile.role === 'admin' || state.userProfile.role === 'owner';
+    const userRole = (state.userProfile.role || '').trim().toLowerCase();
+    const isAdminOrOwner = userRole === 'admin' || userRole === 'owner';
     if (!isAdminOrOwner) {
         const settingsBtn = document.getElementById('settings-button');
         const helpBtn = document.getElementById('help-button');
@@ -637,18 +638,17 @@ function waitForExternalLibs() {
         let elapsed = 0;
 
         const check = () => {
-            if (window.google && window.gapi && window.supabase && window.pdfjsLib && window.Chart) {
+            // Check for all required global objects from CDNs
+            if (window.google && window.google.accounts && window.supabase && window.pdfjsLib && window.Chart) {
                 resolve();
             } else {
                 elapsed += interval;
                 if (elapsed >= timeout) {
-                    const missing = [
-                        !window.google && 'Google Identity',
-                        !window.gapi && 'Google API Client',
-                        !window.supabase && 'Supabase Client',
-                        !window.pdfjsLib && 'PDF.js',
-                        !window.Chart && 'Chart.js'
-                    ].filter(Boolean);
+                    let missing = [];
+                    if (!window.google || !window.google.accounts) missing.push("Google API");
+                    if (!window.supabase) missing.push("Supabase Client");
+                    if (!window.pdfjsLib) missing.push("PDF.js");
+                    if (!window.Chart) missing.push("Chart.js");
                     reject(new Error(`Не удалось загрузить внешние библиотеки: ${missing.join(', ')}`));
                 } else {
                     setTimeout(check, interval);
@@ -659,37 +659,36 @@ function waitForExternalLibs() {
     });
 }
 
+
 /**
- * Main entry point. Decides whether to handle an auth callback or start the app normally.
+ * The main entry point of the application.
  */
 async function main() {
     appContainer = document.getElementById('app-container');
     modalContainer = document.getElementById('modal-container');
     cameraViewContainer = document.getElementById('camera-view-container');
 
-    let session = null;
-    if (window.location.hash.includes('access_token')) {
-        // This is an OAuth redirect. Supabase JS client handles the hash automatically.
-        // We wait for the session to be available.
-        ({ data: { session } } = await supabaseService.client.auth.getSession());
-        if (!session) {
-            session = await new Promise((resolve) => {
-                const { data: { subscription } } = supabaseService.onAuthStateChange((event, session) => {
-                    if (event === 'SIGNED_IN' && session) {
-                        subscription.unsubscribe();
-                        resolve(session);
-                    }
-                });
-            });
-        }
-        // Clean the URL hash
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    } else {
-        // On a normal page load, just check if a session already exists.
-        const { data } = await supabaseService.client.auth.getSession();
-        session = data.session;
+    try {
+        await waitForExternalLibs();
+    } catch (error) {
+        appContainer.innerHTML = `<div class="p-4 text-red-500">${error.message}</div>`;
+        return;
     }
 
+    if (!supabaseService) {
+        appContainer.innerHTML = `<div class="p-4 text-red-500">Не удалось инициализировать Supabase. Проверьте конфигурацию.</div>`;
+        return;
+    }
+    
+    supabaseService.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+            await startAuthenticatedSession(session);
+        } else if (event === 'SIGNED_OUT') {
+            showWelcomeScreen();
+        }
+    });
+
+    const { data: { session } } = await supabaseService.client.auth.getSession();
     if (session) {
         await startAuthenticatedSession(session);
     } else {
@@ -697,16 +696,5 @@ async function main() {
     }
 }
 
-// Wait for the DOM to be fully loaded, then for external libraries, then run the main application logic.
-document.addEventListener('DOMContentLoaded', () => {
-    waitForExternalLibs()
-        .then(main)
-        .catch(error => {
-            console.error("An unhandled error occurred during app startup:", error);
-            document.body.innerHTML = `<div class="p-4 bg-red-100 text-red-800 rounded-md m-4">
-                <h3 class="font-bold">Критическая ошибка при запуске</h3>
-                <p>${error.message}</p>
-                <p class="mt-2 text-sm">Проверьте подключение к интернету, отключите блокировщики рекламы и попробуйте <a href="${window.location.pathname}" class="underline">перезагрузить страницу</a>.</p>
-            </div>`;
-        });
-});
+// Start the application once the DOM is fully loaded.
+document.addEventListener('DOMContentLoaded', main);

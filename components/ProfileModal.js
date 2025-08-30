@@ -226,11 +226,11 @@ function renderSyncTab(syncTasks, syncStatus, isSyncingAll, syncingSingle) {
                     </div>
                 </div>
                 <div class="mt-4 flex gap-2">
-                    <button data-action="run-single-sync" data-task-name="${task.name}" class="flex-1 px-3 py-2 text-sm bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-md font-semibold flex items-center justify-center gap-1" ${isSyncing ? 'disabled' : ''}>
+                    <button data-action="run-single-sync" data-task-name="${task.name}" class="flex-1 px-3 py-1.5 text-xs bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-md font-semibold flex items-center justify-center gap-1" ${isSyncing ? 'disabled' : ''}>
                        ${isSyncing ? `<div class="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>` : Icons.RefreshCwIcon.replace('width="24"', 'width="16"')}
                        <span>Синхр.</span>
                     </button>
-                    <button data-action="view-data" data-table-name="${task.tableName}" data-label="${task.label}" class="flex-1 px-3 py-2 text-sm bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-md font-semibold flex items-center justify-center gap-1">
+                    <button data-action="view-data" data-table-name="${task.tableName}" data-label="${task.label}" class="flex-1 px-3 py-1.5 text-xs bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-md font-semibold flex items-center justify-center gap-1">
                         ${Icons.DatabaseIcon.replace('width="24"', 'width="16"')}
                         <span>Данные</span>
                     </button>
@@ -239,231 +239,213 @@ function renderSyncTab(syncTasks, syncStatus, isSyncingAll, syncingSingle) {
     }).join('');
 
     return `
-        <section class="p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div class="p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
             <div class="text-center sm:text-left">
-                <h3 class="font-semibold text-slate-800 dark:text-slate-200">Общая информация и действия</h3>
-                <p class="text-xs text-slate-500 dark:text-slate-400">Проверьте соединение с базой данных или запустите полную синхронизацию всех сервисов.</p>
+                <h3 class="font-semibold text-slate-800 dark:text-slate-200">Общая информация</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Здесь вы можете запустить синхронизацию всех сервисов вручную.</p>
             </div>
-            <div class="flex items-center gap-2">
-                 <button data-action="test-connection" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md text-sm font-semibold flex items-center gap-2">
-                    <span>Проверить подключение</span>
-                    <div id="connection-test-status" class="w-20 text-left"></div>
-                </button>
-                <button data-action="run-all-syncs" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-semibold flex items-center gap-2" ${isSyncingAll ? 'disabled' : ''}>
-                    ${isSyncingAll ? `<div class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div> <span>Синхронизация...</span>` : 'Синхронизировать всё'}
-                </button>
-            </div>
-        </section>
-        <section class="mt-6">
-             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                ${syncItemsHtml}
-            </div>
-        </section>
-    `;
-}
-
-
-function renderDangerZoneTab() {
-    return `
-        <div class="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-600 rounded-lg">
-            <h4 class="font-bold text-red-800 dark:text-red-200">Удаление данных из облака</h4>
-            <p class="text-xs text-red-700 dark:text-red-300 mt-1 mb-3">
-                Это действие необратимо удалит **только ваши личные настройки**, сохраненные в облаке Supabase (ключи, предпочтения). 
-                Ваши синхронизированные данные (контакты, файлы и т.д.) и аккаунт останутся нетронутыми.
-            </p>
-            <button data-action="delete-settings" class="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-semibold">Удалить мои настройки</button>
+            <button data-action="run-all-syncs" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-semibold flex items-center gap-2" ${isSyncingAll ? 'disabled' : ''}>
+                ${isSyncingAll ? `<div class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div> <span>Синхронизация...</span>` : 'Синхронизировать всё'}
+            </button>
+        </div>
+        <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            ${syncItemsHtml}
         </div>
     `;
 }
 
 // --- MAIN COMPONENT ---
-
 export function createProfileModal({ currentUserProfile, supabaseService, syncTasks, onClose, onLogout, onRunSingleSync, onRunAllSyncs }) {
-    const modalOverlay = document.createElement('div');
-    modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fadeIn';
-
-    const isAdmin = currentUserProfile.role === 'admin' || currentUserProfile.role === 'owner';
-    const isSupabaseEnabled = !!supabaseService;
+    const modalElement = document.createElement('div');
+    modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4 animate-fadeIn';
     
     let state = {
+        currentTab: 'profile',
+        isLoading: false,
+        // Sync tab state
         isSyncingAll: false,
         syncingSingle: null,
-    };
-
-    const TABS = [
-        { id: 'profile', label: 'Профиль', icon: Icons.UserIcon, enabled: true },
-        { id: 'sync', label: 'Синхронизация', icon: Icons.DatabaseIcon, enabled: isSupabaseEnabled },
-        { id: 'stats', label: 'Статистика', icon: Icons.ChartBarIcon, enabled: isAdmin && isSupabaseEnabled },
-        { id: 'users', label: 'Пользователи', icon: Icons.UsersIcon, enabled: isAdmin && isSupabaseEnabled },
-        { id: 'history', label: 'История чата', icon: Icons.FileIcon, enabled: isAdmin && isSupabaseEnabled },
-        { id: 'danger', label: 'Опасная зона', icon: Icons.AlertTriangleIcon, enabled: isSupabaseEnabled },
-    ];
-
-    const availableTabs = TABS.filter(tab => tab.enabled);
-
-    modalOverlay.innerHTML = `
-        <div id="profile-modal-content" class="bg-white dark:bg-slate-800 w-full max-w-6xl h-full sm:h-auto sm:max-h-[90vh] rounded-lg shadow-xl flex flex-col sm:flex-row">
-            <header class="p-4 border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-slate-700 w-full sm:w-56 flex-shrink-0">
-                <div class="flex items-center justify-between sm:flex-col sm:items-start sm:h-full">
-                     <h2 class="text-lg font-bold">Профиль и Управление</h2>
-                     <nav class="flex flex-row sm:flex-col sm:space-y-1 mt-0 sm:mt-4 w-full">
-                        ${availableTabs.map(tab => `
-                            <button class="profile-tab-button ${tab.id === 'profile' ? 'active' : ''}" data-tab="${tab.id}">
-                                <span class="w-5 h-5">${tab.icon}</span>
-                                <span>${tab.label}</span>
-                            </button>
-                        `).join('')}
-                     </nav>
-                     <div class="hidden sm:block sm:mt-auto sm:w-full">
-                        <button data-action="close" class="w-full text-center px-4 py-2 text-sm font-medium rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                            Закрыть
-                        </button>
-                     </div>
-                </div>
-            </header>
-            <main id="profile-tab-content" class="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900/50">
-                <!-- Tab content will be rendered here -->
-            </main>
-        </div>
-    `;
-
-    const contentContainer = modalOverlay.querySelector('#profile-tab-content');
-    const subModalContainer = document.createElement('div'); // Container for modals launched from this one
-    modalOverlay.appendChild(subModalContainer);
-
-    const initializeChart = (canvasId, type, data, options) => {
-        setTimeout(() => {
-            const canvas = document.getElementById(canvasId);
-            if(canvas) {
-                new Chart(canvas.getContext('2d'), { type, data, options });
-            }
-        }, 100);
-    };
-
-    const switchTab = async (tabId) => {
-        modalOverlay.querySelectorAll('.profile-tab-button').forEach(btn => btn.classList.remove('active'));
-        modalOverlay.querySelector(`.profile-tab-button[data-tab="${tabId}"]`).classList.add('active');
-        
-        contentContainer.innerHTML = `<div class="flex justify-center items-center h-full"><div class="animate-spin h-8 w-8 border-4 border-slate-300 border-t-transparent rounded-full"></div></div>`;
-
-        try {
-            switch (tabId) {
-                case 'profile':
-                    contentContainer.innerHTML = renderProfileTab(currentUserProfile);
-                    break;
-                case 'sync':
-                    contentContainer.innerHTML = renderSyncTab(syncTasks, getSyncStatus(), state.isSyncingAll, state.syncingSingle);
-                    break;
-                case 'users':
-                    const users = await supabaseService.getAllUserProfiles();
-                    contentContainer.innerHTML = renderUsersTab(users, currentUserProfile.id);
-                    break;
-                case 'history':
-                    const history = await supabaseService.getChatHistoryForAdmin();
-                    contentContainer.innerHTML = renderHistoryTab(history);
-                    break;
-                case 'stats':
-                    const statsData = await supabaseService.getFullStats();
-                    contentContainer.innerHTML = renderStatsTab(statsData);
-                    
-                    const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                    const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-                    const textColor = isDarkMode ? '#cbd5e1' : '#334155';
-                    
-                    if (statsData.actions_by_day?.length) {
-                        initializeChart('activity-chart', 'line', {
-                            labels: statsData.actions_by_day.map(d => new Date(d.date).toLocaleDateString('ru-RU')),
-                            datasets: [{ label: 'Действий в день', data: statsData.actions_by_day.map(d => d.count), borderColor: '#3b82f6', tension: 0.1, fill: false }]
-                        }, { scales: { x: { ticks: { color: textColor }, grid: { color: gridColor } }, y: { ticks: { color: textColor }, grid: { color: gridColor } } } });
-                    }
-                    if (statsData.actions_by_function?.length) {
-                         initializeChart('actions-chart', 'pie', {
-                            labels: statsData.actions_by_function.map(d => ACTION_NAMES[d.function_name] || d.function_name),
-                            datasets: [{ data: statsData.actions_by_function.map(d => d.count), backgroundColor: CHART_COLORS }]
-                        }, { plugins: { legend: { labels: { color: textColor } } } });
-                    }
-                     if (statsData.actions_by_user?.length) {
-                        initializeChart('users-chart', 'bar', {
-                            labels: statsData.actions_by_user.map(d => d.full_name),
-                            datasets: [{ label: 'Всего действий', data: statsData.actions_by_user.map(d => d.count), backgroundColor: CHART_COLORS[1] }]
-                        }, { scales: { x: { ticks: { color: textColor }, grid: { color: gridColor } }, y: { ticks: { color: textColor }, grid: { color: gridColor } } }, indexAxis: 'y' });
-                    }
-                    if(statsData.responses_by_type?.length) {
-                         initializeChart('responses-chart', 'doughnut', {
-                            labels: statsData.responses_by_type.map(d => d.type === 'card' ? 'Интерактивные' : 'Текстовые'),
-                            datasets: [{ data: statsData.responses_by_type.map(d => d.count), backgroundColor: [CHART_COLORS[2], CHART_COLORS[3]] }]
-                        }, { plugins: { legend: { labels: { color: textColor } } } });
-                    }
-                    break;
-                case 'danger':
-                    contentContainer.innerHTML = renderDangerZoneTab();
-                    break;
-            }
-        } catch (error) {
-            console.error(`Error loading tab ${tabId}:`, error);
-            contentContainer.innerHTML = `<p class="text-red-500 p-4">Не удалось загрузить данные: ${error.message}</p>`;
-        }
+        syncStatus: getSyncStatus(),
+        // Users tab state
+        users: [],
+        // History tab state
+        history: [],
+        // Stats tab state
+        stats: null,
     };
     
-    const handleAction = async (e) => {
-        const target = e.target.closest('[data-action]');
-        if (target) {
+    // --- ROBUST ROLE CHECK ---
+    const role = (currentUserProfile.role || '').trim().toLowerCase();
+    const isOwner = role === 'owner';
+    const isAdmin = role === 'admin';
+
+    const TABS = [
+        { id: 'profile', label: 'Профиль', icon: Icons.UserIcon, requiresRole: 'user' },
+        { id: 'sync', label: 'Синхронизация', icon: Icons.RefreshCwIcon, requiresRole: 'user' },
+        { id: 'users', label: 'Пользователи', icon: Icons.UsersIcon, requiresRole: 'admin' },
+        { id: 'stats', label: 'Статистика', icon: Icons.ChartBarIcon, requiresRole: 'admin' },
+        { id: 'history', label: 'История чата', icon: Icons.FileIcon, requiresRole: 'admin' },
+        { id: 'data', label: 'Управление данными', icon: Icons.DatabaseIcon, requiresRole: 'owner' },
+    ];
+    
+    const hasRole = (requiredRole) => {
+        if (requiredRole === 'user') return true;
+        if (requiredRole === 'admin') return isAdmin || isOwner;
+        if (requiredRole === 'owner') return isOwner;
+        return false;
+    };
+    
+    const visibleTabs = TABS.filter(tab => hasRole(tab.requiresRole));
+
+    const render = () => {
+        let contentHtml;
+        if (state.isLoading) {
+            contentHtml = `<div class="flex items-center justify-center h-full"><div class="animate-spin h-10 w-10 border-4 border-slate-300 border-t-transparent rounded-full"></div></div>`;
+        } else {
+            switch (state.currentTab) {
+                case 'profile': contentHtml = renderProfileTab(currentUserProfile); break;
+                case 'sync': contentHtml = renderSyncTab(syncTasks, state.syncStatus, state.isSyncingAll, state.syncingSingle); break;
+                case 'users': contentHtml = renderUsersTab(state.users, currentUserProfile.id); break;
+                case 'history': contentHtml = renderHistoryTab(state.history); break;
+                case 'stats': contentHtml = renderStatsTab(state.stats); break;
+                default: contentHtml = `<p>Выберите вкладку</p>`;
+            }
+        }
+
+        const tabButtonsHtml = visibleTabs.map(tab => `
+            <button class="profile-tab-button ${state.currentTab === tab.id ? 'active' : ''}" data-tab-id="${tab.id}">
+                <span class="w-5 h-5">${tab.icon}</span>
+                <span>${tab.label}</span>
+            </button>
+        `).join('');
+
+        modalElement.innerHTML = `
+            <div id="profile-content" class="bg-white dark:bg-slate-800 w-full h-full flex flex-col sm:h-auto sm:max-h-[90vh] sm:max-w-4xl sm:rounded-lg shadow-xl text-slate-800 dark:text-slate-100">
+                <header class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+                    <h2 class="text-xl sm:text-2xl font-bold">Профиль и Управление</h2>
+                    <button data-action="close" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Закрыть профиль">&times;</button>
+                </header>
+                <main class="flex-1 flex flex-col sm:flex-row overflow-hidden bg-slate-50 dark:bg-slate-900/70">
+                    <aside class="w-full sm:w-56 border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-slate-700 p-2 sm:p-4 flex-shrink-0 bg-white dark:bg-slate-800">
+                         <nav class="flex flex-row sm:flex-col sm:space-y-1 w-full justify-around">${tabButtonsHtml}</nav>
+                    </aside>
+                    <div class="flex-1 p-0 sm:p-6 overflow-y-auto" id="profile-tab-content">${contentHtml}</div>
+                </main>
+                 <div id="sub-modal-container"></div>
+            </div>
+        `;
+
+        if (state.currentTab === 'stats' && state.stats && !state.isLoading) {
+             setTimeout(() => {
+                const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const textColor = isDarkMode ? '#e2e8f0' : '#334155';
+                const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+
+                // Activity Chart
+                const activityCanvas = document.getElementById('activity-chart');
+                if(activityCanvas && state.stats.actions_by_day) {
+                    new Chart(activityCanvas, {
+                        type: 'line',
+                        data: {
+                            labels: state.stats.actions_by_day.map(d => new Date(d.date).toLocaleDateString('ru-RU')),
+                            datasets: [{ label: 'Действия', data: state.stats.actions_by_day.map(d => d.count), borderColor: '#3b82f6', tension: 0.1, fill: false }]
+                        },
+                        options: { scales: { y: { beginAtZero: true, ticks: { color: textColor }, grid: { color: gridColor } }, x: { ticks: { color: textColor }, grid: { color: gridColor } } }, plugins: { legend: { labels: { color: textColor } } } }
+                    });
+                }
+                // Actions Chart
+                 const actionsCanvas = document.getElementById('actions-chart');
+                 if (actionsCanvas && state.stats.actions_by_function) {
+                     new Chart(actionsCanvas, {
+                         type: 'doughnut',
+                         data: {
+                             labels: state.stats.actions_by_function.map(d => ACTION_NAMES[d.function_name] || d.function_name),
+                             datasets: [{ data: state.stats.actions_by_function.map(d => d.count), backgroundColor: CHART_COLORS }]
+                         },
+                         options: { plugins: { legend: { position: 'right', labels: { color: textColor, boxWidth: 20 } } } }
+                     });
+                 }
+                  // Users Chart
+                 const usersCanvas = document.getElementById('users-chart');
+                 if(usersCanvas && state.stats.actions_by_user) {
+                      new Chart(usersCanvas, {
+                        type: 'bar',
+                        data: {
+                            labels: state.stats.actions_by_user.map(d => d.full_name),
+                            datasets: [{ label: 'Действия', data: state.stats.actions_by_user.map(d => d.count), backgroundColor: '#10b981' }]
+                        },
+                         options: { indexAxis: 'y', scales: { y: { ticks: { color: textColor }, grid: { color: gridColor } }, x: { ticks: { color: textColor }, grid: { color: gridColor } } }, plugins: { legend: { display: false } } }
+                    });
+                 }
+                // Responses Chart
+                const responsesCanvas = document.getElementById('responses-chart');
+                if(responsesCanvas && state.stats.responses_by_type) {
+                     new Chart(responsesCanvas, {
+                        type: 'pie',
+                        data: {
+                            labels: state.stats.responses_by_type.map(d => d.type === 'card' ? 'Карточки' : 'Текст'),
+                            datasets: [{ data: state.stats.responses_by_type.map(d => d.count), backgroundColor: ['#8b5cf6', '#ef4444'] }]
+                        },
+                        options: { plugins: { legend: { position: 'top', labels: { color: textColor } } } }
+                    });
+                }
+             }, 0);
+        }
+
+    };
+    
+    const switchTab = async (tabId) => {
+        state.currentTab = tabId;
+        state.isLoading = true;
+        render();
+
+        try {
+            switch(tabId) {
+                case 'sync': state.syncStatus = getSyncStatus(); break;
+                case 'users': state.users = await supabaseService.getAllUserProfiles(); break;
+                case 'history': state.history = await supabaseService.getChatHistoryForAdmin(); break;
+                case 'stats': state.stats = await supabaseService.getFullStats(); break;
+            }
+        } catch (error) {
+            console.error(`Failed to load data for tab ${tabId}:`, error);
+            document.getElementById('profile-tab-content').innerHTML = `<p class="p-4 text-red-500">Не удалось загрузить данные: ${error.message}</p>`;
+        }
+        
+        state.isLoading = false;
+        render();
+    };
+
+    modalElement.addEventListener('click', async (e) => {
+        const target = e.target.closest('[data-tab-id], [data-action]');
+        if (!target) {
+             if (e.target === modalElement || !e.target.closest('#profile-content')) {
+                onClose();
+            }
+            return;
+        }
+
+        if (target.dataset.tabId) {
+            switchTab(target.dataset.tabId);
+        }
+
+        if (target.dataset.action) {
             const action = target.dataset.action;
-            switch (action) {
+            const subModalContainer = modalElement.querySelector('#sub-modal-container');
+
+            switch(action) {
                 case 'close': onClose(); break;
-                case 'logout': onLogout(); break;
-                case 'delete-settings':
-                    if (confirm('Вы уверены, что хотите удалить все ваши настройки из облака? Это действие необратимо.')) {
-                        await supabaseService.deleteUserSettings();
-                        window.location.reload();
-                    }
-                    break;
-                case 'change-role': {
-                    const userId = target.dataset.userId;
-                    const newRole = target.value;
-                    if(confirm(`Вы уверены, что хотите изменить роль пользователя на "${ROLE_DISPLAY_MAP[newRole].text}"?`)) {
-                        try {
-                            await supabaseService.updateUserRole(userId, newRole);
-                            switchTab('users'); // Refresh the tab
-                        } catch(err) {
-                            alert(`Ошибка: ${err.message}`);
-                        }
-                    } else {
-                        target.value = target.querySelector('option[selected]').value; // Revert dropdown
-                    }
+                case 'logout': if(confirm('Вы уверены, что хотите выйти?')) onLogout(); break;
+                case 'run-all-syncs': {
+                    state.isSyncingAll = true; render();
+                    try { await onRunAllSyncs(); } catch(err) {/* ignore */}
+                    state.syncStatus = getSyncStatus(); state.isSyncingAll = false; render();
                     break;
                 }
-                case 'test-connection': {
-                    const statusEl = modalOverlay.querySelector('#connection-test-status');
-                    if (!statusEl) return;
-                    statusEl.innerHTML = `<div class="animate-spin h-5 w-5 border-2 border-current border-t-transparent rounded-full"></div>`;
-                    try {
-                        await supabaseService.testConnection();
-                        statusEl.innerHTML = `<span class="text-green-500 font-semibold">✓ Успешно</span>`;
-                    } catch (error) {
-                        statusEl.innerHTML = `<span class="text-red-500 font-semibold">✗ Ошибка</span>`;
-                    }
-                    break;
-                }
-                 case 'run-all-syncs': {
-                    state.isSyncingAll = true;
-                    switchTab('sync');
-                    await onRunAllSyncs();
-                    state.isSyncingAll = false;
-                    switchTab('sync');
-                    break;
-                }
-                case 'run-single-sync': {
+                 case 'run-single-sync': {
                     const taskName = target.dataset.taskName;
-                    state.syncingSingle = taskName;
-                    switchTab('sync');
-                    try {
-                        await onRunSingleSync(taskName);
-                    } catch(err) {
-                        // error is handled inside, just need to update UI
-                    }
-                    state.syncingSingle = null;
-                    switchTab('sync');
+                    state.syncingSingle = taskName; render();
+                    try { await onRunSingleSync(taskName); } catch(err) {/* ignore */}
+                    state.syncStatus = getSyncStatus(); state.syncingSingle = null; render();
                     break;
                 }
                 case 'view-data': {
@@ -471,42 +453,37 @@ export function createProfileModal({ currentUserProfile, supabaseService, syncTa
                     const label = target.dataset.label;
                     subModalContainer.innerHTML = `<div class="fixed inset-0 bg-black/10 flex items-center justify-center z-[53]"><div class="animate-spin h-8 w-8 border-4 border-white border-t-transparent rounded-full"></div></div>`;
                     const { data, error } = await supabaseService.getSampleData(tableName);
-                    const viewerModal = createDataViewerModal(label, data, error ? error.message : null, () => subModalContainer.innerHTML = '');
+                    const modal = createDataViewerModal(label, data, error ? error.message : null, () => subModalContainer.innerHTML = '');
                     subModalContainer.innerHTML = '';
-                    subModalContainer.appendChild(viewerModal);
-                    break;
-                }
-                case 'open-settings': {
-                    // This is a special action to bridge modals. We assume the main `showSettingsModal` is available globally.
-                    onClose(); // Close the current modal first
-                    document.querySelector('#settings-button').click(); // Then open the settings modal
+                    subModalContainer.appendChild(modal);
                     break;
                 }
             }
-            return;
         }
-
-        const tabButton = e.target.closest('.profile-tab-button');
-        if (tabButton) {
-            switchTab(tabButton.dataset.tab);
-            return;
-        }
-        
-        // Close if clicking outside the modal content
-        if (!e.target.closest('#profile-modal-content')) {
-            onClose();
-        }
-    };
+    });
     
-    modalOverlay.addEventListener('click', handleAction);
-    modalOverlay.addEventListener('change', (e) => { // For select dropdown
-         if (e.target.dataset.action === 'change-role') {
-            handleAction(e);
-         }
+     modalElement.addEventListener('change', async (e) => {
+        const target = e.target.closest('[data-action="change-role"]');
+        if (target) {
+            const userId = target.dataset.userId;
+            const newRole = target.value;
+            if (confirm(`Вы уверены, что хотите изменить роль для пользователя на "${newRole}"?`)) {
+                try {
+                    await supabaseService.updateUserRole(userId, newRole);
+                    // Refresh users list
+                    state.users = await supabaseService.getAllUserProfiles();
+                    render();
+                } catch (error) {
+                    alert(`Ошибка: ${error.message}`);
+                }
+            } else {
+                // Revert select box if cancelled
+                const user = state.users.find(u => u.id === userId);
+                if (user) target.value = user.role;
+            }
+        }
     });
 
-    // Initial render
-    switchTab('profile');
-
-    return modalOverlay;
+    render();
+    return modalElement;
 }
