@@ -2,7 +2,7 @@ import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.j
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
 import { callGemini, analyzeSyncErrorWithGemini, testProxyConnection } from './services/geminiService.js';
-import { getSettings, saveSettings, getSyncStatus, saveSyncStatus } from './utils/storage.js';
+import { getSettings, saveSettings, getSyncStatus, saveSyncStatus, getGoogleToken, saveGoogleToken, clearGoogleToken } from './utils/storage.js';
 import { createSetupWizard } from './components/SetupWizard.js';
 import { createSettingsModal } from './components/SettingsModal.js';
 import { createProfileModal } from './components/ProfileModal.js';
@@ -282,6 +282,12 @@ async function handleAuthentication() {
                 saveSettings(state.settings);
             }
         }
+    } else {
+        // Handle direct Google auth: load token from localStorage if it exists
+        const directToken = getGoogleToken();
+        if (directToken) {
+            googleProvider.setAuthToken(directToken);
+        }
     }
 
     if (googleProvider.token) {
@@ -289,17 +295,16 @@ async function handleAuthentication() {
             const googleProfile = await googleProvider.getUserProfile();
             state.isGoogleConnected = true;
             
-            // If using Supabase, merge Google profile with Supabase profile data (like role)
             if (state.isSupabaseReady && supabaseService) {
                 const supabaseProfile = await supabaseService.getCurrentUserProfile();
-                state.userProfile = supabaseProfile || { ...googleProfile, role: 'user' }; // Fallback to Google profile if Supabase profile fails
+                state.userProfile = supabaseProfile || { ...googleProfile, role: 'user' };
             } else {
                  state.userProfile = googleProfile;
             }
 
         } catch (error) {
-            console.error("Failed to get user profile:", error);
-            showSystemError(`Не удалось получить профиль Google: ${error.message}`);
+            console.error("Failed to get user profile, token might be invalid:", error);
+            showSystemError(`Сессия Google истекла или недействительна. Пожалуйста, войдите снова.`);
             await handleLogout();
         }
     }
@@ -328,7 +333,8 @@ async function handleLogout() {
     } else {
         await googleProvider.disconnect();
     }
-    // A more robust way to clear state
+    // Clear all potential auth tokens
+    clearGoogleToken();
     localStorage.removeItem('secretary-plus-settings-v4');
     localStorage.removeItem('secretary-plus-sync-status-v1');
     window.location.reload();

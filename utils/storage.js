@@ -1,5 +1,6 @@
 const SETTINGS_KEY = 'secretary-plus-settings-v4';
 const SYNC_STATUS_KEY = 'secretary-plus-sync-status-v1';
+const GOOGLE_TOKEN_KEY = 'secretary-plus-google-token-v1';
 
 const defaultSettings = {
     geminiApiKey: '',
@@ -62,6 +63,36 @@ export function saveSettings(settings) {
         console.error("Failed to save settings to localStorage", error);
     }
 }
+
+// --- Direct Google Auth Token ---
+
+export function getGoogleToken() {
+    try {
+        return localStorage.getItem(GOOGLE_TOKEN_KEY);
+    } catch (error) {
+        console.error("Failed to get Google token from localStorage", error);
+        return null;
+    }
+}
+
+export function saveGoogleToken(token) {
+    try {
+        localStorage.setItem(GOOGLE_TOKEN_KEY, token);
+    } catch (error) {
+        console.error("Failed to save Google token to localStorage", error);
+    }
+}
+
+export function clearGoogleToken() {
+    try {
+        localStorage.removeItem(GOOGLE_TOKEN_KEY);
+    } catch (error) {
+        console.error("Failed to remove Google token from localStorage", error);
+    }
+}
+
+
+// --- Sync Status ---
 
 export function getSyncStatus() {
     try {

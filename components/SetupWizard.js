@@ -1,4 +1,4 @@
-import { getSettings } from '../utils/storage.js';
+import { getSettings, saveGoogleToken } from '../utils/storage.js';
 import { SupabaseService } from '../services/supabase/SupabaseService.js';
 import * as Icons from './icons/Icons.js';
 import { createProxyManagerModal } from './ProxyManagerModal.js';
@@ -246,6 +246,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         } else {
             googleProvider.initClient(googleClientId, (tokenResponse) => {
                 if (tokenResponse && !tokenResponse.error) {
+                    saveGoogleToken(tokenResponse.access_token);
                     googleProvider.setAuthToken(tokenResponse.access_token);
                     window.location.reload();
                 } else {
