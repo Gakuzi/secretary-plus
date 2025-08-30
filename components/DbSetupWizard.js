@@ -99,6 +99,7 @@ export function createDbSetupWizard({ supabaseService, onComplete }) {
         settings: getSettings(),
         isLoading: false,
         testStatus: 'idle', // idle, testing, ok, error
+        errorMessage: '',
     };
     
     const PROJECT_REF = SUPABASE_CONFIG.url.split('.')[0].split('//')[1];
@@ -182,10 +183,21 @@ export function createDbSetupWizard({ supabaseService, onComplete }) {
             case 'final_config':
                 let testStatusHtml;
                 switch(state.testStatus) {
-                    case 'testing': testStatusHtml = `<span class="text-yellow-500 flex items-center gap-2"><div class="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div> Тестирование...</span>`; break;
-                    case 'ok': testStatusHtml = `<span class="text-green-500 font-bold">✓ Соединение успешно!</span>`; break;
-                    case 'error': testStatusHtml = `<span class="text-red-500 font-bold">✗ Ошибка соединения.</span>`; break;
-                    default: testStatusHtml = `<span class="text-slate-500">Ожидание...</span>`;
+                    case 'testing': 
+                        testStatusHtml = `<span class="text-yellow-500 flex items-center gap-2"><div class="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div> Тестирование...</span>`; 
+                        break;
+                    case 'ok': 
+                        testStatusHtml = `<span class="text-green-500 font-bold">✓ Соединение успешно!</span>`; 
+                        break;
+                    case 'error': 
+                        testStatusHtml = `
+                            <div class="text-right">
+                                <span class="text-red-500 font-bold">✗ Ошибка соединения.</span>
+                                ${state.errorMessage ? `<p class="text-xs text-slate-500 mt-1 max-w-xs truncate" title="${state.errorMessage}">${state.errorMessage}</p>` : ''}
+                            </div>`; 
+                        break;
+                    default: 
+                        testStatusHtml = `<span class="text-slate-500">Ожидание...</span>`;
                 }
                 nextButtonDisabled = state.isLoading || state.testStatus !== 'ok';
 
@@ -196,7 +208,7 @@ export function createDbSetupWizard({ supabaseService, onComplete }) {
                             <label for="worker-url-input" class="font-medium text-sm">URL Управляющего Воркера</label>
                             <div class="flex items-center gap-2">
                                 <input type="url" id="worker-url-input" class="flex-1 mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 text-sm font-mono" placeholder="https://....supabase.co/functions/v1/db-admin" value="${state.settings.managementWorkerUrl || ''}">
-                                <a href="${EDGE_FUNCTIONS_URL}" target="_blank" class="text-xs font-semibold text-blue-500 hover:underline mt-1">Скопировать URL</a>
+                                <a href="${EDGE_FUNCTIONS_URL}" target="_blank" class="text-xs font-semibold text-blue-500 hover:underline mt-1">Найти URL</a>
                             </div>
                         </div>
                          <div>
@@ -217,9 +229,9 @@ export function createDbSetupWizard({ supabaseService, onComplete }) {
             footerHtml += `<button data-action="back" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md text-sm font-semibold">Назад</button>`;
         }
         if (state.currentStep < STEPS.length - 1) {
-            footerHtml += `<button data-action="next" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold" ${nextButtonDisabled ? 'disabled' : ''}>Далее</button>`;
+            footerHtml += `<button data-action="next" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold disabled:opacity-50" ${nextButtonDisabled ? 'disabled' : ''}>Далее</button>`;
         } else {
-            footerHtml += `<button data-action="finish" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold" ${nextButtonDisabled ? 'disabled' : ''}>Завершить и сохранить</button>`;
+            footerHtml += `<button data-action="finish" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold disabled:opacity-50" ${nextButtonDisabled ? 'disabled' : ''}>Завершить и сохранить</button>`;
         }
 
         // --- Main Layout ---
@@ -291,16 +303,20 @@ export function createDbSetupWizard({ supabaseService, onComplete }) {
                     return;
                 }
 
-                state.isLoading = true; state.testStatus = 'testing'; render();
+                state.isLoading = true; 
+                state.testStatus = 'testing';
+                state.errorMessage = '';
+                render();
                 try {
                     await supabaseService.executeSqlViaFunction('SELECT 1;', url, token);
                     state.testStatus = 'ok';
                 } catch (error) {
                     console.error("Worker test failed:", error);
                     state.testStatus = 'error';
-                    alert(`Ошибка соединения: ${error.message}`);
+                    state.errorMessage = error.message;
                 } finally {
-                    state.isLoading = false; render();
+                    state.isLoading = false; 
+                    render();
                 }
                 break;
             case 'finish':

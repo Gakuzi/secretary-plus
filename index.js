@@ -520,21 +520,37 @@ async function startAuthenticatedSession(session) {
         // --- Step 2: Critical Schema Check ---
         try {
             await supabaseService.checkSchemaVersion();
+
+            // --- Step 3: Load remaining data (ONLY if schema is OK) ---
+            const cloudSettings = await supabaseService.getUserSettings();
+            if (cloudSettings) {
+                state.settings = { ...getSettings(), ...cloudSettings };
+                saveSettings(state.settings);
+            }
+            supabaseService.setSettings(state.settings);
+            googleProvider.setTimezone(state.settings.timezone);
+            
+            state.keyPool = await supabaseService.getSharedGeminiKeys();
+            state.proxyPool = await supabaseService.getSharedProxies();
+            
+            await startNewChatSession();
+            startAutoSync();
+            setupEmailPolling();
+
         } catch (schemaError) {
-            // Check if it's a "relation does not exist" type of error, which indicates a schema issue.
-            const isSchemaError = schemaError.message.includes('relation') || schemaError.message.includes('does not exist') || schemaError.message.includes('could not find the function');
+             const isSchemaError = schemaError.message.includes('relation') || schemaError.message.includes('does not exist') || schemaError.message.includes('could not find the table');
             
             if (isAdminOrOwner && isSchemaError) {
                  addMessageToChat({
                     id: Date.now().toString(),
                     sender: MessageSender.SYSTEM,
-                    text: 'Обнаружена проблема с базой данных (схема устарела или не настроена). Для корректной работы приложения необходимо провести обновление.',
+                    text: 'Обнаружена проблема с базой данных. Вероятно, она не настроена или ее структура устарела. Для корректной работы приложения необходимо провести обновление.',
                     card: {
                         type: 'system_action',
                         icon: 'DatabaseIcon',
-                        title: 'Требуется обновление БД',
+                        title: 'Требуется настройка БД',
                         actions: [{
-                            label: 'Запустить Мастер Обновления',
+                            label: 'Запустить Мастер Настройки',
                             clientAction: 'open_migration_modal',
                         }]
                     }
@@ -548,22 +564,6 @@ async function startAuthenticatedSession(session) {
             state.isLoading = false;
             return; 
         }
-
-        // --- Step 3: Load remaining data (only if schema is OK) ---
-        const cloudSettings = await supabaseService.getUserSettings();
-        if (cloudSettings) {
-            state.settings = { ...getSettings(), ...cloudSettings };
-            saveSettings(state.settings);
-        }
-        supabaseService.setSettings(state.settings);
-        googleProvider.setTimezone(state.settings.timezone);
-        
-        state.keyPool = await supabaseService.getSharedGeminiKeys();
-        state.proxyPool = await supabaseService.getSharedProxies();
-        
-        await startNewChatSession();
-        startAutoSync();
-        setupEmailPolling();
 
     } catch (error) {
         console.error("Critical error during session start:", error);
