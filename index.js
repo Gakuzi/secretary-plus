@@ -83,6 +83,7 @@ let supabaseService = null;
 let emailCheckInterval = null;
 let syncInterval = null;
 let proxyTestInterval = null;
+let migrationModal = null; // Instance for the migration modal
 
 const serviceProviders = {
     google: googleProvider,
@@ -600,7 +601,12 @@ function showSettingsModal() {
         onSave: async (newSettings) => {
             state.settings = newSettings;
             if (supabaseService) {
-                await supabaseService.saveUserSettings(newSettings);
+                try {
+                    await supabaseService.saveUserSettings(newSettings);
+                } catch (error) {
+                    console.error("Failed to save settings to cloud:", error);
+                    showSystemError(`Не удалось сохранить настройки в облаке: ${error.message}`);
+                }
             }
             saveSettings(newSettings);
             googleProvider.setTimezone(newSettings.timezone);
@@ -844,9 +850,51 @@ function setupEmailPolling() {
     emailCheckInterval = setInterval(checkEmails, 60000);
 }
 
-// --- SCHEMA MIGRATION ---
-// This function is now deprecated and removed. All migration logic is handled manually
-// by the user through the new DbSetupWizard component which calls a secure Supabase Edge Function.
+// --- SCHEMA MIGRATION LOGIC ---
+
+async function runMigration() {
+    if (!migrationModal) return;
+
+    if (!state.settings.managementWorkerUrl || !state.settings.adminSecretToken) {
+        migrationModal.updateState('not-configured');
+        return;
+    }
+
+    try {
+        migrationModal.updateState('migrating', 'Выполняется SQL-скрипт. Это может занять до минуты...');
+        await supabaseService.executeSqlViaFunction(
+            state.settings.managementWorkerUrl,
+            state.settings.adminSecretToken,
+            FULL_MIGRATION_SQL
+        );
+        migrationModal.updateState('success');
+        setTimeout(() => window.location.reload(), 3000); // Reload to apply changes
+    } catch (error) {
+        migrationModal.updateState('error', null, error.message);
+    }
+}
+
+async function checkDatabaseSchema() {
+    if (!state.settings.isSupabaseEnabled || !supabaseService) {
+        return true; // Supabase is disabled, so no schema to check.
+    }
+
+    try {
+        const { error } = await supabaseService.client.from('user_settings').select('*', { count: 'exact', head: true });
+
+        if (error) {
+            // 42P01 is PostgreSQL's code for "undefined_table"
+            if (error.code === '42P01' || error.message.includes("violates row-level security policy")) {
+                return false; // Schema is outdated or missing tables/policies.
+            }
+            throw error; // A different, unexpected error occurred.
+        }
+        return true; // Schema seems OK.
+    } catch (e) {
+        console.error("Database schema check failed with an exception:", e);
+        return false; // Treat exceptions as a failed check for safety.
+    }
+}
 
 
 // --- APP STARTUP LOGIC ---
@@ -910,7 +958,27 @@ async function startFullApp() {
     } else {
         // All settings are present. Initialize services and render the main app.
         await initializeAppServices();
-        renderMainContent();
+
+        const isSchemaOk = await checkDatabaseSchema();
+        if (!isSchemaOk) {
+            const { element, updateState } = createMigrationModal();
+            migrationModal = { updateState };
+            wizardContainer.innerHTML = '';
+            wizardContainer.appendChild(element);
+            updateState('required');
+
+            element.addEventListener('click', async (e) => {
+                const action = e.target.closest('[data-action]')?.dataset.action;
+                if (action === 'migrate' || action === 'retry') {
+                    await runMigration();
+                } else if (action === 'open-wizard') {
+                    element.remove();
+                    showDbSetupWizard();
+                }
+            });
+        } else {
+            renderMainContent();
+        }
     }
 }
 

@@ -1,4 +1,3 @@
-
 import * as Icons from './icons/Icons.js';
 
 export function createMigrationModal() {
@@ -24,7 +23,7 @@ export function createMigrationModal() {
 
     const updateState = (state, message = '', error = null) => {
         spinner.classList.add('hidden');
-        iconContainer.classList.add('hidden');
+        iconContainer.classList.remove('hidden');
         actions.innerHTML = '';
 
         switch (state) {
@@ -33,37 +32,42 @@ export function createMigrationModal() {
                 title.textContent = 'Проверка базы данных...';
                 status.textContent = message || 'Определяем текущую версию схемы...';
                 break;
+            case 'required':
+                iconContainer.innerHTML = Icons.AlertTriangleIcon;
+                iconContainer.className = 'mx-auto h-12 w-12 text-yellow-500';
+                title.textContent = 'Требуется обновление базы данных';
+                status.innerHTML = `Структура вашей базы данных устарела. Для корректной работы приложения необходимо её обновить. <br><strong class="mt-2 block">Все кэшированные данные будут удалены и синхронизированы заново.</strong>`;
+                 actions.innerHTML = `
+                    <button data-action="migrate" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold">Начать обновление</button>
+                `;
+                break;
             case 'migrating':
                 spinner.classList.remove('hidden');
                 title.textContent = 'Обновление базы данных...';
                 status.textContent = message;
                 break;
             case 'success':
-                iconContainer.classList.remove('hidden');
                 iconContainer.innerHTML = Icons.CheckSquareIcon;
                 iconContainer.className = 'mx-auto h-12 w-12 text-green-500';
                 title.textContent = 'База данных обновлена!';
-                status.textContent = message || 'Приложение готово к работе.';
+                status.textContent = message || 'Приложение перезагрузится через 3 секунды...';
                 break;
             case 'error':
-                iconContainer.classList.remove('hidden');
                 iconContainer.innerHTML = Icons.AlertTriangleIcon;
                 iconContainer.className = 'mx-auto h-12 w-12 text-red-500';
                 title.textContent = 'Ошибка обновления!';
                 status.innerHTML = `Не удалось обновить базу данных.<br><strong class="mt-2 block">${error || 'Неизвестная ошибка.'}</strong>`;
                 actions.innerHTML = `
                     <button data-action="retry" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold">Повторить</button>
-                    <button data-action="open-wizard" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-semibold">Настроить Воркер</button>
                 `;
                 break;
              case 'not-configured':
-                iconContainer.classList.remove('hidden');
                 iconContainer.innerHTML = Icons.SettingsIcon;
                 iconContainer.className = 'mx-auto h-12 w-12 text-yellow-500';
                 title.textContent = 'Автоматическое обновление не настроено';
-                status.textContent = 'Для автоматического обновления схемы БД необходимо настроить Управляющий воркер. Вы можете сделать это в Центре Помощи.';
+                status.textContent = 'Для автоматического обновления схемы БД необходимо настроить "Управляющий воркер". Запустите мастер для его настройки.';
                  actions.innerHTML = `
-                    <button data-action="continue" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold">Продолжить</button>
+                    <button data-action="open-wizard" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-semibold">Настроить Воркер</button>
                 `;
                 break;
         }
