@@ -1,6 +1,7 @@
 import * as Icons from './icons/Icons.js';
 import { getSyncStatus } from '../utils/storage.js';
 import { SERVICE_SCHEMAS } from '../services/supabase/schema.js';
+import { createDbExecutionModal } from './DbExecutionModal.js';
 
 function createDataViewerModal(title, data, error, onClose) {
     const modal = document.createElement('div');
@@ -133,49 +134,53 @@ function renderSyncTab(syncTasks, state) {
 }
 
 function renderSchemaTab(state) {
+    let autoCheckHtml = '';
     if (state.isCheckingSchema) {
-        return `<div class="flex justify-center items-center h-full"><div class="animate-spin h-8 w-8 border-4 border-slate-300 border-t-transparent rounded-full"></div></div>`;
-    }
-
-    if (state.schemaError) {
-        return `<div class="p-4 bg-red-100 text-red-800 rounded-md"><strong>Ошибка проверки схемы:</strong> ${state.schemaError}</div>`;
-    }
-    
-    if (!state.generatedSql) {
-        return `
+        autoCheckHtml = `<div class="flex justify-center items-center h-full p-8"><div class="animate-spin h-8 w-8 border-4 border-slate-300 border-t-transparent rounded-full"></div></div>`;
+    } else if (state.schemaError) {
+        autoCheckHtml = `<div class="p-4 bg-red-100 text-red-800 rounded-md"><strong>Ошибка проверки схемы:</strong> ${state.schemaError}</div>`;
+    } else if (!state.generatedSql) {
+        autoCheckHtml = `
             <div class="p-6 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-lg text-center">
                 <div class="w-12 h-12 flex items-center justify-center mx-auto bg-green-100 dark:bg-green-800 rounded-full text-green-600 dark:text-green-300">${Icons.CheckSquareIcon}</div>
                 <h4 class="mt-4 text-lg font-bold text-green-800 dark:text-green-200">Схема базы данных в порядке</h4>
                 <p class="mt-1 text-sm text-green-700 dark:text-green-300">Все таблицы, необходимые для включенных служб, уже существуют.</p>
             </div>
         `;
-    }
-
-    let footerHtml = '';
-    if (state.executionSuccess) {
-        footerHtml = `<button data-action="close-and-refresh" class="w-full px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold">Готово</button>`;
     } else {
-        footerHtml = `
-            <button data-action="execute-sql" class="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold disabled:bg-slate-500" ${state.isExecutingSql ? 'disabled' : ''}>
-                ${state.isExecutingSql ? 'Выполнение...' : 'Создать недостающие таблицы'}
+        autoCheckHtml = `
+            <div class="p-4 bg-yellow-100/50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300 rounded-md text-sm">
+                <h4 class="font-bold">Требуется создание таблиц</h4>
+                <p>Для некоторых включенных служб отсутствуют таблицы в базе данных. Нажмите кнопку ниже, чтобы сгенерировать и выполнить SQL-скрипт для их создания.</p>
+            </div>
+            <button data-action="force-migrate" class="mt-4 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center justify-center gap-2">
+                ${Icons.WandIcon}
+                <span>Создать недостающие таблицы</span>
             </button>
         `;
     }
 
+
     return `
-        <div class="p-4 bg-yellow-100/50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300 rounded-md text-sm">
-            <h4 class="font-bold">Требуется обновление схемы</h4>
-            <p>Для некоторых включенных служб отсутствуют таблицы в базе данных. Сгенерирован SQL-скрипт для их создания.</p>
+        <div class="space-y-6">
+            <div>
+                <h3 class="font-semibold text-lg text-slate-900 dark:text-slate-100">Автоматическая проверка схемы</h3>
+                <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Система автоматически проверяет наличие необходимых таблиц для всех включенных служб.</p>
+                ${autoCheckHtml}
+            </div>
+
+            <div class="mt-6 pt-6 border-t border-slate-300 dark:border-slate-700">
+                <h3 class="font-semibold text-lg text-slate-900 dark:text-slate-100">Редактор и Миграция БД</h3>
+                <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Если вы столкнулись с ошибками, связанными со структурой БД (например, 'column not found'), вы можете запустить полную миграцию. Это пересоздаст все таблицы данных до последней актуальной версии.</p>
+                <div class="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-200 rounded-md text-sm">
+                    <strong>Внимание:</strong> Это действие удалит все кэшированные данные (контакты, файлы и т.д.) и синхронизирует их заново.
+                </div>
+                <button data-action="force-migrate" class="mt-4 w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold flex items-center justify-center gap-2">
+                    ${Icons.AlertTriangleIcon}
+                    <span>Запустить Редактор миграции</span>
+                </button>
+            </div>
         </div>
-        <div class="mt-4">
-            <label for="sql-script-area" class="font-semibold text-sm">Сгенерированный SQL-скрипт:</label>
-            <textarea id="sql-script-area" class="w-full h-48 mt-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 font-mono text-xs" readonly>${state.generatedSql}</textarea>
-        </div>
-        <div>
-            <label class="font-semibold text-sm">Лог выполнения:</label>
-            <div class="w-full h-24 mt-1 bg-slate-900 text-slate-200 border border-slate-700 rounded-md p-2 font-mono text-xs overflow-y-auto whitespace-pre-wrap">${state.logOutput}</div>
-        </div>
-        <div class="mt-4">${footerHtml}</div>
     `;
 }
 
@@ -194,14 +199,11 @@ export function createDataManagerModal({ supabaseService, syncTasks, settings, o
         schemaError: null,
         existingTables: [],
         generatedSql: '',
-        isExecutingSql: false,
-        executionSuccess: false,
-        logOutput: 'Ожидание выполнения...',
     };
     
     const render = () => {
         const TABS = [
-            { id: 'sync', label: 'Синхронизация' },
+            { id: 'sync', label: 'Статус синхронизации' },
             { id: 'schema', label: 'Схема БД' },
         ];
         
@@ -222,7 +224,7 @@ export function createDataManagerModal({ supabaseService, syncTasks, settings, o
                     <div id="tab-content-sync" class="${state.currentTab === 'sync' ? '' : 'hidden'}">${renderSyncTab(syncTasks, state)}</div>
                     <div id="tab-content-schema" class="${state.currentTab === 'schema' ? '' : 'hidden'}">${renderSchemaTab(state)}</div>
                 </main>
-                 <div id="data-viewer-container"></div>
+                 <div id="sub-modal-container"></div>
             </div>
         `;
     };
@@ -232,6 +234,13 @@ export function createDataManagerModal({ supabaseService, syncTasks, settings, o
         state.schemaError = null;
         state.generatedSql = '';
         render();
+
+        if (!settings.managementWorkerUrl || !settings.adminSecretToken) {
+            state.schemaError = "Управляющий воркер не настроен. Запустите мастер настройки в Настройках > База данных.";
+            state.isCheckingSchema = false;
+            render();
+            return;
+        }
 
         try {
             const tables = await supabaseService.getExistingTables(settings.managementWorkerUrl, settings.adminSecretToken);
@@ -266,10 +275,10 @@ export function createDataManagerModal({ supabaseService, syncTasks, settings, o
         }
 
         const action = target.dataset.action;
+        const subModalContainer = modalOverlay.querySelector('#sub-modal-container');
 
         switch(action) {
             case 'close': onClose(); break;
-            case 'close-and-refresh': window.location.reload(); break;
             case 'test-connection': {
                 state.isTestingConnection = true;
                 state.testStatus = 'idle';
@@ -314,33 +323,30 @@ export function createDataManagerModal({ supabaseService, syncTasks, settings, o
                 break;
             }
             case 'view-data': {
-                 const tableName = target.dataset.tableName;
+                const tableName = target.dataset.tableName;
                 const label = target.dataset.label;
-                const viewerContainer = modalOverlay.querySelector('#data-viewer-container');
-                viewerContainer.innerHTML = `<div class="fixed inset-0 bg-black/10 flex items-center justify-center z-[53]"><div class="animate-spin h-8 w-8 border-4 border-white border-t-transparent rounded-full"></div></div>`;
+                subModalContainer.innerHTML = `<div class="fixed inset-0 bg-black/10 flex items-center justify-center z-[53]"><div class="animate-spin h-8 w-8 border-4 border-white border-t-transparent rounded-full"></div></div>`;
                 const { data, error } = await supabaseService.getSampleData(tableName);
-                const modal = createDataViewerModal(label, data, error ? error.message : null, () => viewerContainer.innerHTML = '');
-                viewerContainer.innerHTML = '';
-                viewerContainer.appendChild(modal);
+                const modal = createDataViewerModal(label, data, error ? error.message : null, () => subModalContainer.innerHTML = '');
+                subModalContainer.innerHTML = '';
+                subModalContainer.appendChild(modal);
                 break;
             }
-            case 'execute-sql': {
-                 const sqlToExecute = modalOverlay.querySelector('#sql-script-area').value.trim();
-                 if (!sqlToExecute) return;
-                 state.isExecutingSql = true;
-                 state.executionSuccess = false;
-                 state.logOutput = 'Выполнение скрипта...';
-                 render();
-                 try {
-                    const result = await supabaseService.executeSqlViaFunction(settings.managementWorkerUrl, settings.adminSecretToken, sqlToExecute);
-                    state.logOutput = `УСПЕШНО! Таблицы созданы.\n\nОтвет сервера:\n${JSON.stringify(result, null, 2)}`;
-                    state.executionSuccess = true;
-                 } catch (error) {
-                    state.logOutput = `ОШИБКА!\n\n${error.message}\n\nПроверьте настройки Управляющего воркера.`;
-                 } finally {
-                    state.isExecutingSql = false;
-                    render();
-                 }
+            case 'force-migrate': {
+                if (!settings.managementWorkerUrl || !settings.adminSecretToken) {
+                     alert("Управляющий воркер не настроен. Запустите мастер настройки в Настройках > База данных.");
+                     return;
+                }
+                const execModal = createDbExecutionModal({
+                    onExecute: async (sql) => {
+                         return await supabaseService.executeSqlViaFunction(settings.managementWorkerUrl, settings.adminSecretToken, sql);
+                    },
+                    onClose: () => {
+                        subModalContainer.innerHTML = '';
+                    }
+                });
+                subModalContainer.innerHTML = '';
+                subModalContainer.appendChild(execModal);
                 break;
             }
         }

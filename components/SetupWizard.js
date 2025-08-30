@@ -1,4 +1,4 @@
-import { getSettings, saveGoogleToken } from '../utils/storage.js';
+import { getSettings, saveGoogleToken, getGoogleToken, clearGoogleToken } from '../utils/storage.js';
 import { SupabaseService } from '../services/supabase/SupabaseService.js';
 import * as Icons from './icons/Icons.js';
 import { createProxyManagerModal } from './ProxyManagerModal.js';
@@ -192,7 +192,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                             <p class="text-sm text-slate-500 dark:text-slate-400">Шаг ${stepIndex + 1} из ${STEPS.length}: ${stepConfig.title}</p>
                         </div>
                     </div>
-                    <button data-action="exit" class="ml-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></button>
+                    <button data-action="exit" class="ml-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></button>
                 </header>
                 <main class="flex-1 p-6 overflow-y-auto bg-slate-50 dark:bg-slate-900/70" id="wizard-content"></main>
                 <footer class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center" id="wizard-footer"></footer>
@@ -246,32 +246,56 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         }
     };
 
+    const handleDirectGoogleAuthSuccess = async (tokenResponse) => {
+        state.isLoading = true;
+        render(); // Show loading indicator
+
+        if (tokenResponse && !tokenResponse.error) {
+            saveGoogleToken(tokenResponse.access_token);
+            googleProvider.setAuthToken(tokenResponse.access_token);
+
+            try {
+                const profile = await googleProvider.getUserProfile();
+                state.isAuthenticated = true;
+                state.userProfile = profile;
+                state.isLoading = false;
+                
+                // Persist the wizard state in case of an accidental refresh later
+                sessionStorage.setItem('wizardState', JSON.stringify({ ...state }));
+
+                render(); // Render with user profile
+                setTimeout(handleNext, 500); // Automatically move to the next step
+            } catch (error) {
+                console.error("Failed to get Google profile after login:", error);
+                alert("Не удалось получить профиль Google после входа. Пожалуйста, попробуйте еще раз.");
+                state.isLoading = false;
+                state.isAuthenticated = false;
+                clearGoogleToken(); // Clean up failed token
+                render();
+            }
+        } else {
+            alert(`Ошибка входа Google: ${tokenResponse.error_description || tokenResponse.error}`);
+            state.isLoading = false;
+            render();
+        }
+    };
+
     const handleLogin = async () => {
         state.isLoading = true;
         render(); // Show loading indicator
         
-        const { ...stateToSave } = state;
+        // Save state to sessionStorage before redirecting or starting the token client
         const authStepIndex = STEPS.findIndex(s => s.id === 'auth');
-        const resumeData = { ...stateToSave, currentStep: authStepIndex };
+        const resumeData = { ...state, currentStep: authStepIndex };
         sessionStorage.setItem('wizardState', JSON.stringify(resumeData));
 
         if (state.authChoice === 'supabase') {
             initSupabase();
             await supabaseService.signInWithGoogle();
+            // The browser will redirect, and the main app logic will handle the callback.
         } else {
-            googleProvider.initClient(googleClientId, (tokenResponse) => {
-                if (tokenResponse && !tokenResponse.error) {
-                    // CRITICAL FIX: Save token before reloading to prevent race condition on mobile.
-                    saveGoogleToken(tokenResponse.access_token);
-                    googleProvider.setAuthToken(tokenResponse.access_token);
-                    window.location.reload();
-                } else {
-                    alert(`Ошибка входа Google: ${tokenResponse.error_description || tokenResponse.error}`);
-                    sessionStorage.removeItem('wizardState');
-                    state.isLoading = false;
-                    render();
-                }
-            });
+            // Direct Google Auth with no reload
+            googleProvider.initClient(googleClientId, handleDirectGoogleAuthSuccess);
             googleProvider.authenticate();
         }
     };
@@ -291,7 +315,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 }
             }
         } else {
-             const directToken = getSettings().googleToken; // Re-check token from storage
+             const directToken = getGoogleToken();
              if (directToken) googleProvider.setAuthToken(directToken);
         }
 
@@ -303,6 +327,8 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             } catch {
                 state.isAuthenticated = false;
                 state.userProfile = null;
+                // If token is invalid, clear it
+                if(state.authChoice === 'direct') clearGoogleToken();
             }
         }
         
@@ -311,7 +337,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         const authStepIndex = STEPS.findIndex(s => s.id === 'auth');
         if (state.isAuthenticated && state.currentStep === authStepIndex) {
             render(); // Render with the user avatar now visible
-            handleNext(); // Immediately advance to the next step
+            setTimeout(handleNext, 500); // Automatically advance to the next step
         } else {
             render();
         }

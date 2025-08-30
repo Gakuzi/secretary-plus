@@ -68,6 +68,9 @@ export function createDbExecutionModal({ onExecute, onClose }) {
 
         switch (action) {
             case 'close':
+                if (state.executionSuccess) {
+                    window.location.reload(); // Reload to apply schema changes
+                }
                 onClose();
                 break;
             case 'reset-sql':

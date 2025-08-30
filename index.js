@@ -20,6 +20,7 @@ import { createMigrationModal } from './components/MigrationModal.js';
 import { FULL_MIGRATION_SQL } from './services/supabase/migrations.js';
 import { createDataManagerModal } from './components/DataManagerModal.js';
 import { SERVICE_SCHEMAS } from './services/supabase/schema.js';
+import { createDbExecutionModal } from './components/DbExecutionModal.js';
 
 
 // --- UTILITY ---
@@ -885,6 +886,10 @@ async function startFullApp() {
             localStorage.removeItem('secretary-plus-sync-status-v1');
             clearGoogleToken();
             sessionStorage.clear();
+            // Clear any lingering Supabase auth tokens
+            Object.keys(localStorage)
+                .filter(key => key.startsWith('sb-'))
+                .forEach(key => localStorage.removeItem(key));
         }
         
         wizardContainer.innerHTML = '';

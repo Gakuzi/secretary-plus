@@ -204,26 +204,55 @@ export class SupabaseService {
     }
 
     async syncEmails(googleEmails) {
-        // Emails are a perfect use case for incremental sync to build a local archive.
-        return this.#incrementalSync(
-            'emails',
-            googleEmails,
-            (e, userId) => ({
-                user_id: userId,
-                source_id: e.id,
-                thread_id: e.threadId,
-                subject: e.subject,
-                snippet: e.snippet,
-                sender_info: e.senderInfo,
-                recipients_info: e.recipientsInfo,
-                received_at: e.receivedAt,
-                full_body: e.body,
-                has_attachments: e.hasAttachments,
-                attachments_metadata: e.attachments,
-                label_ids: e.labelIds,
-                gmail_link: e.gmailLink,
-            })
-        );
+        const { data: { user } } = await this.client.auth.getUser();
+        if (!user) throw new Error("User not authenticated.");
+        if (!googleEmails || googleEmails.length === 0) return;
+
+        let successCount = 0;
+        let errorCount = 0;
+
+        const formatterFn = (e, userId) => ({
+            user_id: userId,
+            source_id: e.id,
+            thread_id: e.threadId,
+            subject: e.subject,
+            snippet: e.snippet,
+            sender_info: e.senderInfo,
+            recipients_info: e.recipientsInfo,
+            received_at: e.receivedAt,
+            full_body: e.body,
+            has_attachments: e.hasAttachments,
+            attachments_metadata: e.attachments,
+            label_ids: e.labelIds,
+            gmail_link: e.gmailLink,
+        });
+
+        for (const email of googleEmails) {
+            if (!email || !email.id) {
+                console.warn("Skipping invalid email object during sync:", email);
+                errorCount++;
+                continue;
+            }
+            try {
+                const formattedEmail = formatterFn(email, user.id);
+                const { error } = await this.client
+                    .from('emails')
+                    .upsert(formattedEmail, { onConflict: 'user_id,source_id' });
+                
+                if (error) {
+                    throw error;
+                }
+                successCount++;
+            } catch (error) {
+                errorCount++;
+                console.error(`Failed to sync email with source_id: ${email.id}. Error:`, error.message);
+                // Continue to the next email, as requested by the user.
+            }
+        }
+
+        if (errorCount > 0) {
+            console.warn(`Email sync completed with ${errorCount} errors and ${successCount} successes.`);
+        }
     }
 
     // --- Data Retrieval (from local cache) ---
