@@ -335,7 +335,7 @@ async function handleGlobalClick(event) {
         switch (action) {
             case 'open_settings': showSettingsModal(); break;
             case 'open_migration_modal': {
-                const { element: migrationModal } = createMigrationModal({ supabaseService, onOpenSettings: showSettingsModal });
+                const { element: migrationModal } = createMigrationModal({ supabaseService });
                 globalModalContainer.innerHTML = '';
                 globalModalContainer.appendChild(migrationModal);
                 break;
@@ -502,35 +502,24 @@ async function startAuthenticatedSession(session) {
     state.isLoading = true;
 
     try {
+        // --- Step 1: Basic setup and profile fetch ---
         const userProfile = await supabaseService.getCurrentUserProfile();
-        if (!userProfile) throw new Error("Профиль пользователя не найден в базе данных.");
-        
+        if (!userProfile) throw new Error("Профиль пользователя не найден. Попробуйте войти снова.");
         state.userProfile = userProfile;
+
         googleProvider.setAuthToken(session.provider_token);
         await googleProvider.loadGapiClient();
         
         renderMainApp();
         renderAuth(state.userProfile);
 
-        const cloudSettings = await supabaseService.getUserSettings();
-        if (cloudSettings) {
-            state.settings = { ...getSettings(), ...cloudSettings };
-            saveSettings(state.settings);
-        }
-        supabaseService.setSettings(state.settings);
-        googleProvider.setTimezone(state.settings.timezone);
-
         const isAdminOrOwner = userProfile.role === 'admin' || userProfile.role === 'owner';
         const settingsBtn = document.getElementById('settings-button');
         if (settingsBtn) { settingsBtn.style.display = isAdminOrOwner ? 'block' : 'none'; }
         
+        // --- Step 2: Critical Schema Check ---
         try {
             await supabaseService.checkSchemaVersion();
-            state.keyPool = await supabaseService.getSharedGeminiKeys();
-            state.proxyPool = await supabaseService.getSharedProxies();
-            await startNewChatSession();
-            startAutoSync();
-            setupEmailPolling();
         } catch (schemaError) {
             const isSchemaError = schemaError.message.includes('relation') || schemaError.message.includes('does not exist') || schemaError.message.includes('Could not find the function');
             
@@ -538,31 +527,52 @@ async function startAuthenticatedSession(session) {
                  addMessageToChat({
                     id: Date.now().toString(),
                     sender: MessageSender.SYSTEM,
-                    text: 'Структура вашей базы данных устарела. Для корректной работы приложения необходимо её обновить.',
+                    text: 'Обнаружена проблема с базой данных (схема устарела или не настроена). Для корректной работы приложения необходимо провести обновление.',
                     card: {
                         type: 'system_action',
-                        icon: 'AlertTriangleIcon',
-                        title: 'Требуется обновление базы данных',
+                        icon: 'DatabaseIcon',
+                        title: 'Требуется обновление БД',
                         actions: [{
-                            label: 'Запустить мастер обновления',
-                            clientAction: 'open_migration_modal'
+                            label: 'Запустить Мастер Обновления',
+                            clientAction: 'open_migration_modal',
                         }]
                     }
                 });
             } else if (isSchemaError) {
-                 showSystemError("База данных не настроена. Обратитесь к администратору.");
+                 showSystemError("База данных не настроена или устарела. Обратитесь к администратору для обновления.");
             } else {
-                 showSystemError(`Не удалось загрузить конфигурацию: ${schemaError.message}`);
+                 showSystemError(`Не удалось проверить конфигурацию: ${schemaError.message}`);
             }
+            // IMPORTANT: Stop execution here. Do not proceed to load other data.
+            state.isLoading = false;
+            return; 
         }
 
+        // --- Step 3: Load remaining data (only if schema is OK) ---
+        const cloudSettings = await supabaseService.getUserSettings();
+        if (cloudSettings) {
+            state.settings = { ...getSettings(), ...cloudSettings };
+            saveSettings(state.settings);
+        }
+        supabaseService.setSettings(state.settings);
+        googleProvider.setTimezone(state.settings.timezone);
+        
+        state.keyPool = await supabaseService.getSharedGeminiKeys();
+        state.proxyPool = await supabaseService.getSharedProxies();
+        
+        await startNewChatSession();
+        startAutoSync();
+        setupEmailPolling();
+
     } catch (error) {
-        console.error("Critical error during session start, signing out:", error);
-        if (!document.getElementById('app')) {
-             alert(`Критическая ошибка: не удалось запустить сессию. Выполняется выход.\n\nДетали: ${error.message}`);
-             await handleLogout();
+        console.error("Critical error during session start:", error);
+        // Use the chat interface for errors if it's rendered, otherwise logout.
+        if (document.getElementById('app')) {
+            showSystemError(`Критическая ошибка при запуске сессии: ${error.message}. Попробуйте перезагрузить страницу.`);
         } else {
-            showSystemError(error.message);
+             await handleLogout();
+             // Show a user-friendly message on the welcome screen if possible
+             alert(`Критическая ошибка: ${error.message}. Выполняется выход.`);
         }
     } finally {
         state.isLoading = false;

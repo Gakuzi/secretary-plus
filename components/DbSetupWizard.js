@@ -98,11 +98,10 @@ export function createDbSetupWizard({ supabaseService, onComplete }) {
         currentStep: 0,
         settings: getSettings(),
         isLoading: false,
-        testStatus: 'idle',
+        testStatus: 'idle', // idle, testing, ok, error
     };
     
     const PROJECT_REF = SUPABASE_CONFIG.url.split('.')[0].split('//')[1];
-    const SUPABASE_URL = SUPABASE_CONFIG.url;
     const EDGE_FUNCTIONS_URL = `https://supabase.com/dashboard/project/${PROJECT_REF}/functions`;
     const SQL_EDITOR_URL = `https://supabase.com/dashboard/project/${PROJECT_REF}/sql`;
     const API_SETTINGS_URL = `https://supabase.com/dashboard/project/${PROJECT_REF}/settings/api`;
@@ -119,8 +118,10 @@ export function createDbSetupWizard({ supabaseService, onComplete }) {
     const render = () => {
         const stepConfig = STEPS[state.currentStep];
         let contentHtml = '';
+        let footerHtml = '';
         let nextButtonDisabled = false;
 
+        // --- Step Content ---
         switch (stepConfig.id) {
             case 'intro':
                 contentHtml = `
@@ -211,5 +212,98 @@ export function createDbSetupWizard({ supabaseService, onComplete }) {
                 break;
         }
 
+        // --- Footer ---
+        if (state.currentStep > 0) {
+            footerHtml += `<button data-action="back" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md text-sm font-semibold">Назад</button>`;
+        }
+        if (state.currentStep < STEPS.length - 1) {
+            footerHtml += `<button data-action="next" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold" ${nextButtonDisabled ? 'disabled' : ''}>Далее</button>`;
+        } else {
+            footerHtml += `<button data-action="finish" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold" ${nextButtonDisabled ? 'disabled' : ''}>Завершить и сохранить</button>`;
+        }
+
+        // --- Main Layout ---
         wizardElement.innerHTML = `
-            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] text-slate-800 dark
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] text-slate-800 dark:text-slate-100">
+                <header class="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                    <h2 class="text-xl font-bold flex items-center gap-2">${Icons.WandIcon} Мастер настройки Воркера</h2>
+                    <button data-action="close" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">&times;</button>
+                </header>
+                <main class="flex-1 p-6 overflow-y-auto bg-slate-50 dark:bg-slate-900/50">
+                    <div class="flex items-center gap-2 mb-6 text-xs">
+                        ${STEPS.map((step, index) => {
+                            const isCompleted = index < state.currentStep;
+                            const isCurrent = index === state.currentStep;
+                            let statusClass = 'bg-slate-200 dark:bg-slate-600 text-slate-500';
+                            if (isCompleted) statusClass = 'bg-blue-600 text-white';
+                            if (isCurrent) statusClass = 'ring-2 ring-blue-500 bg-white dark:bg-slate-700 text-blue-500';
+                            return `<div class="flex items-center gap-2 ${index > 0 ? 'flex-1' : ''}">
+                                ${index > 0 ? `<div class="h-px flex-1 ${isCompleted ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}"></div>` : ''}
+                                <span class="h-6 w-6 rounded-full flex items-center justify-center font-bold text-sm ${statusClass} transition-all">${index + 1}</span>
+                                <span class="font-semibold ${isCurrent ? 'text-blue-500' : 'text-slate-500'}">${step.title}</span>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                    <div id="wizard-step-content">${contentHtml}</div>
+                </main>
+                <footer class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">${footerHtml}</footer>
+            </div>
+        `;
+    };
+
+    const collectInputs = () => {
+        const urlInput = wizardElement.querySelector('#worker-url-input');
+        if (urlInput) state.settings.managementWorkerUrl = urlInput.value.trim();
+        const tokenInput = wizardElement.querySelector('#worker-token-input');
+        if (tokenInput) state.settings.adminSecretToken = tokenInput.value.trim();
+    };
+
+    const handleAction = async (e) => {
+        const target = e.target.closest('[data-action]');
+        if (!target) {
+            if (e.target === wizardElement) onClose();
+            return;
+        }
+
+        const action = target.dataset.action;
+
+        switch(action) {
+            case 'close': onClose(); break;
+            case 'next': state.currentStep++; render(); break;
+            case 'back': state.currentStep--; render(); break;
+            case 'copy':
+                try {
+                    await navigator.clipboard.writeText(decodeURIComponent(target.dataset.text));
+                    target.textContent = 'Скопировано!';
+                    setTimeout(() => target.innerHTML = `${Icons.FileIcon} Копировать...`, 2000);
+                } catch (err) {
+                    alert('Не удалось скопировать. Пожалуйста, сделайте это вручную.');
+                }
+                break;
+            case 'test-connection':
+                collectInputs();
+                state.isLoading = true; state.testStatus = 'testing'; render();
+                try {
+                    await supabaseService.executeSqlViaFunction('SELECT 1;');
+                    state.testStatus = 'ok';
+                } catch (error) {
+                    console.error("Worker test failed:", error);
+                    state.testStatus = 'error';
+                    alert(`Ошибка соединения: ${error.message}`);
+                } finally {
+                    state.isLoading = false; render();
+                }
+                break;
+            case 'finish':
+                collectInputs();
+                await supabaseService.saveUserSettings(state.settings);
+                saveSettings(state.settings);
+                onComplete();
+                break;
+        }
+    };
+
+    wizardElement.addEventListener('click', handleAction);
+    render();
+    return wizardElement;
+}

@@ -8,6 +8,7 @@ const CARD_COLORS = {
     'FileIcon': 'orange',
     'AlertTriangleIcon': 'rose',
     'PhoneIcon': 'green', // For direct call action card
+    'DatabaseIcon': 'indigo',
     'default': 'slate'
 };
 

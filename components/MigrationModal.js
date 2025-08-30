@@ -16,8 +16,8 @@ export function createMigrationModal({ supabaseService }) {
         switch (state) {
             case 'checking':
                 iconHtml = `<div class="mx-auto h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>`;
-                titleText = 'Проверка базы данных...';
-                statusText = 'Определяем текущую версию схемы...';
+                titleText = 'Проверка конфигурации...';
+                statusText = 'Проверяем возможность автоматического обновления...';
                 break;
             case 'required':
                 iconHtml = `<div class="mx-auto h-12 w-12 text-yellow-500">${Icons.AlertTriangleIcon}</div>`;
@@ -32,8 +32,8 @@ export function createMigrationModal({ supabaseService }) {
                 break;
             case 'success':
                 iconHtml = `<div class="mx-auto h-12 w-12 text-green-500">${Icons.CheckSquareIcon}</div>`;
-                titleText = 'База данных обновлена!';
-                statusText = 'Приложение перезагрузится через 3 секунды...';
+                titleText = 'База данных успешно обновлена!';
+                statusText = 'Приложение будет перезагружено через 3 секунды...';
                 break;
             case 'error':
                 iconHtml = `<div class="mx-auto h-12 w-12 text-red-500">${Icons.AlertTriangleIcon}</div>`;
@@ -42,9 +42,9 @@ export function createMigrationModal({ supabaseService }) {
                 actionsHtml = `<button data-action="retry" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold">Повторить</button>`;
                 break;
             case 'not-configured':
-                iconHtml = `<div class="mx-auto h-12 w-12 text-yellow-500">${Icons.SettingsIcon}</div>`;
+                iconHtml = `<div class="mx-auto h-12 w-12 text-yellow-500">${Icons.WandIcon}</div>`;
                 titleText = 'Автоматическое обновление не настроено';
-                statusText = 'Для автоматического обновления схемы БД необходимо настроить "Управляющий воркер". Запустите мастер настройки, чтобы это исправить.';
+                statusText = 'Для выполнения этой операции необходим "Управляющий воркер". Запустите пошаговый мастер, чтобы его настроить.';
                 actionsHtml = `<button data-client-action="open_db_setup_wizard" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-semibold">Запустить Мастер настройки</button>`;
                 break;
         }

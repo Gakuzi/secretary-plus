@@ -34,9 +34,9 @@ function renderErrorTab(errorMessage) {
         <div class="p-6 text-center">
             <div class="w-12 h-12 mx-auto text-red-500">${Icons.AlertTriangleIcon}</div>
             <h3 class="mt-4 text-lg font-bold">Ошибка загрузки данных</h3>
-            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Не удалось загрузить данные для этой вкладки. Возможно, ваша база данных устарела.</p>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Не удалось загрузить данные для этой вкладки. Вероятно, структура базы данных устарела.</p>
             <p class="mt-1 text-xs font-mono bg-slate-100 dark:bg-slate-900 p-2 rounded-md">${errorMessage}</p>
-            <button data-client-action="open_migration_modal" class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md">Запустить мастер обновления</button>
+            <button data-client-action="open_migration_modal" class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md">Запустить Мастер Обновления</button>
         </div>
     `;
 }
@@ -280,7 +280,8 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
             if (isSchemaError) {
                 state.error = error.message;
             } else {
-                alert(`Произошла непредвиденная ошибка: ${error.message}`);
+                 // For non-schema errors, just log it, as the UI won't crash.
+                console.error("An unexpected error occurred in settings:", error);
             }
         } finally {
             state.isLoading = false;
