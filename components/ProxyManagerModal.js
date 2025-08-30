@@ -95,40 +95,55 @@ function createAiFinderModal({ supabaseService, existingProxies, onComplete }) {
         status: 'running', // 'running', 'success', 'error'
         systemPrompt: '',
         rawResponse: '',
-        foundProxies: [], // { url, location, status: 'idle' | 'testing' | 'ok' | 'error', isAdded: false }
+        foundProxies: [], // { url, location, status: 'idle' | 'testing' | 'ok' | 'error', speed: null, isAdded: false, isDismissed: false }
     };
 
     const render = () => {
         let resultsHtml = '';
+        const visibleProxies = state.foundProxies.filter(p => !p.isDismissed);
+        
         if (state.status === 'success') {
-            if (state.foundProxies.length > 0) {
+            if (visibleProxies.length > 0) {
                  resultsHtml = `
                     <div class="flex justify-between items-center mb-2">
-                         <h4 class="font-semibold text-slate-800 dark:text-slate-100">Найдено прокси: ${state.foundProxies.length}</h4>
-                         <button data-action="add-all" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold">Добавить все</button>
+                         <h4 class="font-semibold text-slate-800 dark:text-slate-100">Найдено прокси: ${visibleProxies.length}</h4>
                     </div>
-                    <div class="space-y-2 border border-slate-200 dark:border-slate-700 rounded-md p-2 max-h-48 overflow-y-auto">
-                        ${state.foundProxies.map((p, index) => `
-                            <div class="flex items-center justify-between gap-2 p-1.5 bg-slate-50 dark:bg-slate-800/50 rounded">
+                    <div class="space-y-2 border border-slate-200 dark:border-slate-700 rounded-md p-2 max-h-96 overflow-y-auto">
+                        ${visibleProxies.map((p, index) => {
+                            let statusText = '';
+                            let statusColor = '';
+                            switch(p.status) {
+                                case 'ok': statusText = `✓ Успешно (${p.speed} мс)`; statusColor = 'text-green-500'; break;
+                                case 'error': statusText = '✗ Ошибка'; statusColor = 'text-red-500'; break;
+                                case 'testing': statusText = 'Тестирование...'; statusColor = 'text-yellow-500'; break;
+                                default: statusText = 'Ожидает теста'; statusColor = 'text-slate-500';
+                            }
+
+                            return `
+                            <div class="proxy-storage-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                                 <div class="flex-1 min-w-0">
-                                    <p class="font-mono text-xs truncate">${p.url}</p>
-                                    <p class="text-xs text-slate-500">${p.location}</p>
+                                    <p class="font-mono text-sm truncate font-semibold" title="${p.url}">${p.url}</p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Локация: ${p.location}</p>
                                 </div>
-                                <div class="flex items-center gap-1 flex-shrink-0">
-                                    <button data-action="test" data-index="${index}" class="px-2 py-1 text-xs bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded font-semibold ${p.status === 'testing' ? 'animate-pulse' : ''}">${p.status === 'ok' ? '✓' : (p.status === 'error' ? '✗' : 'Тест')}</button>
-                                    <button data-action="add" data-index="${index}" class="px-2 py-1 text-xs bg-green-500 hover:bg-green-600 text-white rounded font-semibold disabled:opacity-50" ${p.isAdded ? 'disabled' : ''}>${p.isAdded ? 'Добавлен' : 'Добавить'}</button>
+                                <div class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
+                                    <div class="text-xs font-semibold ${statusColor}">${statusText}</div>
+                                    <div class="flex items-center justify-between gap-2">
+                                        <button data-action="test" data-url="${p.url}" class="flex-1 px-2 py-1.5 text-xs bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded font-semibold ${p.status === 'testing' ? 'animate-pulse' : ''}" ${p.status === 'testing' ? 'disabled' : ''}>Тестировать</button>
+                                        <button data-action="add" data-url="${p.url}" class="flex-1 px-2 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded font-semibold disabled:opacity-50" ${p.isAdded ? 'disabled' : ''}>${p.isAdded ? 'Принят' : 'Принять'}</button>
+                                        <button data-action="decline" data-url="${p.url}" class="flex-1 px-2 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded font-semibold">Отклонить</button>
+                                    </div>
                                 </div>
                             </div>
-                        `).join('')}
+                            `}).join('')}
                     </div>
                 `;
             } else {
-                 resultsHtml = `<p class="text-center font-semibold text-yellow-500 p-4">ИИ не нашел новых прокси-серверов.</p>`;
+                 resultsHtml = `<p class="text-center font-semibold text-yellow-500 p-4">ИИ не нашел новых прокси-серверов или все были отклонены.</p>`;
             }
         }
 
         modal.innerHTML = `
-            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-3xl flex flex-col max-h-[90vh] animate-fadeIn">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-4xl flex flex-col max-h-[90vh] animate-fadeIn">
                 <header class="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
                     <h3 class="text-lg font-bold flex items-center gap-2">
                         ${state.status === 'running' ? `<div class="animate-spin h-5 w-5 border-2 border-current border-t-transparent rounded-full"></div>` : Icons.WandIcon}
@@ -137,9 +152,9 @@ function createAiFinderModal({ supabaseService, existingProxies, onComplete }) {
                     <button data-action="close" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">&times;</button>
                 </header>
                 <main class="flex-1 p-4 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="space-y-2">
-                        <h4 class="font-semibold text-slate-800 dark:text-slate-100">Лог выполнения</h4>
-                        <div class="h-full p-3 bg-slate-900 text-slate-200 rounded-md font-mono text-xs space-y-4 overflow-y-auto">
+                    <div class="space-y-2 min-h-0 flex flex-col">
+                        <h4 class="font-semibold text-slate-800 dark:text-slate-100 flex-shrink-0">Лог выполнения</h4>
+                        <div class="flex-1 h-full p-3 bg-slate-900 text-slate-200 rounded-md font-mono text-xs space-y-4 overflow-y-auto">
                            <div>
                                 <p class="text-indigo-400 font-bold mb-1">&gt; Системный промпт:</p>
                                 <pre class="whitespace-pre-wrap text-slate-400">${state.systemPrompt || 'Ожидание...'}</pre>
@@ -150,7 +165,7 @@ function createAiFinderModal({ supabaseService, existingProxies, onComplete }) {
                            </div>
                         </div>
                     </div>
-                    <div class="space-y-2">
+                    <div class="space-y-2 min-h-0 flex flex-col">
                         ${resultsHtml}
                     </div>
                 </main>
@@ -172,7 +187,7 @@ function createAiFinderModal({ supabaseService, existingProxies, onComplete }) {
             state.status = 'success';
             state.systemPrompt = result.systemPrompt;
             state.rawResponse = result.rawResponse;
-            state.foundProxies = result.parsedData.map(p => ({ ...p, status: 'idle', isAdded: false }));
+            state.foundProxies = result.parsedData.map(p => ({ ...p, status: 'idle', speed: null, isAdded: false, isDismissed: false }));
         } catch (err) {
             state.status = 'error';
             state.systemPrompt = state.systemPrompt || 'Не удалось отправить промпт.';
@@ -189,29 +204,33 @@ function createAiFinderModal({ supabaseService, existingProxies, onComplete }) {
              return;
         }
         const action = target.dataset.action;
-        const index = parseInt(target.dataset.index, 10);
+        const url = target.dataset.url;
+        const proxy = state.foundProxies.find(p => p.url === url);
 
         switch(action) {
             case 'close': onComplete(); break;
-            case 'add':
-            case 'add-all': {
-                const proxiesToAdd = action === 'add-all' ? state.foundProxies.filter(p => !p.isAdded) : [state.foundProxies[index]];
-                for (const proxy of proxiesToAdd) {
-                     try {
-                        await supabaseService.addProxy({ url: proxy.url, geolocation: proxy.location, is_active: false });
-                        proxy.isAdded = true;
-                     } catch(err) { alert(`Не удалось добавить ${proxy.url}: ${err.message}`); }
-                }
+            case 'add': {
+                if (!proxy) return;
+                try {
+                    await supabaseService.addProxy({ url: proxy.url, geolocation: proxy.location, is_active: false });
+                    proxy.isAdded = true;
+                } catch(err) { alert(`Не удалось добавить ${proxy.url}: ${err.message}`); }
+                render();
+                break;
+            }
+            case 'decline': {
+                if(proxy) proxy.isDismissed = true;
                 render();
                 break;
             }
             case 'test': {
-                const proxy = state.foundProxies[index];
+                if (!proxy) return;
                 proxy.status = 'testing';
                 render();
                 const currentSettings = getSettings();
                 const result = await testProxyConnection({ proxyUrl: proxy.url, apiKey: currentSettings.geminiApiKey });
                 proxy.status = result.status;
+                proxy.speed = result.speed;
                 render();
                 break;
             }
@@ -312,7 +331,7 @@ export function createProxyManagerModal({ supabaseService, onClose }) {
                 </header>
                 <main class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200 dark:bg-slate-700 overflow-hidden">
                     <!-- Left Column -->
-                    <div class="flex flex-col bg-slate-100 dark:bg-slate-800/50">
+                    <div class="flex flex-col bg-slate-100 dark:bg-slate-800/50 min-h-0">
                         <h4 class="p-3 font-semibold border-b border-slate-200 dark:border-slate-700 flex-shrink-0">Активные прокси (Приоритет)</h4>
                         <div id="active-proxy-list" class="flex-1 p-3 space-y-2 overflow-y-auto">
                             ${state.activeProxies.length > 0 ? activeProxiesHtml : `<p class="text-center text-sm text-slate-500 mt-4">Перетащите прокси из хранилища или активируйте их.</p>`}
@@ -320,7 +339,7 @@ export function createProxyManagerModal({ supabaseService, onClose }) {
                     </div>
 
                     <!-- Right Column -->
-                    <div class="flex flex-col bg-slate-100 dark:bg-slate-800/50">
+                    <div class="flex flex-col bg-slate-100 dark:bg-slate-800/50 min-h-0">
                         <div class="p-3 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
                             <h4 class="font-semibold">Хранилище прокси</h4>
                              <button data-action="ai-settings" class="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full" title="Настройки ИИ">${Icons.SettingsIcon}</button>

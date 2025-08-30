@@ -880,7 +880,10 @@ async function checkDatabaseSchema() {
     }
 
     try {
-        const { error } = await supabaseService.client.from('user_settings').select('*', { count: 'exact', head: true });
+        // This check is now more robust. The 'sessions' table was added in the same
+        // migration as the critical 'get_or_create_profile' RPC function. If this
+        // check fails, we can be confident the schema is out of date.
+        const { error } = await supabaseService.client.from('sessions').select('*', { count: 'exact', head: true });
 
         if (error) {
             // 42P01 is PostgreSQL's code for "undefined_table"
