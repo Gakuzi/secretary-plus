@@ -46,9 +46,7 @@ export class GoogleServiceProvider {
 
     setAuthToken(token) {
         this.token = token;
-        if (window.gapi && this.token) {
-            window.gapi.auth.setToken({ access_token: this.token });
-        }
+        // The token is now set within loadGapiClient when the client is ready.
     }
     
     setTimezone(timezone) {
@@ -74,19 +72,25 @@ export class GoogleServiceProvider {
     async loadGapiClient() {
         if (this.gapiReady) return;
         
+        // Ensure the base gapi.client is loaded
         await new Promise((resolve, reject) => {
-            if (window.gapi && window.gapi.client) {
-                resolve();
-            } else {
-                 gapi.load('client', { callback: resolve, onerror: reject, timeout: 5000 });
-            }
+            gapi.load('client', {
+                callback: resolve,
+                onerror: reject,
+                timeout: 10000,
+                ontimeout: () => reject(new Error('gapi.client loading timed out.')),
+            });
         });
 
+        // Now that gapi.client is available, set the token for all subsequent requests
         if (this.token) {
-             gapi.auth.setToken({ access_token: this.token });
+            gapi.client.setToken({ access_token: this.token });
+        } else {
+            throw new Error("Cannot initialize Google API client without an auth token.");
         }
         
         // Load services serially for increased stability on unreliable networks
+        await this.#loadClientWithRetries('oauth2', 'v2'); // Needed for userinfo.get()
         await this.#loadClientWithRetries('calendar', 'v3');
         await this.#loadClientWithRetries('tasks', 'v1');
         await this.#loadClientWithRetries('people', 'v1');
