@@ -190,7 +190,7 @@ async function handleLogout() {
 }
 
 async function handleNewChat() {
-    if (state.messages.length > 0 && confirm('Вы уверены, что хотите начать новый чат?')) {
+    if (state.messages.length > 0) {
         state.messages = [];
         await startNewChatSession();
         const chatContainer = createChatInterface(handleSendMessage, showCameraView, showSystemError, handleNewChat);
@@ -201,66 +201,86 @@ async function handleNewChat() {
 
 
 async function processBotResponse(userMessage, isSilent) {
-    if (state.isLoading) return;
-    state.isLoading = true;
-    if (!isSilent) showLoadingIndicator();
-    
-    const botMessage = await callGemini({
-        userMessage: userMessage,
-        history: state.messages,
-        serviceProviders,
-        serviceMap: state.settings.serviceMap,
-        timezone: state.settings.timezone,
-        isGoogleConnected: !!googleProvider.token,
-        keyPool: state.keyPool,
-        proxyPool: state.proxyPool,
-    });
+    // This function now robustly handles errors from the Gemini call
+    try {
+        const botMessage = await callGemini({
+            userMessage: userMessage,
+            history: state.messages,
+            serviceProviders,
+            serviceMap: state.settings.serviceMap,
+            timezone: state.settings.timezone,
+            isGoogleConnected: !!googleProvider.token,
+            keyPool: state.keyPool,
+            proxyPool: state.proxyPool,
+        });
 
-    if (botMessage.functionCallName && supabaseService) {
-        supabaseService.incrementActionStat(botMessage.functionCallName);
-    }
-
-    if (supabaseService && state.sessionId) {
-        supabaseService.logChatMessage(botMessage, state.sessionId);
-    }
-    
-    state.isLoading = false;
-    hideLoadingIndicator();
-    
-    if (isSilent) {
-        if(botMessage.text && botMessage.text.trim().length > 0 && botMessage.sender === MessageSender.ASSISTANT) {
-             showBrowserNotification("Новое важное сообщение", {
-                body: botMessage.text,
-                icon: './favicon.svg'
-            });
+        if (botMessage.functionCallName && supabaseService) {
+            supabaseService.incrementActionStat(botMessage.functionCallName);
         }
-        return;
+
+        if (supabaseService && state.sessionId) {
+            supabaseService.logChatMessage(botMessage, state.sessionId);
+        }
+        
+        if (isSilent) {
+            if(botMessage.text && botMessage.text.trim().length > 0 && botMessage.sender === MessageSender.ASSISTANT) {
+                 showBrowserNotification("Новое важное сообщение", {
+                    body: botMessage.text,
+                    icon: './favicon.svg'
+                });
+            }
+            return;
+        }
+        
+        state.messages.push(botMessage);
+        addMessageToChat(botMessage);
+        renderContextualActions(botMessage.contextualActions || []);
+
+    } catch(error) {
+        console.error("Error processing bot response:", error);
+        if (!isSilent) {
+            showSystemError(`Не удалось получить ответ от ассистента: ${error.message}`);
+        }
     }
-    
-    state.messages.push(botMessage);
-    addMessageToChat(botMessage);
-    
-    renderContextualActions(botMessage.contextualActions || []);
 }
 
 async function handleSendMessage(prompt, image = null) {
     if (state.isLoading) return;
-    const userMessage = {
-        id: Date.now().toString(),
-        sender: MessageSender.USER,
-        text: prompt,
-        image: image
-    };
-    state.messages.push(userMessage);
-    addMessageToChat(userMessage);
+    state.isLoading = true;
+    showLoadingIndicator();
 
-    if (supabaseService && state.sessionId) {
-        supabaseService.logChatMessage(userMessage, state.sessionId);
+    try {
+        const userMessage = {
+            id: Date.now().toString(),
+            sender: MessageSender.USER,
+            text: prompt,
+            image: image
+        };
+        // CRITICAL FIX: Add user's message to chat immediately and unconditionally
+        // This ensures the message appears even if the bot fails.
+        addMessageToChat(userMessage);
+        state.messages.push(userMessage);
+
+        if (supabaseService && state.sessionId) {
+            // Don't await, let it log in the background
+            supabaseService.logChatMessage(userMessage, state.sessionId);
+        }
+
+        renderContextualActions([]);
+        
+        // Process the bot response. Any errors inside are now caught.
+        await processBotResponse(userMessage, false);
+
+    } catch (error) {
+        // This is a fallback catch for any unexpected errors in the main flow
+        console.error("Critical error in handleSendMessage:", error);
+        showSystemError(`Произошла непредвиденная ошибка: ${error.message}`);
+    } finally {
+        hideLoadingIndicator();
+        state.isLoading = false;
     }
-
-    renderContextualActions([]);
-    await processBotResponse(userMessage, false);
 }
+
 
 async function handleGlobalClick(event) {
     const target = event.target;
@@ -544,138 +564,101 @@ async function startAuthenticatedSession(session) {
             const errorMsg = String(schemaError.message).toLowerCase();
             const isSchemaError = errorMsg.includes('relation') || errorMsg.includes('does not exist') || errorMsg.includes('could not find the table');
             
-            if (isSchemaError) {
-                // If a schema error is detected, render the dedicated setup screen and STOP.
+            if (isSchemaError && isAdminOrOwner) {
                 renderSetupRequiredScreen(schemaError.message);
-            } else {
-                // For other critical errors during startup, show them in the main view.
-                showSystemError(`Критическая ошибка конфигурации: ${schemaError.message}`);
+                return; // Stop further execution
+            } else if (isSchemaError && !isAdminOrOwner) {
+                showSystemError("База данных требует обновления. Пожалуйста, свяжитесь с администратором.");
+                return; // Stop for non-admins too
             }
-            // IMPORTANT: Stop execution here. Do not proceed to load other data.
-            state.isLoading = false;
-            return; 
+             // Re-throw other errors
+            throw schemaError;
         }
 
-        // --- Step 3: Schema is OK. Load all data and start the chat ---
+        // --- Step 3: Load user settings and resource pools ---
         const cloudSettings = await supabaseService.getUserSettings();
         if (cloudSettings) {
-            state.settings = { ...getSettings(), ...cloudSettings };
-            saveSettings(state.settings);
+            state.settings = { ...state.settings, ...cloudSettings };
+        } else {
+            await supabaseService.saveUserSettings(state.settings);
         }
         supabaseService.setSettings(state.settings);
-        googleProvider.setTimezone(state.settings.timezone);
-        
-        state.keyPool = await supabaseService.getSharedGeminiKeys();
-        state.proxyPool = await supabaseService.getSharedProxies();
-        
+
+        [state.keyPool, state.proxyPool] = await Promise.all([
+            supabaseService.getSharedGeminiKeys(),
+            supabaseService.getSharedProxies()
+        ]);
+
+        // --- Step 4: Finalize UI and start background services ---
         const mainContent = document.getElementById('main-content');
-        mainContent.innerHTML = '';
         const chatContainer = createChatInterface(handleSendMessage, showCameraView, showSystemError, handleNewChat);
+        mainContent.innerHTML = '';
         mainContent.appendChild(chatContainer);
         
         await startNewChatSession();
-        startAutoSync();
         setupEmailPolling();
+        startAutoSync();
+        
+        // Send welcome message
+        const welcomeMessage = {
+            sender: MessageSender.ASSISTANT,
+            id: 'welcome-msg',
+            text: `Здравствуйте, ${state.userProfile.full_name}! Я готов к работе. Что бы вы хотели сделать?`,
+            suggestedReplies: ["Проверь почту", "Какие у меня задачи на сегодня?", "Покажи мое расписание"]
+        };
+        addMessageToChat(welcomeMessage);
+        state.messages.push(welcomeMessage);
 
     } catch (error) {
-        console.error("Critical error during session start:", error);
-        // Use the chat interface for errors if it's rendered, otherwise logout.
-        if (document.getElementById('app')) {
-            showSystemError(`Критическая ошибка при запуске сессии: ${error.message}. Попробуйте перезагрузить страницу.`);
-        } else {
-             await handleLogout();
-             alert(`Критическая ошибка: ${error.message}. Выполняется выход.`);
-        }
+        console.error("Failed to start authenticated session:", error);
+        appContainer.innerHTML = ''; // Clear potentially broken UI
+        appContainer.appendChild(createWelcomeScreen({ onLogin: () => supabaseService.signInWithGoogle(), onShowAbout: showAboutModal }));
+        showSystemError(`Не удалось запустить сессию: ${error.message}`);
     } finally {
         state.isLoading = false;
     }
 }
 
-
-function showWelcomeScreen() {
-    if (document.querySelector('.welcome-screen-container')) return;
-    appContainer.innerHTML = '';
-    const welcome = createWelcomeScreen({
-        onLogin: async () => {
-            try {
-                await supabaseService.signInWithGoogle();
-            } catch (error) {
-                console.error("Google Sign-In failed:", error);
-                alert(`Не удалось войти через Google: ${error.message}`);
-            }
-        },
-        onShowAbout: showAboutModal,
-    });
-    appContainer.appendChild(welcome);
-}
-
-function waitForExternalLibs() {
-    return new Promise((resolve, reject) => {
-        const timeout = 15000;
-        const interval = 100;
-        let elapsed = 0;
-        const check = () => {
-            const isGoogleReady = window.google && window.google.accounts && window.google.accounts.oauth2 && window.gapi;
-            const isSupabaseReady = window.supabase && typeof window.supabase.createClient === 'function';
-            const isPdfJsReady = window.pdfjsLib && typeof window.pdfjsLib.getDocument === 'function';
-            const isChartJsReady = window.Chart;
-
-            if (isGoogleReady && isSupabaseReady && isPdfJsReady && isChartJsReady) {
-                resolve();
-            } else {
-                elapsed += interval;
-                if (elapsed >= timeout) {
-                    let missing = [];
-                    if (!isGoogleReady) missing.push("Google API");
-                    if (!isSupabaseReady) missing.push("Supabase Client");
-                    if (!isPdfJsReady) missing.push("PDF.js");
-                    if (!isChartJsReady) missing.push("Chart.js");
-                    reject(new Error(`Критическая ошибка при запуске: не удалось загрузить внешние библиотеки: ${missing.join(', ')}.\n\nПроверьте подключение к интернету, отключите блокировщики рекламы и попробуйте перезагрузить страницу.`));
-                } else {
-                    setTimeout(check, interval);
-                }
-            }
-        };
-        check();
-    });
-}
-
-async function main() {
+// --- MAIN INITIALIZATION ---
+async function initializeApp() {
     appContainer = document.getElementById('app-container');
     modalContainer = document.getElementById('modal-container');
     cameraViewContainer = document.getElementById('camera-view-container');
     globalModalContainer = document.getElementById('global-modal-container');
 
-    appContainer.innerHTML = `<div class="h-full w-full flex items-center justify-center"><div class="animate-spin h-10 w-10 border-4 border-slate-300 border-t-transparent rounded-full"></div></div>`;
-
-    try {
-        await waitForExternalLibs();
-    } catch (error) {
-        appContainer.innerHTML = `<div class="p-4 text-red-500">${error.message}</div>`;
-        return;
-    }
-
+    appContainer.innerHTML = `<div class="flex items-center justify-center h-full"><div class="animate-spin h-10 w-10 border-4 border-slate-300 border-t-transparent rounded-full"></div></div>`;
+    
     if (!supabaseService) {
-        appContainer.innerHTML = `<div class="p-4 text-red-500">Не удалось инициализировать Supabase. Проверьте конфигурацию.</div>`;
+        appContainer.innerHTML = '';
+        const welcomeScreen = createWelcomeScreen({ 
+            onLogin: () => alert("Ошибка: Supabase не инициализирован. Проверьте конфигурацию."), 
+            onShowAbout: showAboutModal 
+        });
+        appContainer.appendChild(welcomeScreen);
+        showSystemError("Не удалось подключиться к Supabase. Проверьте URL и ключ в config.js.");
         return;
     }
     
     supabaseService.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' && session) {
-            await startAuthenticatedSession(session);
-        } else if (event === 'TOKEN_REFRESHED' && session) {
-             googleProvider.setAuthToken(session.provider_token);
+            startAuthenticatedSession(session);
         } else if (event === 'SIGNED_OUT') {
             state.userProfile = null;
-            state.isLoading = false;
+            state.messages = [];
+            state.sessionId = null;
             stopEmailPolling();
             stopAutoSync();
-            showWelcomeScreen();
-        } else if (!session && !state.userProfile) {
-            // Initial load without a session
-            showWelcomeScreen();
+            appContainer.innerHTML = '';
+            appContainer.appendChild(createWelcomeScreen({ onLogin: () => supabaseService.signInWithGoogle(), onShowAbout: showAboutModal }));
         }
     });
+
+    const { data: { session } } = await supabaseService.client.auth.getSession();
+    if (!session) {
+        appContainer.innerHTML = '';
+        appContainer.appendChild(createWelcomeScreen({ onLogin: () => supabaseService.signInWithGoogle(), onShowAbout: showAboutModal }));
+    }
 }
 
-window.onload = main;
+// Start the application once the DOM is ready
+document.addEventListener('DOMContentLoaded', initializeApp);
