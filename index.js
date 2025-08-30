@@ -183,8 +183,6 @@ async function startNewChatSession() {
 // --- EVENT HANDLERS & LOGIC ---
 async function handleLogout() {
     modalContainer.innerHTML = '';
-    // The onAuthStateChange handler will now manage showing the welcome screen.
-    // We just need to trigger it by signing out.
     if (supabaseService) {
         await supabaseService.signOut();
     }
@@ -194,7 +192,6 @@ async function handleNewChat() {
     if (state.messages.length > 0 && confirm('Вы уверены, что хотите начать новый чат?')) {
         state.messages = [];
         await startNewChatSession();
-        // Re-render the chat interface to clear messages
         const chatContainer = createChatInterface(handleSendMessage, showCameraView, showSystemError, handleNewChat);
         document.getElementById('main-content').innerHTML = '';
         document.getElementById('main-content').appendChild(chatContainer);
@@ -229,7 +226,6 @@ async function processBotResponse(userMessage, isSilent) {
     state.isLoading = false;
     hideLoadingIndicator();
     
-    // If we are in a silent operation (like email polling), don't add to chat
     if (isSilent) {
         if(botMessage.text && botMessage.text.trim().length > 0 && botMessage.sender === MessageSender.ASSISTANT) {
              showBrowserNotification("Новое важное сообщение", {
@@ -243,7 +239,6 @@ async function processBotResponse(userMessage, isSilent) {
     state.messages.push(botMessage);
     addMessageToChat(botMessage);
     
-    // Render contextual actions if they exist
     renderContextualActions(botMessage.contextualActions || []);
 }
 
@@ -262,19 +257,12 @@ async function handleSendMessage(prompt, image = null) {
         supabaseService.logChatMessage(userMessage, state.sessionId);
     }
 
-    // Clear contextual actions after sending a new message
     renderContextualActions([]);
     await processBotResponse(userMessage, false);
 }
 
-/**
- * A centralized handler for all dynamic actions in the app.
- * Uses event delegation to handle clicks on buttons with data-* attributes.
- */
 async function handleGlobalClick(event) {
     const target = event.target;
-
-    // --- 1. Handle actions within result cards, welcome screen, etc. ---
     const actionButton = target.closest('[data-action]');
     if (actionButton) {
         event.preventDefault();
@@ -288,106 +276,72 @@ async function handleGlobalClick(event) {
         }
 
         switch (action) {
-            case 'welcome_prompt': {
+            case 'welcome_prompt':
                 handleSendMessage(payload.prompt);
                 const welcomeScreen = document.querySelector('.welcome-screen-container');
                 if (welcomeScreen) welcomeScreen.remove();
                 break;
-            }
-
-            case 'analyze_event':
-                handleSendMessage(`Подробности о событии: "${payload.summary}". Что можно с ним сделать?`);
-                break;
-            case 'analyze_task':
-                handleSendMessage(`Подробности о задаче: "${payload.title}". Какие есть опции?`);
-                break;
-            case 'analyze_email':
-                handleSendMessage(`Проанализируй это письмо от ${payload.from} с темой "${payload.subject}" и подготовь варианты действий. Содержимое:\n\n${payload.body}`);
-                break;
-            case 'analyze_document':
-                handleSendMessage(`Проанализируй документ "${payload.name}" и сделай краткую выжимку.`);
-                break;
-            case 'analyze_contact': {
-                addMessageToChat({
-                    id: Date.now().toString(),
-                    sender: MessageSender.ASSISTANT,
-                    text: `Выбран контакт: ${payload.display_name}.`,
-                    card: { type: 'contact', icon: 'UsersIcon', title: 'Карточка контакта', person: payload }
-                });
-                break;
-            }
-
-            case 'download_ics': {
+            case 'analyze_event': handleSendMessage(`Подробности о событии: "${payload.summary}". Что можно с ним сделать?`); break;
+            case 'analyze_task': handleSendMessage(`Подробности о задаче: "${payload.title}". Какие есть опции?`); break;
+            case 'analyze_email': handleSendMessage(`Проанализируй это письмо от ${payload.from} с темой "${payload.subject}" и подготовь варианты действий. Содержимое:\n\n${payload.body}`); break;
+            case 'analyze_document': handleSendMessage(`Проанализируй документ "${payload.name}" и сделай краткую выжимку.`); break;
+            case 'analyze_contact': addMessageToChat({ id: Date.now().toString(), sender: MessageSender.ASSISTANT, text: `Выбран контакт: ${payload.display_name}.`, card: { type: 'contact', icon: 'UsersIcon', title: 'Карточка контакта', person: payload } }); break;
+            case 'download_ics':
                 try {
                     const base64Decoded = atob(payload.data);
                     const uint8Array = new Uint8Array(base64Decoded.length);
-                    for (let i = 0; i < base64Decoded.length; i++) {
-                        uint8Array[i] = base64Decoded.charCodeAt(i);
-                    }
+                    for (let i = 0; i < base64Decoded.length; i++) { uint8Array[i] = base64Decoded.charCodeAt(i); }
                     const blob = new Blob([uint8Array], { type: 'text/calendar;charset=utf-8' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
-                    a.href = url;
-                    a.download = payload.filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
+                    a.href = url; a.download = payload.filename;
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
                     URL.revokeObjectURL(url);
-                } catch (e) {
-                    showSystemError(`Не удалось создать файл .ics: ${e.message}`);
-                }
+                } catch (e) { showSystemError(`Не удалось создать файл .ics: ${e.message}`); }
                 break;
-            }
-
-            case 'request_delete': {
+            case 'request_delete':
                 const typeMap = { event: 'событие', task: 'задачу', email: 'письмо' };
                 const typeText = typeMap[payload.type] || 'элемент';
-                if (confirm(`Вы уверены, что хотите удалить это ${typeText}?`)) {
-                    handleSendMessage(`Удали ${typeText} с ID ${payload.id}`);
-                }
+                if (confirm(`Вы уверены, что хотите удалить это ${typeText}?`)) { handleSendMessage(`Удали ${typeText} с ID ${payload.id}`); }
                 break;
-            }
-            case 'create_meet_with':
-                handleSendMessage(`Создай видеовстречу с ${payload.name} (${payload.email}) на ближайшее удобное время.`);
-                break;
-            
-            case 'send_meeting_link': {
+            case 'create_meet_with': handleSendMessage(`Создай видеовстречу с ${payload.name} (${payload.email}) на ближайшее удобное время.`); break;
+            case 'send_meeting_link':
                 try {
                     await googleProvider.sendEmail(payload);
                     addMessageToChat({ sender: MessageSender.ASSISTANT, text: 'Приглашение со ссылкой на встречу отправлено.', id: Date.now().toString() });
                 } catch (e) { showSystemError(`Не удалось отправить письмо: ${e.message}`); }
                 break;
-            }
-            case 'create_prep_task': {
+            case 'create_prep_task':
                 try {
                     const task = await googleProvider.createTask(payload);
                     addMessageToChat({ sender: MessageSender.ASSISTANT, text: `Задача "${task.title}" успешно создана.`, id: Date.now().toString() });
                 } catch (e) { showSystemError(`Не удалось создать задачу: ${e.message}`); }
                 break;
-            }
-            case 'create_google_doc_with_content': {
+            case 'create_google_doc_with_content':
                  try {
                     const doc = await googleProvider.createGoogleDocWithContent(payload.title, payload.content);
                     addMessageToChat({ sender: MessageSender.ASSISTANT, text: `Документ "${doc.name}" создан.`, id: Date.now().toString(), card: { type: 'document', icon: 'FileIcon', title: doc.name, actions: [{label: 'Открыть', url: doc.webViewLink}] } });
                 } catch (e) { showSystemError(`Не удалось создать документ: ${e.message}`); }
                 break;
-            }
         }
         return;
     }
 
-    // --- 2. Handle client-side actions (like opening modals) ---
     const clientActionButton = target.closest('[data-client-action]');
     if (clientActionButton) {
         event.preventDefault();
         const action = clientActionButton.dataset.clientAction;
-        if (action === 'open_settings') {
-            showSettingsModal();
+        switch (action) {
+            case 'open_settings': showSettingsModal(); break;
+            case 'open_migration_modal':
+                const { element: migrationModal } = createMigrationModal({ supabaseService, onOpenSettings: () => showSettingsModal() });
+                globalModalContainer.innerHTML = '';
+                globalModalContainer.appendChild(migrationModal);
+                break;
         }
         return;
     }
 
-    // --- 3. Handle contextual action prompts ---
     const promptButton = target.closest('[data-action-prompt]');
     if (promptButton) {
         event.preventDefault();
@@ -396,16 +350,12 @@ async function handleGlobalClick(event) {
         return;
     }
 
-    // --- 4. Handle quick replies ---
     const replyButton = target.closest('[data-reply-text]');
     if (replyButton) {
         event.preventDefault();
         handleSendMessage(replyButton.dataset.replyText);
         const container = replyButton.closest('.quick-replies-container');
-        if (container) {
-            container.querySelectorAll('button').forEach(b => b.disabled = true);
-            replyButton.classList.add('clicked');
-        }
+        if (container) { container.querySelectorAll('button').forEach(b => b.disabled = true); replyButton.classList.add('clicked'); }
         return;
     }
 }
@@ -429,11 +379,8 @@ async function showProfileModal() {
     modalContainer.innerHTML = `<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"><div class="animate-spin h-10 w-10 border-4 border-white border-t-transparent rounded-full"></div></div>`;
 
     try {
-        if (!state.userProfile) {
-            throw new Error("Не удалось загрузить профиль пользователя.");
-        }
-        
-        modalContainer.innerHTML = ''; // Clear loading spinner
+        if (!state.userProfile) throw new Error("Не удалось загрузить профиль пользователя.");
+        modalContainer.innerHTML = '';
         const modal = createProfileModal({
             currentUserProfile: state.userProfile,
             supabaseService: supabaseService,
@@ -441,7 +388,6 @@ async function showProfileModal() {
             onLogout: handleLogout,
         });
         modalContainer.appendChild(modal);
-
     } catch (error) {
         modalContainer.innerHTML = '';
         showSystemError(`Не удалось открыть профиль: ${error.message}`);
@@ -450,9 +396,7 @@ async function showProfileModal() {
 
 function showHelpModal() {
     modalContainer.innerHTML = '';
-    const modal = createHelpModal({
-        onClose: () => { modalContainer.innerHTML = ''; },
-    });
+    const modal = createHelpModal({ onClose: () => { modalContainer.innerHTML = ''; } });
     modalContainer.appendChild(modal);
 }
 
@@ -461,19 +405,14 @@ function showCameraView() {
     cameraViewContainer.classList.remove('hidden');
     const cameraView = createCameraView(
         (image) => { handleSendMessage('Что на этом фото?', image); },
-        () => {
-            cameraViewContainer.innerHTML = '';
-            cameraViewContainer.classList.add('hidden');
-        }
+        () => { cameraViewContainer.innerHTML = ''; cameraViewContainer.classList.add('hidden'); }
     );
     cameraViewContainer.appendChild(cameraView);
 }
 
 function showAboutModal() {
     modalContainer.innerHTML = '';
-    const aboutModal = createAboutModal(() => {
-        modalContainer.innerHTML = '';
-    });
+    const aboutModal = createAboutModal(() => { modalContainer.innerHTML = ''; });
     modalContainer.appendChild(aboutModal);
 }
 
@@ -509,9 +448,6 @@ function setupEmailPolling() {
 
 // --- APP STARTUP LOGIC ---
 
-/**
- * Renders the main application UI for an authenticated user.
- */
 function renderMainApp() {
     appContainer.innerHTML = `
         <div id="app" class="flex flex-col h-full">
@@ -531,17 +467,12 @@ function renderMainApp() {
             <main id="main-content" class="flex-1 overflow-hidden relative"></main>
         </div>
     `;
-
-    // Hook up header button listeners
     const settingsButton = document.getElementById('settings-button');
     const helpButton = document.getElementById('help-button');
     settingsButton.innerHTML = SettingsIcon;
     helpButton.innerHTML = QuestionMarkCircleIcon;
     helpButton.addEventListener('click', showHelpModal);
-    
-    // Add the global click handler to the body to catch all dynamic actions
     document.body.addEventListener('click', handleGlobalClick);
-
     const mainContent = document.getElementById('main-content');
     mainContent.innerHTML = '';
     const chatContainer = createChatInterface(handleSendMessage, showCameraView, showSystemError, handleNewChat);
@@ -549,24 +480,21 @@ function renderMainApp() {
 }
 
 
-/**
- * Initializes all services for an authenticated session.
- */
 async function startAuthenticatedSession(session) {
     if (state.isLoading) return;
     state.isLoading = true;
 
     try {
-        // 1. Fetch user profile and Google token first.
         const userProfile = await supabaseService.getCurrentUserProfile();
-        if (!userProfile) {
-            throw new Error("Профиль пользователя не найден в базе данных.");
-        }
+        if (!userProfile) throw new Error("Профиль пользователя не найден в базе данных.");
+        
         state.userProfile = userProfile;
         googleProvider.setAuthToken(session.provider_token);
         await googleProvider.loadGapiClient();
+        
+        renderMainApp();
+        renderAuth(state.userProfile);
 
-        // 2. Fetch cloud settings and merge with local.
         const cloudSettings = await supabaseService.getUserSettings();
         if (cloudSettings) {
             state.settings = { ...getSettings(), ...cloudSettings };
@@ -574,58 +502,49 @@ async function startAuthenticatedSession(session) {
         }
         supabaseService.setSettings(state.settings);
         googleProvider.setTimezone(state.settings.timezone);
-        
-        // 3. Render the main application structure FIRST. This provides a stable UI.
-        renderMainApp();
-        renderAuth(state.userProfile);
 
-        // 4. CRITICAL: Perform all schema-dependent initializations in one block.
-        // This is the single point of failure that will trigger the migration modal.
+        const isAdminOrOwner = userProfile.role === 'admin' || userProfile.role === 'owner';
+        const settingsBtn = document.getElementById('settings-button');
+        if (settingsBtn) { settingsBtn.style.display = isAdminOrOwner ? 'block' : 'none'; }
+        
         try {
-            await supabaseService.checkSchemaVersion(); // Lightweight check for a new table
+            await supabaseService.checkSchemaVersion();
             state.keyPool = await supabaseService.getSharedGeminiKeys();
             state.proxyPool = await supabaseService.getSharedProxies();
+            await startNewChatSession();
+            startAutoSync();
+            setupEmailPolling();
         } catch (schemaError) {
-            const isAdminOrOwner = state.userProfile?.role === 'admin' || state.userProfile?.role === 'owner';
             const isSchemaError = schemaError.message.includes('relation') || schemaError.message.includes('does not exist') || schemaError.message.includes('Could not find the function');
             
             if (isAdminOrOwner && isSchemaError) {
-                // HALT execution and show migration modal for admins.
-                const { element: migrationModal } = createMigrationModal({
-                    supabaseService,
-                    onOpenSettings: () => showSettingsModal(),
+                 addMessageToChat({
+                    id: Date.now().toString(),
+                    sender: MessageSender.SYSTEM,
+                    text: 'Структура вашей базы данных устарела. Для корректной работы приложения необходимо её обновить.',
+                    card: {
+                        type: 'system_action',
+                        icon: 'AlertTriangleIcon',
+                        title: 'Требуется обновление базы данных',
+                        actions: [{
+                            label: 'Запустить мастер обновления',
+                            clientAction: 'open_migration_modal'
+                        }]
+                    }
                 });
-                globalModalContainer.innerHTML = '';
-                globalModalContainer.appendChild(migrationModal);
-                state.isLoading = false;
-                return; // Stop further initialization.
+            } else if (isSchemaError) {
+                 showSystemError("База данных не настроена. Обратитесь к администратору.");
             } else {
-                // For non-admins or non-schema errors, show a simple error.
-                throw new Error("Не удалось загрузить конфигурацию. Некоторые функции могут быть недоступны.");
+                 showSystemError(`Не удалось загрузить конфигурацию: ${schemaError.message}`);
             }
         }
-        
-        // 5. If schema is OK, proceed with normal setup.
-        const isAdminOrOwner = userProfile.role === 'admin' || userProfile.role === 'owner';
-        const settingsBtn = document.getElementById('settings-button');
-        
-        if (settingsBtn) {
-            settingsBtn.style.display = isAdminOrOwner ? 'block' : 'none';
-        }
-
-        // 6. Start background services.
-        await startNewChatSession();
-        startAutoSync();
-        setupEmailPolling();
 
     } catch (error) {
         console.error("Critical error during session start, signing out:", error);
-        // If the error happens before the main app is rendered, show an alert.
         if (!document.getElementById('app')) {
              alert(`Критическая ошибка: не удалось запустить сессию. Выполняется выход.\n\nДетали: ${error.message}`);
              await handleLogout();
         } else {
-            // If the app is rendered, show the error in the chat.
             showSystemError(error.message);
         }
     } finally {
@@ -635,10 +554,7 @@ async function startAuthenticatedSession(session) {
 
 
 function showWelcomeScreen() {
-    // Only render if it's not already there to prevent flashes
-    if (document.querySelector('.welcome-screen-container')) {
-        return;
-    }
+    if (document.querySelector('.welcome-screen-container')) return;
     appContainer.innerHTML = '';
     const welcome = createWelcomeScreen({
         onLogin: async () => {
@@ -654,16 +570,11 @@ function showWelcomeScreen() {
     appContainer.appendChild(welcome);
 }
 
-/**
- * Ensures all external libraries loaded from CDN are available before starting the app.
- * @returns {Promise<void>} A promise that resolves when all libraries are loaded.
- */
 function waitForExternalLibs() {
     return new Promise((resolve, reject) => {
-        const timeout = 15000; // 15 seconds
+        const timeout = 15000;
         const interval = 100;
         let elapsed = 0;
-
         const check = () => {
             const isGoogleReady = window.google && window.google.accounts && window.google.accounts.oauth2 && window.gapi;
             const isSupabaseReady = window.supabase && typeof window.supabase.createClient === 'function';
@@ -690,10 +601,6 @@ function waitForExternalLibs() {
     });
 }
 
-
-/**
- * The main entry point of the application.
- */
 async function main() {
     appContainer = document.getElementById('app-container');
     modalContainer = document.getElementById('modal-container');
@@ -715,35 +622,22 @@ async function main() {
     }
     
     supabaseService.onAuthStateChange(async (event, session) => {
-        // If a session object exists, we attempt to log in.
-        if (session) {
-            // But only if we aren't already logged in. This handles token refreshes gracefully.
-            if (!state.userProfile) {
-                await startAuthenticatedSession(session);
-            } else {
-                // This is a token refresh for an existing session, just update the provider token.
-                googleProvider.setAuthToken(session.provider_token);
-            }
-        } 
-        // If no session object exists, we log out.
-        else {
-            // But only if we were previously logged in. This prevents loops on the welcome screen.
-            if (state.userProfile) {
-                state.userProfile = null;
-                state.isLoading = false; // Ensure loading state is reset
-                stopEmailPolling();
-                stopAutoSync();
+        if (session && !state.userProfile) {
+            await startAuthenticatedSession(session);
+        } else if (session && state.userProfile) {
+            googleProvider.setAuthToken(session.provider_token);
+        } else if (!session && state.userProfile) {
+            state.userProfile = null;
+            state.isLoading = false;
+            stopEmailPolling();
+            stopAutoSync();
+            showWelcomeScreen();
+        } else if (!session && !state.userProfile) {
+            if (!document.querySelector('.welcome-screen-container')) {
                 showWelcomeScreen();
-            } else {
-                 // We are not logged in and have no session. Make sure the welcome screen is visible.
-                 // This is a defensive check for the initial page load.
-                 if (!document.querySelector('.welcome-screen-container')) {
-                    showWelcomeScreen();
-                 }
             }
         }
     });
 }
 
-// Use window.onload to ensure all resources including scripts are fully loaded.
 window.onload = main;

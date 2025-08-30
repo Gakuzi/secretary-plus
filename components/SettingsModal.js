@@ -31,6 +31,19 @@ const maskApiKey = (key) => (!key || key.length < 10) ? 'Неверный клю
 
 // --- TAB RENDERERS ---
 
+function renderErrorTab(errorMessage) {
+    return `
+        <div class="p-6 text-center">
+            <div class="w-12 h-12 mx-auto text-red-500">${Icons.AlertTriangleIcon}</div>
+            <h3 class="mt-4 text-lg font-bold">Ошибка загрузки данных</h3>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Не удалось загрузить данные для этой вкладки. Возможно, ваша база данных устарела.</p>
+            <p class="mt-1 text-xs font-mono bg-slate-100 dark:bg-slate-900 p-2 rounded-md">${errorMessage}</p>
+            <button data-client-action="open_migration_modal" class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md">Запустить мастер обновления</button>
+        </div>
+    `;
+}
+
+
 function renderUsersTab(users, currentUserId) {
     const usersHtml = users.map(user => {
         const roleInfo = ROLE_DISPLAY_MAP[user.role] || ROLE_DISPLAY_MAP.user;
@@ -189,8 +202,8 @@ function renderSchemaTab(state) {
 
         <div class="mt-4 p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
              <h4 class="font-semibold text-lg mb-3">Действия с БД</h4>
-            <button data-action="open-db-migration" class="w-full px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-semibold flex items-center justify-center gap-2">
-                ${Icons.DatabaseIcon} <span>Открыть Редактор и запустить Миграцию БД</span>
+            <button data-client-action="open_migration_modal" class="w-full px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-semibold flex items-center justify-center gap-2">
+                ${Icons.DatabaseIcon} <span>Открыть Мастер Миграции БД</span>
             </button>
         </div>
     `;
@@ -235,6 +248,7 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
     let state = {
         currentTab: 'users',
         isLoading: false,
+        error: null,
         users: [],
         history: [],
         stats: null,
@@ -244,8 +258,6 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
         syncStatus: getSyncStatus(),
         isSyncingAll: false,
         syncingSingle: null,
-        isCheckingSchema: false,
-        schemaError: null,
     };
 
     const TABS = [
@@ -261,7 +273,9 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
     const switchTab = async (tabId) => {
         state.currentTab = tabId;
         state.isLoading = true;
+        state.error = null;
         render();
+
         try {
             switch(tabId) {
                 case 'users': state.users = await supabaseService.getAllUserProfiles(); break;
@@ -271,39 +285,16 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
             }
         } catch (error) {
             console.error(`Failed to load data for tab ${tabId}:`, error);
-            handleSchemaError(error);
+            const isSchemaError = error.message.includes('relation') || error.message.includes('does not exist') || error.message.includes('Could not find the function');
+            if (isSchemaError) {
+                state.error = error.message;
+            } else {
+                alert(`Произошла непредвиденная ошибка: ${error.message}`);
+            }
+        } finally {
+            state.isLoading = false;
+            render();
         }
-        
-        state.isLoading = false;
-        render();
-    };
-
-    const handleSchemaError = (error) => {
-        const isSchemaError = (error.message.includes('relation') && error.message.includes('does not exist')) || 
-                              error.message.includes('Could not find the function');
-
-        if (!isSchemaError) {
-            alert(`Произошла непредвиденная ошибка: ${error.message}`);
-            return;
-        }
-
-        const globalModalContainer = document.getElementById('global-modal-container');
-        if (!globalModalContainer) {
-            console.error("Global modal container not found!");
-            alert(`Критическая ошибка: ${error.message}`);
-            return;
-        }
-        
-        const { element: migrationModal } = createMigrationModal({
-            supabaseService,
-            onOpenSettings: () => {
-                globalModalContainer.innerHTML = '';
-                switchTab('schema'); 
-            },
-        });
-
-        globalModalContainer.innerHTML = '';
-        globalModalContainer.appendChild(migrationModal);
     };
 
     const render = () => {
@@ -312,6 +303,8 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
 
         if (state.isLoading) {
             contentContainer.innerHTML = `<div class="flex items-center justify-center h-full"><div class="animate-spin h-10 w-10 border-4 border-slate-300 border-t-transparent rounded-full"></div></div>`;
+        } else if (state.error) {
+            contentContainer.innerHTML = renderErrorTab(state.error);
         } else {
             switch (state.currentTab) {
                 case 'users': contentContainer.innerHTML = renderUsersTab(state.users, supabaseService.client.auth.getUser().id); break;
@@ -348,7 +341,7 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
         
         modalElement.querySelector('#settings-tab-content').appendChild(contentContainer);
 
-        if (state.currentTab === 'stats' && state.stats && !state.isLoading && window.Chart) {
+        if (state.currentTab === 'stats' && state.stats && !state.isLoading && !state.error && window.Chart) {
              setTimeout(() => {
                 const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
                 const textColor = isDarkMode ? '#e2e8f0' : '#334155';
@@ -373,14 +366,7 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
                 case 'close': onClose(); break;
                 case 'delete-key': {
                     const keyId = target.dataset.keyId;
-                    if (confirm('Удалить этот ключ?')) { 
-                        try { 
-                            await supabaseService.deleteSharedGeminiKey(keyId); 
-                            await switchTab('apiKeys'); 
-                        } catch (err) { 
-                            handleSchemaError(err);
-                        } 
-                    }
+                    if (confirm('Удалить этот ключ?')) { await supabaseService.deleteSharedGeminiKey(keyId); await switchTab('apiKeys'); }
                     break;
                 }
                 case 'add-key': {
@@ -388,25 +374,13 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
                     const description = modalElement.querySelector('#new-key-desc-input').value.trim();
                     const priority = parseInt(modalElement.querySelector('#new-key-priority-input').value, 10);
                     if (!apiKey) { alert('Ключ API не может быть пустым.'); return; }
-                    try { 
-                        await supabaseService.addSharedGeminiKey({ apiKey, description, priority }); 
-                        await switchTab('apiKeys'); 
-                    } catch(err) { 
-                        handleSchemaError(err);
-                    }
+                    await supabaseService.addSharedGeminiKey({ apiKey, description, priority }); 
+                    await switchTab('apiKeys');
                     break;
                 }
                  case 'open-proxy-manager': {
                     const manager = createProxyManagerModal({ supabaseService, onClose: () => subModalContainer.innerHTML = '' });
                     subModalContainer.appendChild(manager);
-                    break;
-                }
-                case 'open-db-migration': {
-                    const execModal = createDbExecutionModal({
-                        onExecute: (sql) => supabaseService.executeSqlViaFunction(sql),
-                        onClose: () => subModalContainer.innerHTML = ''
-                    });
-                    subModalContainer.appendChild(execModal);
                     break;
                 }
                 case 'save-worker-config': {
@@ -451,7 +425,7 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
                     await supabaseService.updateUserRole(userId, newRole); 
                     await switchTab('users'); 
                 } catch (error) { 
-                    handleSchemaError(error);
+                    alert(`Ошибка: ${error.message}`);
                     await switchTab('users'); 
                 }
             } else {
@@ -468,7 +442,7 @@ export function createSettingsModal({ supabaseService, allSyncTasks, onClose, on
             try { 
                 await supabaseService.updateSharedGeminiKey(keyId, updates); 
             } catch (err) { 
-                handleSchemaError(err);
+                 alert(`Ошибка обновления ключа: ${err.message}`);
                 await switchTab('apiKeys'); 
             }
         }
