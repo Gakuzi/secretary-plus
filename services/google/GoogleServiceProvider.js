@@ -86,16 +86,14 @@ export class GoogleServiceProvider {
              gapi.auth.setToken({ access_token: this.token });
         }
         
-        // Load all required services with retry logic
-        await Promise.all([
-            this.#loadClientWithRetries('calendar', 'v3'),
-            this.#loadClientWithRetries('tasks', 'v1'),
-            this.#loadClientWithRetries('people', 'v1'),
-            this.#loadClientWithRetries('drive', 'v3'),
-            this.#loadClientWithRetries('docs', 'v1'),
-            this.#loadClientWithRetries('sheets', 'v4'),
-            this.#loadClientWithRetries('gmail', 'v1'),
-        ]);
+        // Load services serially for increased stability on unreliable networks
+        await this.#loadClientWithRetries('calendar', 'v3');
+        await this.#loadClientWithRetries('tasks', 'v1');
+        await this.#loadClientWithRetries('people', 'v1');
+        await this.#loadClientWithRetries('drive', 'v3');
+        await this.#loadClientWithRetries('docs', 'v1');
+        await this.#loadClientWithRetries('sheets', 'v4');
+        await this.#loadClientWithRetries('gmail', 'v1');
         
         this.gapiReady = true;
     }
