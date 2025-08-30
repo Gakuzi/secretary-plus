@@ -459,10 +459,32 @@ export class SupabaseService {
     }
     
     async getSharedProxies() {
-        const { data, error } = await this.client.from('shared_proxies').select('url').eq('is_active', true).order('priority');
+        const { data, error } = await this.client.from('shared_proxies').select('url, geolocation').eq('is_active', true).order('priority');
         if (error) throw error;
         return data;
     }
+    
+    async getProxies() {
+        const { data, error } = await this.client.from('shared_proxies').select('*').order('priority');
+        if (error) throw error;
+        return data;
+    }
+    
+    async addProxy(proxyData) {
+        const { error } = await this.client.from('shared_proxies').insert(proxyData);
+        if (error) throw error;
+    }
+    
+    async updateProxy(id, updates) {
+        const { error } = await this.client.from('shared_proxies').update(updates).eq('id', id);
+        if (error) throw error;
+    }
+    
+    async deleteProxy(id) {
+        const { error } = await this.client.from('shared_proxies').delete().eq('id', id);
+        if (error) throw error;
+    }
+
 
     // --- Admin Functions for Shared Keys ---
     async getAllSharedGeminiKeysForAdmin() {
