@@ -32,6 +32,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
     ];
     
     let render; // Forward-declare
+    let handleNext; // Forward-declare
 
     const initSupabase = () => {
         if (!supabaseService && state.authChoice === 'supabase') {
@@ -71,9 +72,9 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             footerEl.appendChild(document.createElement('div'));
         }
 
-        const addNextButton = (text = 'Далее', skip = false) => {
+        const addNextButton = (text = 'Далее', isSkip = false) => {
             const nextBtn = document.createElement('button');
-            nextBtn.className = `px-6 py-2 rounded-md font-semibold text-white ${skip ? 'bg-slate-500 hover:bg-slate-600' : 'bg-blue-600 hover:bg-blue-700'}`;
+            nextBtn.className = `px-6 py-2 rounded-md font-semibold text-white ${isSkip ? 'bg-slate-500 hover:bg-slate-600' : 'bg-blue-600 hover:bg-blue-700'}`;
             nextBtn.textContent = text;
             nextBtn.dataset.action = 'next';
             footerEl.appendChild(nextBtn);
@@ -103,22 +104,21 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 addNextButton();
                 break;
             case 'auth':
+                // The content for the auth step. If the user is already authenticated (from a redirect),
+                // this step will be shown briefly before automatically advancing.
                 contentEl.innerHTML = `
                      <h2 class="text-2xl font-bold mb-4">Аутентификация</h2>
                      <p class="mb-6 text-slate-500 dark:text-slate-400">Войдите в свой аккаунт Google, чтобы предоставить приложению разрешения.</p>
                      <div class="p-6 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center min-h-[200px]">
-                        ${state.isLoading ? `<div class="text-center"><p>Ожидание...</p></div>` :
-                         state.isAuthenticated && state.userProfile ? `
+                        ${state.isLoading ? `<div class="text-center"><div class="animate-spin h-8 w-8 border-4 border-slate-300 border-t-transparent rounded-full mx-auto mb-2"></div><p>Ожидание...</p></div>` :
+                         state.isAuthenticated ? `
                             <div class="text-center">
-                                <img src="${state.userProfile.imageUrl}" class="w-20 h-20 rounded-full mx-auto mb-4">
-                                <p class="font-bold text-lg">${state.userProfile.name}</p>
-                                <p class="text-sm text-slate-500 dark:text-slate-400">${state.userProfile.email}</p>
-                                <p class="text-green-600 dark:text-green-400 mt-4">✓ Вход выполнен успешно</p>
+                                <p class="text-green-600 dark:text-green-400 font-semibold">✓ Вход выполнен успешно. Переход...</p>
                             </div>` : 
                             `<button data-action="login" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center gap-2">${Icons.GoogleIcon}<span>Войти через Google</span></button>`
                         }
                      </div>`;
-                addNextButton(state.isAuthenticated ? 'Далее' : 'Пропустить', !state.isAuthenticated);
+                addNextButton('Пропустить', true);
                 break;
              case 'gemini':
                 contentEl.innerHTML = `
@@ -151,7 +151,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                         </button>
                     </div>
                 `;
-                addNextButton('Пропустить');
+                addNextButton('Далее');
                 break;
             case 'finish':
                 contentEl.innerHTML = `
@@ -174,14 +174,26 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
     render = () => {
         const stepIndex = STEPS.findIndex(s => s.id === STEPS[state.currentStep].id);
         const stepConfig = STEPS[stepIndex];
+
+        let authIndicatorHtml = '';
+        if (state.isAuthenticated && state.userProfile) {
+            authIndicatorHtml = `
+                <div class="flex items-center gap-2 text-sm">
+                    <img src="${state.userProfile.imageUrl}" alt="${state.userProfile.name}" class="w-6 h-6 rounded-full">
+                    <span class="font-medium text-slate-600 dark:text-slate-300 hidden sm:inline">${state.userProfile.name}</span>
+                </div>
+            `;
+        }
+
         wizardElement.innerHTML = `
             <div class="bg-white dark:bg-slate-800 rounded-lg shadow-2xl w-full max-w-4xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col relative text-slate-800 dark:text-slate-100">
                 <header class="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                    <div>
+                    <div class="flex-1">
                         <h1 class="text-xl font-bold">Мастер Настройки Секретарь+</h1>
                         <p class="text-sm text-slate-500 dark:text-slate-400">Шаг ${stepIndex + 1} из ${STEPS.length}: ${stepConfig.title}</p>
                     </div>
-                    <button data-action="exit" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></button>
+                    ${authIndicatorHtml}
+                    <button data-action="exit" class="ml-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></button>
                 </header>
                 <main class="flex-1 p-6 overflow-y-auto bg-slate-50 dark:bg-slate-900/70" id="wizard-content"></main>
                 <footer class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center" id="wizard-footer"></footer>
@@ -198,7 +210,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         state.config = newConfig;
     };
     
-    const handleNext = async () => {
+    handleNext = async () => {
         collectInputs();
         
         let nextStepIndex = state.currentStep + 1;
@@ -236,8 +248,12 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
     };
 
     const handleLogin = async () => {
+        state.isLoading = true;
+        render(); // Show loading indicator
+        
         const { ...stateToSave } = state;
-        const resumeData = { ...stateToSave, currentStep: 2 };
+        const authStepIndex = STEPS.findIndex(s => s.id === 'auth');
+        const resumeData = { ...stateToSave, currentStep: authStepIndex };
         sessionStorage.setItem('wizardState', JSON.stringify(resumeData));
 
         if (state.authChoice === 'supabase') {
@@ -253,6 +269,8 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 } else {
                     alert(`Ошибка входа Google: ${tokenResponse.error_description || tokenResponse.error}`);
                     sessionStorage.removeItem('wizardState');
+                    state.isLoading = false;
+                    render();
                 }
             });
             googleProvider.authenticate();
@@ -260,6 +278,9 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
     };
 
     const checkAuthStatus = async () => {
+        state.isLoading = true;
+        render();
+
         if (state.authChoice === 'supabase') {
             initSupabase();
             const { data: { session } } = await supabaseService.client.auth.getSession();
@@ -281,7 +302,18 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 state.userProfile = null;
             }
         }
-        render();
+        
+        state.isLoading = false;
+
+        const authStepIndex = STEPS.findIndex(s => s.id === 'auth');
+        if (state.isAuthenticated && state.currentStep === authStepIndex) {
+            render(); // Render the success message briefly
+            setTimeout(() => {
+                handleNext();
+            }, 1000); // Wait 1 second before automatically advancing
+        } else {
+            render();
+        }
     };
 
     const handleAction = async (e) => {
@@ -308,6 +340,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 if (supabaseService) {
                     await supabaseService.saveUserSettings(state.config);
                 }
+                sessionStorage.removeItem('wizardState');
                 onComplete(state.config); 
                 break;
             case 'manage-proxies':
@@ -323,7 +356,6 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
             state.config.useProxy = useProxyToggle.checked;
         }
     });
-
 
     if (resumeState) {
         checkAuthStatus();

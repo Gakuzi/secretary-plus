@@ -971,7 +971,7 @@ async function main() {
             // Wait for the SIGNED_IN event, which confirms Supabase has created the session.
             await new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
-                    reject(new Error("Authentication timed out. Please try again."));
+                    reject(new Error("Аутентификация заняла слишком много времени. Пожалуйста, попробуйте снова."));
                 }, 15000); // 15-second timeout for safety.
 
                 const { data: { subscription } } = tempSupabaseService.onAuthStateChange((event, session) => {
