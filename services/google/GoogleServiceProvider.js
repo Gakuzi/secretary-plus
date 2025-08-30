@@ -81,7 +81,7 @@ function getEmailBody(payload) {
 
 export class GoogleServiceProvider {
     constructor() {
-        this.gapi = window.gapi;
+        this.gapi = null; // Initialize as null to avoid race conditions. Will be set in loadGapiClient.
         this.token = null;
         this.isGapiLoaded = false;
         this.loadGapiPromise = null;
@@ -108,15 +108,37 @@ export class GoogleServiceProvider {
     async loadGapiClient() {
         if (this.loadGapiPromise) return this.loadGapiPromise;
 
-        this.loadGapiPromise = new Promise((resolve) => {
-            this.gapi.load('client', async () => {
-                await this.gapi.client.init({});
-                this.isGapiLoaded = true;
-                if (this.token) {
-                    this.gapi.client.setToken({ access_token: this.token });
-                }
-                resolve();
-            });
+        // FIX: Ensure gapi is initialized, even if the constructor ran before the script loaded.
+        if (!this.gapi && window.gapi) {
+            this.gapi = window.gapi;
+        }
+
+        // Add a robust check to prevent the 'undefined is not an object' error.
+        if (!this.gapi || typeof this.gapi.load !== 'function') {
+            console.error("Google API client (gapi) is not available.");
+            return Promise.reject(new Error("Не удалось загрузить клиент Google API. Проверьте подключение к интернету или настройки блокировщика рекламы."));
+        }
+
+
+        this.loadGapiPromise = new Promise((resolve, reject) => {
+            try {
+                this.gapi.load('client', async () => {
+                    try {
+                        await this.gapi.client.init({});
+                        this.isGapiLoaded = true;
+                        if (this.token) {
+                            this.gapi.client.setToken({ access_token: this.token });
+                        }
+                        resolve();
+                    } catch (initError) {
+                         console.error("Error initializing GAPI client:", initError);
+                         reject(new Error("Ошибка инициализации клиента Google API."));
+                    }
+                });
+            } catch (loadError) {
+                console.error("Error calling gapi.load:", loadError);
+                reject(new Error("Ошибка загрузки модуля клиента Google API."));
+            }
         });
         return this.loadGapiPromise;
     }
