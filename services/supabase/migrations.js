@@ -34,9 +34,10 @@ DROP TABLE IF EXISTS public.sessions CASCADE;
 DROP TABLE IF EXISTS public.action_stats CASCADE;
 
 
--- Drop types if they exist to avoid conflicts on re-creation
-DROP TYPE IF EXISTS public.user_role;
-DROP TYPE IF EXISTS public.chat_sender;
+-- Drop types if they exist to avoid conflicts on re-creation.
+-- Using CASCADE to ensure dependent objects are also removed.
+DROP TYPE IF EXISTS public.user_role CASCADE;
+DROP TYPE IF EXISTS public.chat_sender CASCADE;
 
 -- Recreate shared schema components (types, shared tables, functions)
 ${SHARED_SQL}

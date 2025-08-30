@@ -95,16 +95,28 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                 addNextButton();
                 break;
             case 'auth':
+                let authContent;
+                if(state.isLoading) {
+                    authContent = `<div class="text-center"><div class="animate-spin h-8 w-8 border-4 border-slate-300 border-t-transparent rounded-full mx-auto mb-2"></div><p>Ожидание...</p></div>`;
+                } else if (state.isAuthenticated && state.userProfile) {
+                     authContent = `
+                        <div class="text-center text-green-600 dark:text-green-400 flex flex-col items-center">
+                           <div class="w-12 h-12 mb-3">${Icons.CheckSquareIcon}</div>
+                           <p class="font-semibold">Вы вошли как</p>
+                           <p class="text-sm text-slate-600 dark:text-slate-300">${state.userProfile.email}</p>
+                        </div>
+                    `;
+                } else {
+                     authContent = `<button data-action="login" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center gap-2">${Icons.GoogleIcon}<span>Войти через Google</span></button>`;
+                }
+
                 contentEl.innerHTML = `
                      <h2 class="text-2xl font-bold mb-4">Аутентификация</h2>
                      <p class="mb-6 text-slate-500 dark:text-slate-400">Войдите в свой аккаунт Google, чтобы предоставить приложению разрешения.</p>
                      <div class="p-6 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center min-h-[200px]">
-                        ${state.isLoading || state.isAuthenticated ? 
-                            `<div class="text-center"><div class="animate-spin h-8 w-8 border-4 border-slate-300 border-t-transparent rounded-full mx-auto mb-2"></div><p>Ожидание...</p></div>` :
-                            `<button data-action="login" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center gap-2">${Icons.GoogleIcon}<span>Войти через Google</span></button>`
-                        }
+                        ${authContent}
                      </div>`;
-                addNextButton('Пропустить', true);
+                addNextButton('Далее', !state.isAuthenticated);
                 break;
              case 'gemini':
                 contentEl.innerHTML = `
@@ -183,7 +195,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
                             <p class="text-sm text-slate-500 dark:text-slate-400">Шаг ${stepIndex + 1} из ${STEPS.length}: ${stepConfig.title}</p>
                         </div>
                     </div>
-                    <button data-action="exit" class="ml-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></button>
+                    <button data-action="exit" class="ml-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></button>
                 </header>
                 <main class="flex-1 p-6 overflow-y-auto bg-slate-50 dark:bg-slate-900/70" id="wizard-content"></main>
                 <footer class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center" id="wizard-footer"></footer>

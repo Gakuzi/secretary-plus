@@ -83,19 +83,12 @@ let syncInterval = null;
 let proxyTestInterval = null;
 let migrationModal = null; // Instance for the migration modal
 
-const serviceProviders = {
-    google: googleProvider,
-    apple: appleProvider,
-    supabase: null,
-};
-
 // **Initialize Supabase client ONCE, globally.** This is critical for stable auth.
 let supabaseService = null;
 const settingsForInit = getSettings();
 if (settingsForInit.isSupabaseEnabled) {
     try {
         supabaseService = new SupabaseService(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
-        serviceProviders.supabase = supabaseService;
         state.isSupabaseReady = true; // Set state early
     } catch (e) {
         console.error("Global Supabase initialization failed", e);
@@ -103,6 +96,11 @@ if (settingsForInit.isSupabaseEnabled) {
     }
 }
 
+const serviceProviders = {
+    google: googleProvider,
+    apple: appleProvider,
+    supabase: supabaseService,
+};
 
 // --- DOM ELEMENTS ---
 // These will be populated after the app's structure is rendered.
@@ -277,21 +275,8 @@ async function startNewChatSession() {
 }
 
 async function handleAuthentication() {
-    if (state.settings.isSupabaseEnabled && supabaseService) {
-        const { data: { session } } = await supabaseService.client.auth.getSession();
-        if (session) {
-            state.supabaseUser = session.user;
-            googleProvider.setAuthToken(session.provider_token);
-            // Cloud settings are now handled by the "cloud-first" logic in startFullApp
-        }
-    } else {
-        // Handle direct Google auth: load token from localStorage if it exists
-        const directToken = getGoogleToken();
-        if (directToken) {
-            googleProvider.setAuthToken(directToken);
-        }
-    }
-
+    // This function now focuses ONLY on getting the profile if a token exists.
+    // The session/token retrieval happens earlier in startFullApp.
     if (googleProvider.token) {
         try {
             const googleProfile = await googleProvider.getUserProfile();
@@ -316,7 +301,6 @@ async function handleAuthentication() {
 
 async function initializeAppServices() {
     state.settings = getSettings();
-    // Supabase is now initialized globally at startup, so no need to call a function here.
     await googleProvider.initClient(GOOGLE_CLIENT_ID, null);
     googleProvider.setTimezone(state.settings.timezone);
     await handleAuthentication();
@@ -328,7 +312,7 @@ async function initializeAppServices() {
 // --- EVENT HANDLERS & LOGIC ---
 async function handleLogout() {
     modalContainer.innerHTML = '';
-    if (state.supabaseUser) {
+    if (state.supabaseUser && supabaseService) {
         await supabaseService.signOut();
     } else {
         await googleProvider.disconnect();
@@ -875,48 +859,43 @@ async function startFullApp() {
     let settings = getSettings();
     const savedWizardState = sessionStorage.getItem('wizardState');
 
-    // **Cloud-first settings check**
-    // If supabase is enabled, try to fetch cloud settings BEFORE showing the wizard.
+    // **Cloud-first settings & session check**
     if (settings.isSupabaseEnabled && supabaseService) {
         const { data: { session } } = await supabaseService.client.auth.getSession();
         if (session) {
+            state.supabaseUser = session.user;
+            googleProvider.setAuthToken(session.provider_token);
             const cloudSettings = await supabaseService.getUserSettings();
             if (cloudSettings && cloudSettings.geminiApiKey) {
-                // If cloud settings are valid, merge them and override local settings.
                 settings = { ...settings, ...cloudSettings };
                 saveSettings(settings);
-                state.settings = settings; // Update global state
             }
         }
+    } else {
+        const directToken = getGoogleToken();
+        if (directToken) {
+            googleProvider.setAuthToken(directToken);
+        }
     }
+    state.settings = settings; // Update global state
 
     // Condition to show the initial setup wizard
     if (!settings.geminiApiKey) {
-        // If this is a true first run, clear all potentially conflicting old data.
-        if (!savedWizardState) {
-            console.log("First run detected, clearing local storage for a clean setup.");
-            localStorage.removeItem('secretary-plus-settings-v4');
-            localStorage.removeItem('secretary-plus-sync-status-v1');
-            clearGoogleToken();
-            sessionStorage.clear();
-            // Clear any lingering Supabase auth tokens
-            Object.keys(localStorage)
-                .filter(key => key.startsWith('sb-'))
-                .forEach(key => localStorage.removeItem(key));
-        }
-        
         wizardContainer.innerHTML = '';
         const wizard = createSetupWizard({
             onComplete: async (newSettings) => {
                 state.settings = newSettings;
                 saveSettings(newSettings);
                 wizardContainer.innerHTML = '';
-                // Reload the entire app to re-initialize with the global Supabase client correctly.
-                window.location.reload();
+                // Instead of reloading, re-initialize services and render main content
+                await initializeAppServices();
+                renderMainContent();
             },
             onExit: () => {
                 wizardContainer.innerHTML = '';
-                initializeAppServices().then(renderMainContent);
+                // Do nothing on exit, as settings are not complete.
+                // The welcome screen will guide the user back.
+                renderMainContent(); 
             },
             googleProvider,
             supabaseService: supabaseService, // Pass the single global instance
@@ -1004,6 +983,7 @@ async function main() {
                 }, 15000);
 
                 const { data: { subscription } } = supabaseService.onAuthStateChange((event, session) => {
+                    // We wait for the SIGNED_IN event which confirms the session is established.
                     if (event === 'SIGNED_IN' && session) {
                         clearTimeout(timeout);
                         subscription.unsubscribe();
@@ -1012,22 +992,25 @@ async function main() {
                 });
             });
 
+            // Clean the URL from auth tokens after successful sign-in
             window.history.replaceState(null, '', window.location.pathname + window.location.search);
-            loadingOverlay.remove();
-            await startFullApp();
-
         } catch (error) {
             console.error("OAuth Callback Error:", error);
-            loadingOverlay.innerHTML = `
+             loadingOverlay.innerHTML = `
                 <div class="flex flex-col items-center justify-center text-center p-4">
                     <p class="font-bold text-red-400">Ошибка аутентификации</p>
                     <p class="mt-2">${error.message}</p>
                     <a href="${window.location.pathname}" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded">Попробовать снова</a>
                 </div>`;
+            return; // Stop execution on auth error
+        } finally {
+            if (document.body.contains(loadingOverlay)) {
+                 loadingOverlay.remove();
+            }
         }
-    } else {
-        await startFullApp();
     }
+    // Whether it was a callback or a normal load, start the full app logic.
+    await startFullApp();
 }
 
 // Wait for external libraries to load, then run the main application logic.
