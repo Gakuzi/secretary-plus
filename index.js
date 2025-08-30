@@ -1,41 +1,20 @@
 import { GoogleServiceProvider } from './services/google/GoogleServiceProvider.js';
 import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
-import { callGemini, analyzeSyncErrorWithGemini, testProxyConnection } from './services/geminiService.js';
-import { getSettings, saveSettings, getSyncStatus, saveSyncStatus, getGoogleToken, saveGoogleToken, clearGoogleToken } from './utils/storage.js';
-import { createSetupWizard } from './components/SetupWizard.js';
+import { callGemini } from './services/geminiService.js';
+import { getSettings, saveSettings, getSyncStatus, saveSyncStatus, clearGoogleToken } from './utils/storage.js';
 import { createSettingsModal } from './components/SettingsModal.js';
 import { createProfileModal } from './components/ProfileModal.js';
 import { createHelpModal } from './components/HelpModal.js';
-import { createProxyManagerModal } from './components/ProxyManagerModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
+import { createAboutModal } from './components/AboutModal.js';
 import { SettingsIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
-import { SUPABASE_CONFIG, GOOGLE_CLIENT_ID } from './config.js';
-import { createMigrationModal } from './components/MigrationModal.js';
-import { FULL_MIGRATION_SQL } from './services/supabase/migrations.js';
-import { createDataManagerModal } from './components/DataManagerModal.js';
-import { DB_SCHEMAS } from './services/supabase/schema.js';
-import { createDbExecutionModal } from './components/DbExecutionModal.js';
-
+import { SUPABASE_CONFIG } from './config.js';
 
 // --- UTILITY ---
-const APP_STRUCTURE_CONTEXT = `
-- index.html: Главный HTML-файл.
-- config.js: Хранилище статических ключей (Supabase, Google Client ID).
-- index.js: Основная логика приложения.
-- services/geminiService.js: Все вызовы к Gemini API.
-- services/google/GoogleServiceProvider.js: Все взаимодействия с Google API.
-- services/supabase/SupabaseService.js: Все взаимодействия с Supabase.
-- services/supabase/migrations.js: SQL-скрипты для автоматического обновления схемы БД.
-- components/SetupWizard.js: Мастер первоначальной настройки.
-- components/SettingsModal.js: Окно для управления настройками после входа.
-- components/DbSetupWizard.js: Мастер настройки управляющего воркера для автоматического обновления схемы БД.
-- components/ProxySetupWizard.js: Мастер настройки прокси-воркера для Gemini.
-`;
-
 async function showBrowserNotification(title, options) {
     if (!('Notification' in window)) {
         console.warn("Браузер не поддерживает уведомления.");
@@ -61,38 +40,24 @@ async function showBrowserNotification(title, options) {
 let state = {
     settings: getSettings(),
     messages: [],
-    isSupabaseReady: false,
-    isGoogleConnected: false,
     userProfile: null,
-    supabaseUser: null,
     isLoading: false,
     lastSeenEmailId: null,
     syncStatus: getSyncStatus(),
     isSyncing: false,
-    proxyStatus: 'off', // 'off', 'connecting', 'ok', 'error'
     sessionId: null,
+    keyPool: [],
+    proxyPool: [],
 };
 
 // --- SERVICE INSTANCES ---
 const googleProvider = new GoogleServiceProvider();
 const appleProvider = new AppleServiceProvider();
-let emailCheckInterval = null;
-let syncInterval = null;
-let proxyTestInterval = null;
-let migrationModal = null; // Instance for the migration modal
-
-// **Initialize Supabase client ONCE, globally.** This is critical for stable auth.
 let supabaseService = null;
-const settingsForInit = getSettings();
-if (settingsForInit.isSupabaseEnabled) {
-    try {
-        supabaseService = new SupabaseService(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
-        supabaseService.setSettings(settingsForInit); // Pass initial settings
-        state.isSupabaseReady = true; // Set state early
-    } catch (e) {
-        console.error("Global Supabase initialization failed", e);
-        state.isSupabaseReady = false;
-    }
+try {
+    supabaseService = new SupabaseService(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+} catch (e) {
+    console.error("Global Supabase initialization failed", e);
 }
 
 const serviceProviders = {
@@ -102,8 +67,10 @@ const serviceProviders = {
 };
 
 // --- DOM ELEMENTS ---
-// These will be populated after the app's structure is rendered.
-let appContainer, authContainer, mainContent, settingsButton, helpButton, modalContainer, cameraViewContainer, wizardContainer;
+let appContainer, modalContainer, cameraViewContainer;
+let emailCheckInterval = null;
+let syncInterval = null;
+
 
 // --- ERROR HANDLING ---
 function showSystemError(text) {
@@ -111,42 +78,21 @@ function showSystemError(text) {
 }
 
 // --- RENDER FUNCTIONS ---
-function updateProxyStatusIndicator(status) {
-    if (state.proxyStatus === status && status !== 'connecting') return; 
-    state.proxyStatus = status;
-    const profileButton = authContainer?.querySelector('button');
-    if (profileButton) {
-        profileButton.classList.remove('proxy-status-ok', 'proxy-status-error', 'proxy-status-off', 'proxy-status-connecting');
-        profileButton.classList.add(`proxy-status-${status}`);
-    }
-}
-
-function renderAuth() {
+function renderAuth(profile) {
+    const authContainer = document.getElementById('auth-container');
+    if (!authContainer) return;
+    
     authContainer.innerHTML = '';
-    if (state.isGoogleConnected && state.userProfile) {
+    if (profile) {
         const profileButton = document.createElement('button');
         profileButton.className = 'flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-blue-500 rounded-full';
         profileButton.setAttribute('aria-label', 'Открыть профиль пользователя');
-        profileButton.innerHTML = `<img src="${state.userProfile.imageUrl || state.userProfile.avatar_url}" alt="${state.userProfile.name || state.userProfile.full_name}" class="w-8 h-8 rounded-full">`;
+        profileButton.innerHTML = `<img src="${profile.avatar_url}" alt="${profile.full_name}" class="w-8 h-8 rounded-full">`;
         profileButton.addEventListener('click', showProfileModal);
         authContainer.appendChild(profileButton);
-        updateProxyStatusIndicator(state.proxyStatus);
     }
 }
 
-function renderMainContent() {
-    mainContent.innerHTML = '';
-    const chatContainer = createChatInterface(handleSendMessage, showCameraView, showSystemError, handleNewChat);
-    mainContent.appendChild(chatContainer);
-    if (state.messages.length === 0) {
-        document.getElementById('chat-log').appendChild(createWelcomeScreen({
-            isGoogleConnected: state.isGoogleConnected,
-            isSupabaseEnabled: state.settings.isSupabaseEnabled,
-        }));
-    } else {
-        state.messages.forEach(addMessageToChat);
-    }
-}
 
 // --- SYNC LOGIC ---
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
@@ -158,14 +104,13 @@ const ALL_SYNC_TASKS = [
     { name: 'Emails', serviceKey: 'emails', label: 'Почта', icon: 'EmailIcon', tableName: 'emails', providerFn: () => googleProvider.getRecentEmails({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncEmails(items) },
     { name: 'Notes', serviceKey: 'notes', label: 'Заметки', icon: 'FileIcon', tableName: 'notes', providerFn: null, supabaseFn: null }, // Placeholder for UI
 ];
-const SYNCABLE_SERVICE_KEYS = ALL_SYNC_TASKS.filter(t => t.providerFn).map(t => t.serviceKey);
 
 function getEnabledSyncTasks() {
     return ALL_SYNC_TASKS.filter(task => state.settings.enabledServices[task.serviceKey]);
 }
 
 async function runSingleSync(taskName) {
-    if (!state.isGoogleConnected || !state.isSupabaseReady || !supabaseService) {
+    if (!googleProvider.token || !supabaseService) {
         throw new Error("Сервисы не готовы для синхронизации.");
     }
     const task = getEnabledSyncTasks().find(t => t.name === taskName);
@@ -185,7 +130,7 @@ async function runSingleSync(taskName) {
 }
 
 async function runAllSyncs() {
-    if (state.isSyncing || !state.isGoogleConnected || !state.isSupabaseReady || !supabaseService) return;
+    if (state.isSyncing || !googleProvider.token || !supabaseService) return;
     state.isSyncing = true;
     for (const task of getEnabledSyncTasks()) {
         if (!task.providerFn) continue; // Skip tasks without a provider function (like Notes)
@@ -201,7 +146,7 @@ async function runAllSyncs() {
 
 function startAutoSync() {
     if (syncInterval) clearInterval(syncInterval);
-    if (!state.settings.enableAutoSync || !state.settings.isSupabaseEnabled) return;
+    if (!state.settings.enableAutoSync) return;
     setTimeout(runAllSyncs, 2000);
     syncInterval = setInterval(runAllSyncs, SYNC_INTERVAL_MS);
 }
@@ -210,61 +155,10 @@ function stopAutoSync() {
     if (syncInterval) clearInterval(syncInterval);
 }
 
-// --- PROXY TESTING LOGIC ---
-const PROXY_TEST_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-
-async function runActiveProxyTests() {
-    if (!state.settings.useProxy || !state.isSupabaseReady || !supabaseService) {
-        updateProxyStatusIndicator('off');
-        return;
-    }
-    
-    const activeProxies = await supabaseService.getActiveProxies();
-    if (activeProxies.length === 0) {
-        updateProxyStatusIndicator('error');
-        return;
-    }
-
-    let isAnyProxyOk = false;
-    for (const proxy of activeProxies) {
-        const result = await testProxyConnection({ 
-            proxyUrl: proxy.url, 
-            apiKey: state.settings.geminiApiKey 
-        });
-        
-        await supabaseService.updateProxy(proxy.id, {
-            last_test_status: result.status,
-            last_test_speed: result.speed,
-        });
-        
-        if (result.status === 'ok') {
-            isAnyProxyOk = true;
-        }
-    }
-    
-    updateProxyStatusIndicator(isAnyProxyOk ? 'ok' : 'error');
-}
-
-function startAutoProxyTesting() {
-    if (proxyTestInterval) clearInterval(proxyTestInterval);
-    if (!state.settings.useProxy) {
-        updateProxyStatusIndicator('off');
-        return;
-    }
-    // Run once on start, then set interval
-    updateProxyStatusIndicator('connecting');
-    setTimeout(runActiveProxyTests, 3000); // Initial run after 3s
-    proxyTestInterval = setInterval(runActiveProxyTests, PROXY_TEST_INTERVAL_MS);
-}
-
-function stopAutoProxyTesting() {
-    if (proxyTestInterval) clearInterval(proxyTestInterval);
-}
-
 
 // --- AUTH & INITIALIZATION ---
 async function startNewChatSession() {
-    if (state.isSupabaseReady && supabaseService) {
+    if (supabaseService) {
         try {
             state.sessionId = await supabaseService.createNewSession();
         } catch (error) {
@@ -275,57 +169,15 @@ async function startNewChatSession() {
     }
 }
 
-async function handleAuthentication() {
-    // This function now focuses ONLY on getting the profile if a token exists.
-    // The session/token retrieval happens earlier in startFullApp.
-    if (googleProvider.token) {
-        try {
-            const googleProfile = await googleProvider.getUserProfile();
-            state.isGoogleConnected = true;
-            
-            if (state.isSupabaseReady && supabaseService) {
-                const supabaseProfile = await supabaseService.getCurrentUserProfile();
-                state.userProfile = supabaseProfile || { ...googleProfile, role: 'user' };
-            } else {
-                 state.userProfile = googleProfile;
-            }
-
-        } catch (error) {
-            console.error("Failed to get user profile, token might be invalid:", error);
-            showSystemError(`Сессия Google истекла или недействительна. Пожалуйста, войдите снова.`);
-            await handleLogout();
-        }
-    }
-    renderAuth();
-    setupEmailPolling();
-}
-
-async function initializeAppServices() {
-    state.settings = getSettings();
-    if (supabaseService) {
-        supabaseService.setSettings(state.settings);
-    }
-    await googleProvider.initClient(GOOGLE_CLIENT_ID, null);
-    googleProvider.setTimezone(state.settings.timezone);
-    await handleAuthentication();
-    await startNewChatSession();
-    startAutoSync();
-    startAutoProxyTesting();
-}
-
 // --- EVENT HANDLERS & LOGIC ---
 async function handleLogout() {
     modalContainer.innerHTML = '';
-    if (state.supabaseUser && supabaseService) {
+    if (supabaseService) {
         await supabaseService.signOut();
-    } else {
-        await googleProvider.disconnect();
     }
-    // Clear all potential auth tokens
     clearGoogleToken();
     localStorage.removeItem('secretary-plus-settings-v4');
     localStorage.removeItem('secretary-plus-sync-status-v1');
-    sessionStorage.removeItem('wizardState');
     window.location.reload();
 }
 
@@ -333,38 +185,17 @@ async function handleNewChat() {
     if (state.messages.length > 0 && confirm('Вы уверены, что хотите начать новый чат?')) {
         state.messages = [];
         await startNewChatSession();
-        renderMainContent();
+        // Re-render the chat interface to clear messages
+        const chatContainer = createChatInterface(handleSendMessage, showCameraView, showSystemError, handleNewChat);
+        document.getElementById('main-content').innerHTML = '';
+        document.getElementById('main-content').appendChild(chatContainer);
     }
 }
 
-// This function is now a pure data fetcher and does not update the UI.
-async function getActiveProxy() {
-    if (!state.settings.useProxy || !state.isSupabaseReady || !supabaseService) {
-        return null;
-    }
-    const proxies = await supabaseService.getActiveProxies();
-    // Find the first active proxy
-    const sorted = [...proxies]
-        .filter(p => p.is_active)
-        .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
-    
-    return sorted.length > 0 ? sorted[0].url : null;
-};
 
 async function processBotResponse(userMessage, isSilent) {
     state.isLoading = true;
     if (!isSilent) showLoadingIndicator();
-    let proxyUrl = null;
-
-    // Centralized logic for managing the proxy status indicator
-    if (state.settings.useProxy) {
-        updateProxyStatusIndicator('connecting'); // Set to 'connecting' while we find and use a proxy
-        proxyUrl = await getActiveProxy();
-        if (!proxyUrl) {
-            updateProxyStatusIndicator('error');
-            if (!isSilent) showSystemError("Режим прокси включен, но не найдено ни одного активного прокси-сервера. Проверьте настройки.");
-        }
-    }
     
     const botMessage = await callGemini({
         userMessage: userMessage,
@@ -372,23 +203,10 @@ async function processBotResponse(userMessage, isSilent) {
         serviceProviders,
         serviceMap: state.settings.serviceMap,
         timezone: state.settings.timezone,
-        isGoogleConnected: state.isGoogleConnected,
-        apiKey: state.settings.geminiApiKey,
-        proxyUrl: proxyUrl,
+        isGoogleConnected: !!googleProvider.token,
+        keyPool: state.keyPool,
+        proxyPool: state.proxyPool,
     });
-    
-    // Update proxy status based on the result of the API call
-    if(state.settings.useProxy && proxyUrl) {
-        // If we got a valid bot message (not a system error about the proxy itself), it means the proxy worked.
-        if (botMessage && botMessage.sender !== MessageSender.SYSTEM) {
-             updateProxyStatusIndicator('ok');
-        } else if (botMessage.text.includes("Gemini")) { 
-            // If the error message is from Gemini (e.g., bad API key), the proxy is still OK.
-            updateProxyStatusIndicator('ok');
-        } else {
-             updateProxyStatusIndicator('error');
-        }
-    }
 
     if (botMessage.functionCallName && supabaseService) {
         supabaseService.incrementActionStat(botMessage.functionCallName);
@@ -403,7 +221,7 @@ async function processBotResponse(userMessage, isSilent) {
     
     // If we are in a silent operation (like email polling), don't add to chat
     if (isSilent) {
-        if(botMessage.text && botMessage.text.trim().length > 0) {
+        if(botMessage.text && botMessage.text.trim().length > 0 && botMessage.sender === MessageSender.ASSISTANT) {
              showBrowserNotification("Новое важное сообщение", {
                 body: botMessage.text,
                 icon: './favicon.svg'
@@ -580,37 +398,10 @@ async function handleGlobalClick(event) {
         }
         return;
     }
-    
-     // --- 5. Handle welcome screen "open wizard" button ---
-    const openWizardButton = target.closest('#open-wizard-from-welcome');
-    if (openWizardButton) {
-        if (confirm('Это действие перезапустит мастер настройки и может сбросить несохраненные ключи. Продолжить?')) {
-             localStorage.removeItem('secretary-plus-settings-v4');
-             window.location.reload();
-        }
-        return;
-    }
 }
 
 
 // --- MODAL & WIZARD MANAGEMENT ---
-
-/**
- * Clears local settings and reloads the page to force the setup wizard to show.
- * This is used for re-configuration from the Settings or Help modals.
- */
-function relaunchWizard() {
-    if (confirm('Это действие перезапустит мастер настройки и сбросит все текущие ключи, сохраненные в браузере. Продолжить?')) {
-        const promptResponse = prompt('Это действие необратимо. Для подтверждения введите "СБРОСИТЬ".');
-        if (promptResponse === "СБРОСИТЬ") {
-            localStorage.removeItem('secretary-plus-settings-v4');
-            sessionStorage.removeItem('wizardState');
-            window.location.reload();
-        } else {
-            alert("Сброс отменен.");
-        }
-    }
-}
 
 function showSettingsModal() {
     modalContainer.innerHTML = '';
@@ -632,18 +423,8 @@ function showSettingsModal() {
             googleProvider.setTimezone(newSettings.timezone);
             if(newSettings.enableAutoSync) startAutoSync(); else stopAutoSync();
             if(newSettings.enableEmailPolling) setupEmailPolling(); else stopEmailPolling();
-            startAutoProxyTesting(); // Restart proxy testing based on new settings
             modalContainer.innerHTML = '';
         },
-        onLaunchDbWizard: relaunchWizard,
-        onLaunchProxyManager: () => {
-            modalContainer.innerHTML = ''; // Close settings before opening manager
-            showProxyManagerModal();
-        },
-        onLaunchDataManager: () => {
-            modalContainer.innerHTML = '';
-            showDataManagerModal();
-        }
     });
     modalContainer.appendChild(modal);
 }
@@ -678,27 +459,6 @@ function showHelpModal() {
     modalContainer.innerHTML = '';
     const modal = createHelpModal({
         onClose: () => { modalContainer.innerHTML = ''; },
-        settings: state.settings,
-        analyzeErrorFn: async (errorText) => analyzeSyncErrorWithGemini({
-            errorMessage: errorText,
-            context: 'User is analyzing a pasted error in the Help Center.',
-            appStructure: APP_STRUCTURE_CONTEXT,
-            apiKey: state.settings.geminiApiKey,
-            proxyUrl: await getActiveProxy(),
-        }),
-        onRelaunchWizard: () => {
-            if (confirm('Вы уверены? Ваши текущие ключи, сохраненные в браузере, будут удалены.')) {
-                 const promptResponse = prompt('Это действие необратимо. Для подтверждения введите "УДАЛИТЬ НАСТРОЙКИ".');
-                 if (promptResponse === "УДАЛИТЬ НАСТРОЙКИ") {
-                    localStorage.removeItem('secretary-plus-settings-v4');
-                    window.location.reload();
-                 } else {
-                    alert("Сброс отменен.");
-                 }
-            }
-        },
-        onLaunchDbWizard: relaunchWizard,
-        onLaunchProxyWizard: relaunchWizard
     });
     modalContainer.appendChild(modal);
 }
@@ -716,49 +476,13 @@ function showCameraView() {
     cameraViewContainer.appendChild(cameraView);
 }
 
-function showProxyManagerModal() {
-    wizardContainer.innerHTML = '';
-    const manager = createProxyManagerModal({
-        supabaseService: supabaseService,
-        apiKey: state.settings.geminiApiKey, // Pass the key for the AI finder
-        onClose: () => { wizardContainer.innerHTML = ''; },
-    });
-    wizardContainer.appendChild(manager);
-}
-
-function showDataManagerModal() {
+function showAboutModal() {
     modalContainer.innerHTML = '';
-
-    const isAdminOrOwner = state.userProfile && (state.userProfile.role === 'admin' || state.userProfile.role === 'owner');
-    let tasksForManager;
-
-    if (isAdminOrOwner) {
-        // For admins, show ALL tables from the schema
-        tasksForManager = Object.entries(DB_SCHEMAS).map(([key, schema]) => ({
-            name: schema.label,
-            serviceKey: key,
-            label: schema.label,
-            icon: schema.icon,
-            tableName: schema.tableName,
-            // Check if it's a syncable task to conditionally show sync buttons later
-            isSyncable: SYNCABLE_SERVICE_KEYS.includes(key)
-        }));
-    } else {
-        // For regular users, only show enabled sync tasks
-        tasksForManager = getEnabledSyncTasks().map(task => ({ ...task, isSyncable: true }));
-    }
-
-    const manager = createDataManagerModal({
-        supabaseService: supabaseService,
-        tasks: tasksForManager,
-        settings: state.settings,
-        onClose: () => { modalContainer.innerHTML = ''; },
-        onRunSingleSync: runSingleSync,
-        onRunAllSyncs: runAllSyncs,
+    const aboutModal = createAboutModal(() => {
+        modalContainer.innerHTML = '';
     });
-    modalContainer.appendChild(manager);
+    modalContainer.appendChild(aboutModal);
 }
-
 
 // --- POLLING LOGIC ---
 function stopEmailPolling() {
@@ -767,7 +491,7 @@ function stopEmailPolling() {
 
 function setupEmailPolling() {
     stopEmailPolling();
-    if (!state.settings.enableEmailPolling || !state.isGoogleConnected) return;
+    if (!state.settings.enableEmailPolling || !googleProvider.token) return;
     
     const checkEmails = async () => {
         try {
@@ -782,7 +506,6 @@ function setupEmailPolling() {
             }
         } catch (error) {
             console.error("Email polling failed:", error);
-            // Optionally stop polling on repeated failures
         }
     };
 
@@ -790,73 +513,33 @@ function setupEmailPolling() {
     emailCheckInterval = setInterval(checkEmails, 60000);
 }
 
-// --- SCHEMA MIGRATION LOGIC ---
-
-async function runMigration() {
-    if (!migrationModal) return;
-
-    if (!state.settings.managementWorkerUrl || !state.settings.adminSecretToken) {
-        migrationModal.updateState('not-configured');
-        return;
-    }
-
-    try {
-        migrationModal.updateState('migrating', 'Выполняется SQL-скрипт. Это может занять до минуты...');
-        await supabaseService.executeSqlViaFunction(
-            state.settings.managementWorkerUrl,
-            state.settings.adminSecretToken,
-            FULL_MIGRATION_SQL
-        );
-        migrationModal.updateState('success');
-        setTimeout(() => window.location.reload(), 3000); // Reload to apply changes
-    } catch (error) {
-        migrationModal.updateState('error', null, error.message);
-    }
-}
-
-async function checkDatabaseSchema() {
-    if (!state.settings.isSupabaseEnabled || !supabaseService) {
-        return true; // Supabase is disabled, so no schema to check.
-    }
-
-    try {
-        // This check is now more robust. The 'sessions' table was added in the same
-        // migration as the critical 'get_or_create_profile' RPC function. If this
-        // check fails, we can be confident the schema is out of date.
-        const { error } = await supabaseService.client.from('sessions').select('*', { count: 'exact', head: true });
-
-        if (error) {
-            // 42P01 is PostgreSQL's code for "undefined_table"
-            if (error.code === '42P01' || error.message.includes("violates row-level security policy")) {
-                return false; // Schema is outdated or missing tables/policies.
-            }
-            throw error; // A different, unexpected error occurred.
-        }
-        return true; // Schema seems OK.
-    } catch (e) {
-        console.error("Database schema check failed with an exception:", e);
-        return false; // Treat exceptions as a failed check for safety.
-    }
-}
-
 
 // --- APP STARTUP LOGIC ---
+
 /**
- * Renders the main application UI, hooks up event listeners, and decides
- * whether to show the setup wizard or the main chat interface.
+ * Renders the main application UI for an authenticated user.
  */
-async function startFullApp(session = null) {
-    // Populate global DOM element variables
-    appContainer = document.getElementById('app');
-    authContainer = document.getElementById('auth-container');
-    mainContent = document.getElementById('main-content');
-    settingsButton = document.getElementById('settings-button');
-    helpButton = document.getElementById('help-button');
-    modalContainer = document.getElementById('modal-container');
-    cameraViewContainer = document.getElementById('camera-view-container');
-    wizardContainer = document.getElementById('setup-wizard-container');
+function renderMainApp() {
+    appContainer.innerHTML = `
+        <div id="app" class="flex flex-col h-full">
+            <header class="flex justify-between items-center p-2 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0 bg-white dark:bg-slate-800 shadow-sm">
+                <a href="#" onclick="window.location.reload()" class="flex items-center gap-3" aria-label="Домашняя страница Секретарь+">
+                    <div id="header-logo-container" class="w-10 h-10"></div>
+                    <h1 class="text-xl font-bold text-slate-800 dark:text-slate-100">Секретарь+</h1>
+                </a>
+                <div class="flex items-center gap-2">
+                    <div id="auth-container" class="relative"></div>
+                    <button id="help-button" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Помощь"></button>
+                    <button id="settings-button" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Настройки"></button>
+                </div>
+            </header>
+            <main id="main-content" class="flex-1 overflow-hidden relative"></main>
+        </div>
+    `;
 
     // Hook up header button listeners
+    const settingsButton = document.getElementById('settings-button');
+    const helpButton = document.getElementById('help-button');
     settingsButton.innerHTML = SettingsIcon;
     helpButton.innerHTML = QuestionMarkCircleIcon;
     settingsButton.addEventListener('click', showSettingsModal);
@@ -864,76 +547,83 @@ async function startFullApp(session = null) {
     
     // Add the global click handler to the body to catch all dynamic actions
     document.body.addEventListener('click', handleGlobalClick);
+
+    const mainContent = document.getElementById('main-content');
+    mainContent.innerHTML = '';
+    const chatContainer = createChatInterface(handleSendMessage, showCameraView, showSystemError, handleNewChat);
+    mainContent.appendChild(chatContainer);
+}
+
+
+/**
+ * Initializes all services for an authenticated session.
+ */
+async function startAuthenticatedSession(session) {
+    // 1. Render the main application structure
+    renderMainApp();
     
-    let settings = getSettings();
-    const savedWizardState = sessionStorage.getItem('wizardState');
+    // 2. Set Google token and initialize Google services
+    googleProvider.setAuthToken(session.provider_token);
+    await googleProvider.loadGapiClient();
 
-    // **Cloud-first settings & session check**
-    if (settings.isSupabaseEnabled && supabaseService) {
-        if (session) { // A session was passed from the main() redirect handler
-            state.supabaseUser = session.user;
-            googleProvider.setAuthToken(session.provider_token);
-            const cloudSettings = await supabaseService.getUserSettings();
-            if (cloudSettings && cloudSettings.geminiApiKey) {
-                // Deep merge settings
-                Object.assign(settings, cloudSettings);
-                saveSettings(settings);
+    // 3. Get user profile and role from Supabase
+    try {
+        state.userProfile = await supabaseService.getCurrentUserProfile();
+    } catch (profileError) {
+        console.error("Critical error fetching user profile:", profileError);
+        showSystemError("Не удалось загрузить ваш профиль. Попробуйте перезагрузить страницу.");
+        return;
+    }
+
+    // 4. Fetch cloud settings and merge with local
+    const cloudSettings = await supabaseService.getUserSettings();
+    if (cloudSettings) {
+        state.settings = { ...getSettings(), ...cloudSettings };
+        saveSettings(state.settings); // Persist merged settings locally
+    }
+    supabaseService.setSettings(state.settings);
+    googleProvider.setTimezone(state.settings.timezone);
+    
+    // 5. Fetch shared resource pools (keys and proxies)
+    try {
+        state.keyPool = await supabaseService.getSharedGeminiKeys();
+        state.proxyPool = await supabaseService.getSharedProxies();
+    } catch (poolError) {
+        console.error("Failed to load shared resource pools:", poolError);
+        showSystemError("Не удалось загрузить конфигурацию. Некоторые функции могут быть недоступны.");
+    }
+    
+    // 6. Configure UI based on user role
+    const isAdminOrOwner = state.userProfile.role === 'admin' || state.userProfile.role === 'owner';
+    if (!isAdminOrOwner) {
+        const settingsBtn = document.getElementById('settings-button');
+        const helpBtn = document.getElementById('help-button');
+        if(settingsBtn) settingsBtn.style.display = 'none';
+        if(helpBtn) helpBtn.style.display = 'none';
+    }
+
+    // 7. Finalize UI and start background services
+    renderAuth(state.userProfile);
+    await startNewChatSession();
+    startAutoSync();
+    setupEmailPolling();
+}
+
+
+function showWelcomeScreen() {
+    appContainer.innerHTML = '';
+    const welcome = createWelcomeScreen({
+        onLogin: async () => {
+            try {
+                await supabaseService.signInWithGoogle();
+            } catch (error) {
+                console.error("Google Sign-In failed:", error);
+                alert(`Не удалось войти через Google: ${error.message}`);
             }
-        }
-    } else {
-        const directToken = getGoogleToken();
-        if (directToken) {
-            googleProvider.setAuthToken(directToken);
-        }
-    }
-    state.settings = settings; // Update global state
-    if(supabaseService) supabaseService.setSettings(state.settings);
-
-    // CRITICAL FIX: The wizard must be shown if EITHER the API key is missing
-    // OR if there is a saved wizard state from an interrupted session (e.g., OAuth redirect).
-    const shouldShowWizard = !settings.geminiApiKey || savedWizardState;
-
-    if (shouldShowWizard) {
-        wizardContainer.innerHTML = '';
-        const wizard = createSetupWizard({
-            onComplete: async (newSettings) => {
-                state.settings = newSettings;
-                saveSettings(newSettings);
-                wizardContainer.innerHTML = '';
-                await initializeAppServices();
-                renderMainContent();
-            },
-            googleProvider,
-            supabaseService,
-            googleClientId: GOOGLE_CLIENT_ID,
-            resumeState: savedWizardState ? JSON.parse(savedWizardState) : null
-        });
-        wizardContainer.appendChild(wizard);
-    } else {
-        // All settings are present. Initialize services and render the main app.
-        await initializeAppServices();
-
-        const isSchemaOk = await checkDatabaseSchema();
-        if (!isSchemaOk) {
-            const { element, updateState } = createMigrationModal();
-            migrationModal = { updateState };
-            wizardContainer.innerHTML = '';
-            wizardContainer.appendChild(element);
-            updateState('required');
-
-            element.addEventListener('click', async (e) => {
-                const action = e.target.closest('[data-action]')?.dataset.action;
-                if (action === 'migrate' || action === 'retry') {
-                    await runMigration();
-                } else if (action === 'open-wizard') {
-                    element.remove();
-                    relaunchWizard(); // Relaunch the main wizard to configure the DB worker
-                }
-            });
-        } else {
-            renderMainContent();
-        }
-    }
+        },
+        onShowAbout: showAboutModal,
+    });
+    appContainer.appendChild(welcome);
 }
 
 /**
@@ -973,48 +663,39 @@ function waitForExternalLibs() {
  * Main entry point. Decides whether to handle an auth callback or start the app normally.
  */
 async function main() {
-    // This is the primary logic to handle OAuth redirects on static pages.
-    const isAuthCallback = window.location.hash.includes('access_token');
-    let session = null;
+    appContainer = document.getElementById('app-container');
+    modalContainer = document.getElementById('modal-container');
+    cameraViewContainer = document.getElementById('camera-view-container');
 
-    if (isAuthCallback) {
-        // If it's a Supabase callback, Supabase's JS library handles the hash automatically.
-        // We just need to wait for the SIGNED_IN event to get the session.
-        if (supabaseService) {
-            ({ data: { session } } = await supabaseService.client.auth.getSession());
-            // If the session is not immediately available, we listen for the auth state change.
-            if (!session) {
-                session = await new Promise((resolve) => {
-                    const { data: { subscription } } = supabaseService.onAuthStateChange((event, session) => {
-                        if (event === 'SIGNED_IN' && session) {
-                            subscription.unsubscribe();
-                            resolve(session);
-                        }
-                    });
+    let session = null;
+    if (window.location.hash.includes('access_token')) {
+        // This is an OAuth redirect. Supabase JS client handles the hash automatically.
+        // We wait for the session to be available.
+        ({ data: { session } } = await supabaseService.client.auth.getSession());
+        if (!session) {
+            session = await new Promise((resolve) => {
+                const { data: { subscription } } = supabaseService.onAuthStateChange((event, session) => {
+                    if (event === 'SIGNED_IN' && session) {
+                        subscription.unsubscribe();
+                        resolve(session);
+                    }
                 });
-            }
-        } else {
-            // Handle direct Google auth.
-            const params = new URLSearchParams(window.location.hash.substring(1));
-            const accessToken = params.get('access_token');
-            if (accessToken) {
-                saveGoogleToken(accessToken);
-            }
+            });
         }
-        // CRITICAL: Clean the URL to prevent re-processing the hash on subsequent reloads.
+        // Clean the URL hash
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
     } else {
         // On a normal page load, just check if a session already exists.
-        if (supabaseService) {
-            const { data } = await supabaseService.client.auth.getSession();
-            session = data.session;
-        }
+        const { data } = await supabaseService.client.auth.getSession();
+        session = data.session;
     }
 
-    // Now, with any existing or newly acquired session, start the app.
-    await startFullApp(session);
+    if (session) {
+        await startAuthenticatedSession(session);
+    } else {
+        showWelcomeScreen();
+    }
 }
-
 
 // Wait for external libraries to load, then run the main application logic.
 waitForExternalLibs()

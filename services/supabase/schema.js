@@ -7,12 +7,6 @@ DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
         CREATE TYPE public.user_role AS ENUM ('owner', 'admin', 'manager', 'user');
-    ELSE
-        -- Добавляем значения, если их нет. Это безопасно для повторного запуска.
-        ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'owner';
-        ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'admin';
-        ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'manager';
-        ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'user';
     END IF;
 END$$;
 
@@ -84,43 +78,33 @@ CREATE TABLE IF NOT EXISTS public.action_stats (
 );
 COMMENT ON TABLE public.action_stats IS 'Статистика вызова функций Gemini.';
 
--- Таблица для хранения прокси-серверов
-CREATE TABLE IF NOT EXISTS public.proxies (
+-- NEW: Таблица для ОБЩИХ прокси-серверов
+CREATE TABLE IF NOT EXISTS public.shared_proxies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    url TEXT NOT NULL,
-    is_active BOOLEAN DEFAULT FALSE,
+    url TEXT NOT NULL UNIQUE,
+    is_active BOOLEAN DEFAULT true,
     priority INTEGER DEFAULT 0,
     geolocation TEXT,
     last_checked_at TIMESTAMPTZ,
     last_test_status TEXT,
     last_test_speed INTEGER,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    UNIQUE (user_id, url)
+    created_at TIMESTAMPTZ DEFAULT now()
 );
-COMMENT ON TABLE public.proxies IS 'Список прокси-серверов пользователя для доступа к Gemini.';
+COMMENT ON TABLE public.shared_proxies IS 'Общий пул прокси-серверов, управляемый администраторами.';
 
--- Включаем Row Level Security на всех общих таблицах
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.chat_history ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.chat_memory ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.action_stats ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.proxies ENABLE ROW LEVEL SECURITY;
+-- NEW: Таблица для ОБЩИХ ключей Gemini API
+CREATE TABLE IF NOT EXISTS public.shared_gemini_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    api_key TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    priority INTEGER DEFAULT 0,
+    description TEXT,
+    last_used_at TIMESTAMPTZ,
+    limit_reached_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+COMMENT ON TABLE public.shared_gemini_keys IS 'Общий пул ключей Gemini API, управляемый администраторами.';
 
--- Удаляем старые политики, чтобы избежать конфликтов
-DROP POLICY IF EXISTS "Пользователи могут видеть все профили." ON public.profiles;
-DROP POLICY IF EXISTS "Пользователи могут обновлять свой профиль." ON public.profiles;
-DROP POLICY IF EXISTS "Администраторы могут делать все." ON public.profiles;
-DROP POLICY IF EXISTS "Пользователи могут управлять своими сессиями и историей." ON public.sessions;
-DROP POLICY IF EXISTS "Пользователи могут управлять своей историей чата." ON public.chat_history;
-DROP POLICY IF EXISTS "Администраторы могут просматривать все сессии и историю." ON public.sessions;
-DROP POLICY IF EXISTS "Администраторы могут просматривать всю историю чата." ON public.chat_history;
-DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.chat_memory;
-DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.user_settings;
-DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.action_stats;
-DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.proxies;
 
 -- Функция-триггер для автоматического обновления поля 'updated_at'
 CREATE OR REPLACE FUNCTION public.handle_updated_at() 
@@ -159,21 +143,49 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
 
+-- Включаем RLS и создаем политики
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_memory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.action_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.shared_proxies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.shared_gemini_keys ENABLE ROW LEVEL SECURITY;
+
+-- Удаляем старые политики, чтобы избежать конфликтов
+DROP POLICY IF EXISTS "Enable all access for users" ON public.profiles;
+DROP POLICY IF EXISTS "Enable all access for users" ON public.sessions;
+DROP POLICY IF EXISTS "Enable all access for users" ON public.chat_history;
+DROP POLICY IF EXISTS "Enable read access for admins" ON public.sessions;
+DROP POLICY IF EXISTS "Enable read access for admins" ON public.chat_history;
+DROP POLICY IF EXISTS "Enable all access for users" ON public.chat_memory;
+DROP POLICY IF EXISTS "Enable all access for users" ON public.user_settings;
+DROP POLICY IF EXISTS "Enable all access for users" ON public.action_stats;
+DROP POLICY IF EXISTS "Enable read for authenticated users" ON public.shared_proxies;
+DROP POLICY IF EXISTS "Enable management for admins" ON public.shared_proxies;
+DROP POLICY IF EXISTS "Enable read for authenticated users" ON public.shared_gemini_keys;
+DROP POLICY IF EXISTS "Enable management for admins" ON public.shared_gemini_keys;
+
 -- Политики для профилей
-CREATE POLICY "Пользователи могут видеть все профили." ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "Пользователи могут обновлять свой профиль." ON public.profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Enable all access for users" ON public.profiles FOR ALL USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
 -- Политики для сессий и истории чата
-CREATE POLICY "Пользователи могут управлять своими сессиями и историей." ON public.sessions FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "Пользователи могут управлять своей историей чата." ON public.chat_history FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "Администраторы могут просматривать все сессии и историю." ON public.sessions FOR SELECT USING (public.is_admin());
-CREATE POLICY "Администраторы могут просматривать всю историю чата." ON public.chat_history FOR SELECT USING (public.is_admin());
+CREATE POLICY "Enable all access for users" ON public.sessions FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Enable all access for users" ON public.chat_history FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Enable read access for admins" ON public.sessions FOR SELECT USING (public.is_admin());
+CREATE POLICY "Enable read access for admins" ON public.chat_history FOR SELECT USING (public.is_admin());
 
--- Общие политики
-CREATE POLICY "Enable all access for authenticated users" ON public.chat_memory FOR ALL TO authenticated USING (auth.uid() = user_id);
-CREATE POLICY "Enable all access for authenticated users" ON public.user_settings FOR ALL TO authenticated USING (auth.uid() = user_id);
-CREATE POLICY "Enable all access for authenticated users" ON public.action_stats FOR ALL TO authenticated USING (auth.uid() = user_id);
-CREATE POLICY "Enable all access for authenticated users" ON public.proxies FOR ALL TO authenticated USING (auth.uid() = user_id);
+-- Общие политики для пользовательских данных
+CREATE POLICY "Enable all access for users" ON public.chat_memory FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Enable all access for users" ON public.user_settings FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Enable all access for users" ON public.action_stats FOR ALL USING (auth.uid() = user_id);
+
+-- Политики для ОБЩИХ таблиц
+CREATE POLICY "Enable read for authenticated users" ON public.shared_proxies FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Enable management for admins" ON public.shared_proxies FOR ALL USING (public.is_admin());
+CREATE POLICY "Enable read for authenticated users" ON public.shared_gemini_keys FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Enable management for admins" ON public.shared_gemini_keys FOR ALL USING (public.is_admin());
 
 -- RPC функция для получения или создания профиля пользователя.
 CREATE OR REPLACE FUNCTION public.get_or_create_profile()
@@ -343,18 +355,22 @@ export const DB_SCHEMAS = {
             { name: 'updated_at', type: 'TIMESTAMPTZ', recommended: true, description: 'Время последнего сохранения настроек.' },
         ]
     },
-     proxies: {
-        label: 'Прокси-серверы', icon: 'GlobeIcon', tableName: 'proxies', isEditable: false,
+     shared_proxies: {
+        label: 'Общие прокси', icon: 'GlobeIcon', tableName: 'shared_proxies', isEditable: false,
         fields: [
             { name: 'id', type: 'UUID PRIMARY KEY', recommended: true, description: 'Уникальный идентификатор прокси-сервера.' },
-            { name: 'user_id', type: 'UUID', recommended: true, description: 'Идентификатор пользователя-владельца прокси.' },
             { name: 'url', type: 'TEXT', recommended: true, description: 'Полный URL прокси-сервера.' },
             { name: 'is_active', type: 'BOOLEAN', recommended: true, description: 'Включен ли данный прокси для использования.' },
             { name: 'priority', type: 'INTEGER', recommended: true, description: 'Приоритет использования (чем меньше, тем выше).' },
-            { name: 'geolocation', type: 'TEXT', recommended: true, description: 'Страна расположения сервера.' },
-            { name: 'last_checked_at', type: 'TIMESTAMPTZ', recommended: true, description: 'Время последней проверки работоспособности.' },
-            { name: 'last_test_status', type: 'TEXT', recommended: true, description: 'Результат последнего теста ("ok" или "error").' },
-            { name: 'last_test_speed', type: 'INTEGER', recommended: true, description: 'Скорость ответа в миллисекундах по результатам последнего теста.' },
+        ]
+    },
+    shared_gemini_keys: {
+        label: 'Общие ключи Gemini', icon: 'CodeIcon', tableName: 'shared_gemini_keys', isEditable: false,
+        fields: [
+            { name: 'id', type: 'UUID PRIMARY KEY', recommended: true, description: 'Уникальный идентификатор ключа.' },
+            { name: 'api_key', type: 'TEXT', recommended: true, description: 'Зашифрованный ключ Gemini API.' },
+            { name: 'is_active', type: 'BOOLEAN', recommended: true, description: 'Активен ли ключ.' },
+            { name: 'priority', type: 'INTEGER', recommended: true, description: 'Приоритет использования.' },
         ]
     },
      sessions: {
@@ -489,7 +505,7 @@ export function generateCreateTableSql(schema, selectedFields) {
     let fieldsSql, baseColumns, uniqueConstraint, closingColumns;
 
     if (isStandardServiceTable) {
-        fieldsSql = selectedFields.map(field => `    ${field.name} ${field.type}`).join(',\n');
+        fieldsSql = selectedFields.map(field => `    "${field.name}" ${field.type}`).join(',\n');
         baseColumns = `
             id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
             user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -503,7 +519,7 @@ export function generateCreateTableSql(schema, selectedFields) {
         `;
     } else {
         // For special tables like 'profiles', the fields define the whole structure.
-        fieldsSql = selectedFields.map(field => `    ${field.name} ${field.type}`).join(',\n');
+        fieldsSql = selectedFields.map(field => `    "${field.name}" ${field.type}`).join(',\n');
         baseColumns = '';
         closingColumns = '';
     }

@@ -29,21 +29,9 @@
 </script>
 </head>
 <body class="font-sans bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-100 h-screen overflow-hidden flex flex-col">
-    <div id="app" class="flex flex-col h-full">
-        <header class="flex justify-between items-center p-2 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0 bg-white dark:bg-slate-800 shadow-sm">
-            <a href="https://gakuzi.github.io/secretary-plus/" target="_blank" rel="noopener noreferrer" class="flex items-center gap-3" aria-label="Домашняя страница Секретарь+">
-                <div id="header-logo-container" class="w-10 h-10"></div>
-                <h1 class="text-xl font-bold text-slate-800 dark:text-slate-100">Секретарь+</h1>
-            </a>
-            <div class="flex items-center gap-2">
-                <div id="auth-container" class="relative"></div>
-                <button id="help-button" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Помощь"></button>
-                <button id="settings-button" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Настройки"></button>
-            </div>
-        </header>
-        <main id="main-content" class="flex-1 overflow-hidden relative"></main>
+    <div id="app-container" class="h-full">
+        <!-- This container will be filled by either the Welcome Screen or the main App -->
     </div>
-    <div id="setup-wizard-container"></div>
     <div id="modal-container"></div>
     <div id="camera-view-container" class="hidden"></div>
     <script type="module" src="./index.js"></script>

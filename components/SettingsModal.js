@@ -1,9 +1,8 @@
-import { getSettings, saveSettings } from '../utils/storage.js';
 import * as Icons from './icons/Icons.js';
 import { DB_SCHEMAS } from '../services/supabase/schema.js';
 
 
-export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizard, onLaunchProxyManager, onLaunchDataManager }) {
+export function createSettingsModal({ settings, onClose, onSave }) {
     const modalElement = document.createElement('div');
     modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
     
@@ -19,7 +18,7 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
                         <span>${schema.label}</span>
                     </label>
                     <label class="toggle-switch">
-                        <input type="checkbox" id="service-toggle-${key}" data-service-key="${key}" ${settings.enabledServices[key] ? 'checked' : ''} ${!settings.isSupabaseEnabled ? 'disabled' : ''}>
+                        <input type="checkbox" id="service-toggle-${key}" data-service-key="${key}" ${settings.enabledServices[key] ? 'checked' : ''}>
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
@@ -36,66 +35,36 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
                 <main class="flex-1 flex flex-col sm:flex-row overflow-hidden bg-slate-50 dark:bg-slate-900/70">
                     <aside class="w-full sm:w-56 border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-slate-700 p-2 sm:p-4 flex-shrink-0 bg-white dark:bg-slate-800">
                          <nav class="flex flex-row sm:flex-col sm:space-y-2 w-full justify-around">
-                            <a href="#connections" class="settings-tab-button text-center sm:text-left active" data-tab="connections">Подключения</a>
-                            <a href="#accounts" class="settings-tab-button text-center sm:text-left" data-tab="accounts">Учетные записи</a>
+                            <a href="#general" class="settings-tab-button text-center sm:text-left active" data-tab="general">Общие</a>
                             <a href="#services" class="settings-tab-button text-center sm:text-left" data-tab="services">Службы</a>
-                            <a href="#database" class="settings-tab-button text-center sm:text-left" data-tab="database">База данных</a>
-                            <a href="#about" class="settings-tab-button text-center sm:text-left" data-tab="about">О приложении</a>
                         </nav>
                     </aside>
 
                     <div class="flex-1 p-4 sm:p-6 overflow-y-auto" id="settings-tabs-content">
-                        <!-- Connections Tab -->
-                        <div id="tab-connections" class="settings-tab-content space-y-6">
+                        <!-- General Tab -->
+                        <div id="tab-general" class="settings-tab-content space-y-6">
                             <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-3">API Ключи</h3>
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-3">Уведомления и Синхронизация</h3>
                                 <div class="space-y-4">
-                                    <div>
-                                        <label for="geminiApiKey" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Gemini API Key</label>
-                                        <input type="password" id="geminiApiKey" class="mt-1 block w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" value="${settings.geminiApiKey || ''}">
-                                        <p class="mt-1 text-xs text-slate-500">Ключ для доступа к моделям Gemini. <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">Получить ключ</a>.</p>
+                                    <div class="flex items-center justify-between">
+                                        <label for="email-polling-toggle" class="font-medium text-slate-700 dark:text-slate-300">Уведомлять о новых письмах</label>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="email-polling-toggle" ${settings.enableEmailPolling ? 'checked' : ''}>
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                     <div class="flex items-center justify-between">
+                                        <label for="auto-sync-toggle" class="font-medium text-slate-700 dark:text-slate-300">Фоновая синхронизация</label>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="auto-sync-toggle" ${settings.enableAutoSync ? 'checked' : ''}>
+                                            <span class="toggle-slider"></span>
+                                        </label>
                                     </div>
                                 </div>
                             </div>
-                            <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-3">Прокси</h3>
-                                <div class="flex items-center justify-between py-2">
-                                    <label for="use-proxy-toggle" class="font-medium text-slate-700 dark:text-slate-300">Использовать прокси-серверы</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="use-proxy-toggle" ${settings.useProxy ? 'checked' : ''} ${!settings.isSupabaseEnabled ? 'disabled' : ''}>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </div>
-                                <p class="text-xs text-slate-500 mt-1">Необходимо для обхода региональных ограничений. Требует включенного режима Supabase.</p>
-                                <button data-action="manage-proxies" class="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md font-semibold text-sm transition-colors ${!settings.isSupabaseEnabled ? 'opacity-50 cursor-not-allowed' : ''}" ${!settings.isSupabaseEnabled ? 'disabled' : ''}>
-                                    ${Icons.SettingsIcon} <span>Управление прокси</span>
-                                </button>
-                            </div>
-                        </div>
-
-                         <!-- Accounts Tab -->
-                        <div id="tab-accounts" class="settings-tab-content hidden space-y-6">
-                            <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Подключенные аккаунты</h3>
-                                <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Здесь будут отображаться все ваши подключенные учетные записи. Пока поддерживается только один аккаунт Google.</p>
-                                <!-- Placeholder for account list -->
-                            </div>
                              <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Добавить новый аккаунт</h3>
-                                 <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <button class="p-4 border rounded-lg flex items-center gap-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700/50 dark:hover:bg-slate-700" disabled>
-                                        ${Icons.GoogleIcon} <span class="font-semibold">Google</span> <span class="text-xs ml-auto text-green-500">(Подключен)</span>
-                                    </button>
-                                     <button class="p-4 border rounded-lg flex items-center gap-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700/50 dark:hover:bg-slate-700 disabled:opacity-50" disabled>
-                                        <span class="w-6 h-6">${Icons.CodeIcon}</span> <span class="font-semibold">Microsoft</span> <span class="text-xs ml-auto">(Скоро)</span>
-                                    </button>
-                                     <button class="p-4 border rounded-lg flex items-center gap-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700/50 dark:hover:bg-slate-700 disabled:opacity-50" disabled>
-                                        <span class="w-6 h-6">${Icons.CodeIcon}</span> <span class="font-semibold">Apple</span> <span class="text-xs ml-auto">(Скоро)</span>
-                                    </button>
-                                     <button class="p-4 border rounded-lg flex items-center gap-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700/50 dark:hover:bg-slate-700 disabled:opacity-50" disabled>
-                                        <span class="w-6 h-6">${Icons.CodeIcon}</span> <span class="font-semibold">Яндекс</span> <span class="text-xs ml-auto">(Скоро)</span>
-                                    </button>
-                                </div>
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-3">Администрирование</h3>
+                                <p class="text-xs text-slate-500 mt-1 mb-2">Управление общим пулом ключей API и прокси-серверов будет доступно здесь в будущих версиях.</p>
                             </div>
                         </div>
 
@@ -107,31 +76,6 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
                                 <div class="divide-y divide-slate-200 dark:divide-slate-700">${servicesHtml}</div>
                             </div>
                         </div>
-
-                        <!-- Database Tab -->
-                        <div id="tab-database" class="settings-tab-content hidden space-y-6">
-                             <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Центр управления данными</h3>
-                                <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Просмотр кэшированных данных, статусы, ручной запуск синхронизации и управление схемой базы данных.</p>
-                                <button data-action="launch-data-manager" class="w-full px-4 py-2 bg-slate-500 hover:bg-slate-600 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2 ${!settings.isSupabaseEnabled ? 'opacity-50 cursor-not-allowed' : ''}" ${!settings.isSupabaseEnabled ? 'disabled' : ''}>
-                                    ${Icons.DatabaseIcon}
-                                    <span>Открыть Центр управления</span>
-                                </button>
-                             </div>
-                             <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Управляющий воркер</h3>
-                                <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Для автоматического обновления схемы базы данных используется **Управляющий воркер**. Если вы столкнулись с ошибками, запустите мастер для его настройки или проверки.</p>
-                                <button data-action="launch-db-wizard" class="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold text-sm flex items-center justify-center gap-2">
-                                    ${Icons.WandIcon}
-                                    <span>Запустить мастер настройки воркера</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- About Tab -->
-                        <div id="tab-about" class="settings-tab-content hidden prose prose-invert max-w-none text-slate-700 dark:text-slate-300">
-                            <!-- App info will be injected here -->
-                        </div>
                     </div>
                 </main>
 
@@ -140,37 +84,6 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
                 </footer>
             </div>
         `;
-    };
-
-    const loadAppInfo = async () => {
-        try {
-            const response = await fetch('./app-info.json');
-            const info = await response.json();
-            const aboutTab = modalElement.querySelector('#tab-about');
-            if (aboutTab) {
-                const changelogHtml = info.changelog.map(entry => `
-                    <div class="mt-4">
-                        <h4 class="font-semibold text-slate-900 dark:text-slate-100">Версия ${entry.version} <span class="text-sm font-normal text-slate-500 dark:text-slate-400">- ${entry.date}</span></h4>
-                        <ul class="list-disc list-inside mt-1 text-sm">
-                            ${entry.changes.map(change => `<li>${change}</li>`).join('')}
-                        </ul>
-                    </div>
-                `).join('');
-
-                aboutTab.innerHTML = `
-                    <h3 class="text-2xl font-bold text-slate-900 dark:text-white">Секретарь+</h3>
-                    <p><strong>Версия:</strong> ${info.version}</p>
-                    <p><strong>Автор:</strong> ${info.author}</p>
-                    <p><strong>Контакт:</strong> <a href="${info.contact}" target="_blank" class="text-blue-500 dark:text-blue-400 hover:underline">Telegram</a></p>
-                    <h3 class="text-xl font-bold mt-6 text-slate-900 dark:text-white">История изменений</h3>
-                    ${changelogHtml}
-                `;
-            }
-        } catch (error) {
-            console.error('Failed to load app info:', error);
-             const aboutTab = modalElement.querySelector('#tab-about');
-             if(aboutTab) aboutTab.innerHTML = '<p>Не удалось загрузить информацию о приложении.</p>';
-        }
     };
     
     const handleAction = async (e) => {
@@ -184,8 +97,8 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
                 break;
             case 'save': {
                 const newSettings = { ...settings };
-                newSettings.geminiApiKey = modalElement.querySelector('#geminiApiKey').value.trim();
-                newSettings.useProxy = modalElement.querySelector('#use-proxy-toggle').checked;
+                newSettings.enableEmailPolling = modalElement.querySelector('#email-polling-toggle').checked;
+                newSettings.enableAutoSync = modalElement.querySelector('#auto-sync-toggle').checked;
                 // Collect service toggles
                 modalElement.querySelectorAll('[data-service-key]').forEach(toggle => {
                     newSettings.enabledServices[toggle.dataset.serviceKey] = toggle.checked;
@@ -193,15 +106,6 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
                 onSave(newSettings);
                 break;
             }
-            case 'manage-proxies':
-                onLaunchProxyManager();
-                break;
-            case 'launch-db-wizard':
-                onLaunchDbWizard();
-                break;
-            case 'launch-data-manager':
-                onLaunchDataManager();
-                break;
         }
     };
 
@@ -226,18 +130,11 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
     });
 
     render();
-    loadAppInfo();
     
-    // Activate initial tab if provided, otherwise default to connections
-    const initialTab = 'connections';
-    modalElement.querySelectorAll('.settings-tab-button').forEach(btn => btn.classList.remove('active'));
-    modalElement.querySelectorAll('.settings-tab-content').forEach(content => content.classList.add('hidden'));
-
-    modalElement.querySelectorAll(`.settings-tab-button[data-tab="${initialTab}"]`).forEach(btn => btn.classList.add('active'));
-    const initialTabContent = modalElement.querySelector(`#tab-${initialTab}`);
-    if (initialTabContent) {
-        initialTabContent.classList.remove('hidden');
-    }
+    // Activate initial tab
+    const initialTab = 'general';
+    modalElement.querySelector(`.settings-tab-button[data-tab="${initialTab}"]`)?.classList.add('active');
+    modalElement.querySelector(`#tab-${initialTab}`)?.classList.remove('hidden');
 
     return modalElement;
 }

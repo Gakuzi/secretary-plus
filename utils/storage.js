@@ -22,13 +22,6 @@ const buildDefaultFieldConfig = () => {
 
 
 const defaultSettings = {
-    geminiApiKey: '',
-    googleClientId: '', // For direct Google auth fallback
-    isSupabaseEnabled: true, // Master switch for Supabase
-    supabaseUrl: '',
-    supabaseAnonKey: '',
-    managementWorkerUrl: '', // URL for the DB management worker
-    adminSecretToken: '', // Token for the DB management function
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     enableEmailPolling: true, // For proactive email notifications
     enableAutoSync: true, // For background data synchronization
@@ -39,8 +32,6 @@ const defaultSettings = {
         files: 'google',
         notes: 'supabase',
     },
-    useProxy: false,
-    customProxyPrompt: '', // For user-editable proxy search prompt
     // New setting to control which services are active
     enabledServices: {
         calendar: true,
@@ -83,19 +74,10 @@ export function saveSettings(settings) {
     try {
         // Create a clean settings object to save, removing legacy fields
         const settingsToSave = {
-            geminiApiKey: settings.geminiApiKey,
-            googleClientId: settings.googleClientId,
-            isSupabaseEnabled: settings.isSupabaseEnabled,
-            supabaseUrl: settings.supabaseUrl,
-            supabaseAnonKey: settings.supabaseAnonKey,
-            managementWorkerUrl: settings.managementWorkerUrl,
-            adminSecretToken: settings.adminSecretToken,
             timezone: settings.timezone,
             enableEmailPolling: settings.enableEmailPolling,
             enableAutoSync: settings.enableAutoSync,
             serviceMap: settings.serviceMap,
-            useProxy: settings.useProxy,
-            customProxyPrompt: settings.customProxyPrompt,
             enabledServices: settings.enabledServices, // Save the new setting
             serviceFieldConfig: settings.serviceFieldConfig, // Save the new field config
         };

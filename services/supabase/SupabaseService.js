@@ -345,64 +345,21 @@ export class SupabaseService {
         const { error } = await this.client.rpc('increment_stat', { fn_name: functionName });
         if(error) console.error("Failed to increment stat:", error.message);
     }
+
+    // --- SHARED Resource Pools ---
+    async getSharedGeminiKeys() {
+        const { data, error } = await this.client.from('shared_gemini_keys').select('api_key').eq('is_active', true).order('priority');
+        if (error) throw error;
+        return data;
+    }
     
-    // --- Proxy Management ---
-    async getProxies() {
-        const { data, error } = await this.client.from('proxies').select('*').order('created_at', { ascending: false });
+    async getSharedProxies() {
+        const { data, error } = await this.client.from('shared_proxies').select('url').eq('is_active', true).order('priority');
         if (error) throw error;
         return data;
-    }
-    
-    async getActiveProxies() {
-        const { data, error } = await this.client.from('proxies').select('*').eq('is_active', true).order('priority');
-        if (error) throw error;
-        return data;
-    }
-
-    async addProxy(proxy) {
-        const { data, error } = await this.client.from('proxies').insert(proxy).select().single();
-        if (error) throw error;
-        return data;
-    }
-
-    async updateProxy(id, updates) {
-        const { data, error } = await this.client.from('proxies').update(updates).eq('id', id).select().single();
-        if (error) throw error;
-        return data;
-    }
-
-    async deleteProxy(id) {
-        const { error } = await this.client.from('proxies').delete().eq('id', id);
-        if (error) throw error;
     }
     
     // --- DB Management ---
-    async executeSqlViaFunction(functionUrl, adminToken, sql) {
-        if (!functionUrl || !adminToken) {
-            throw new Error("Management Worker URL or Admin Token is not configured.");
-        }
-
-        const response = await fetch(functionUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.anonKey}`
-            },
-            body: JSON.stringify({
-                sql: sql,
-                admin_token: adminToken,
-            }),
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || `Server responded with status ${response.status}`);
-        }
-
-        return result;
-    }
-
     async testConnection() {
         const { error } = await this.client.from('profiles').select('id').limit(1);
         if (error) throw error;
@@ -411,21 +368,5 @@ export class SupabaseService {
 
     async getSampleData(tableName) {
         return this.client.from(tableName).select('*').limit(10).order('created_at', { ascending: false });
-    }
-    
-    async getExistingTables(functionUrl, adminToken) {
-        const sql = "SELECT tablename FROM pg_tables WHERE schemaname = 'public';";
-        const result = await this.executeSqlViaFunction(functionUrl, adminToken, sql);
-        return result.result.map(row => row.tablename);
-    }
-
-    async getTableSchema(functionUrl, adminToken, tableName) {
-         const sql = `
-            SELECT column_name, data_type 
-            FROM information_schema.columns 
-            WHERE table_schema = 'public' AND table_name = '${tableName}';
-        `;
-        const result = await this.executeSqlViaFunction(functionUrl, adminToken, sql);
-        return result.result;
     }
 }
