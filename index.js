@@ -638,7 +638,27 @@ async function startAuthenticatedSession(session) {
         state.proxyPool = await supabaseService.getSharedProxies();
     } catch (poolError) {
         console.error("Failed to load shared resource pools:", poolError);
-        showSystemError("Не удалось загрузить конфигурацию. Некоторые функции могут быть недоступны.");
+
+        const userRole = state.userProfile?.role;
+        const isAdminOrOwner = userRole === 'admin' || userRole === 'owner';
+        const isSchemaError = poolError.message.includes('relation') && poolError.message.includes('does not exist');
+
+        if (isAdminOrOwner && isSchemaError) {
+            // The configuration failed because the tables don't exist.
+            // For an admin, this triggers the actionable migration modal instead of a passive error message.
+            const { element: migrationModal } = createMigrationModal({
+                supabaseService,
+                onOpenSettings: () => showSettingsModal(),
+            });
+            globalModalContainer.innerHTML = '';
+            globalModalContainer.appendChild(migrationModal);
+            // Stop further execution as the app is not in a usable state until migration.
+            state.isLoading = false;
+            return;
+        } else {
+            // For non-admins, or for other types of errors (e.g., network), show the generic message.
+            showSystemError("Не удалось загрузить конфигурацию. Некоторые функции могут быть недоступны.");
+        }
     }
     
     // 7. Configure UI based on user role
