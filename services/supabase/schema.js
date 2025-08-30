@@ -540,3 +540,62 @@ export const DB_SCHEMAS = {
         ]
     }
 };
+
+/**
+ * Generates a complete CREATE TABLE SQL statement for a given service schema.
+ * Includes table creation, comments, RLS policies, and triggers.
+ * @param {object} schema The schema object from DB_SCHEMAS.
+ * @param {Array<object>} fieldsToCreate An array of field objects to include in the table.
+ * @returns {string} The complete SQL statement for creating the table.
+ */
+export function generateCreateTableSql(schema, fieldsToCreate) {
+    const tableName = schema.tableName;
+    
+    // Use only the fields passed to the function
+    const columns = fieldsToCreate.map(field => `    "${field.name}" ${field.type}`);
+
+    // Add common columns that are not part of the dynamic fields list but are essential for every table.
+    const commonColumns = [
+        'id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY',
+        'user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE',
+        'created_at TIMESTAMPTZ DEFAULT now()',
+        'updated_at TIMESTAMPTZ DEFAULT now()'
+    ];
+    
+    const allColumns = [...commonColumns, ...columns];
+
+    // Add UNIQUE constraint for tables that have a source_id to prevent duplicates per user.
+    const hasSourceId = fieldsToCreate.some(f => f.name === 'source_id');
+    const uniqueConstraint = hasSourceId ? `    UNIQUE(user_id, source_id)` : '';
+    if(uniqueConstraint) {
+        allColumns.push(uniqueConstraint);
+    }
+    
+    const sql = `
+-- Create table for: ${schema.label}
+CREATE TABLE IF NOT EXISTS public.${tableName} (
+${allColumns.join(',\n')}
+);
+
+-- Comment on table
+COMMENT ON TABLE public.${tableName} IS 'Cached data for the ${schema.label} service.';
+
+-- Enable RLS
+ALTER TABLE public.${tableName} ENABLE ROW LEVEL SECURITY;
+
+-- Drop old policy to avoid errors on re-run
+DROP POLICY IF EXISTS "Enable all access for users" ON public.${tableName};
+
+-- Policy: Users can see and modify only their own data
+CREATE POLICY "Enable all access for users" ON public.${tableName}
+FOR ALL USING (auth.uid() = user_id);
+
+-- Trigger to automatically update 'updated_at'
+DROP TRIGGER IF EXISTS on_${tableName}_update ON public.${tableName};
+CREATE TRIGGER on_${tableName}_update
+BEFORE UPDATE ON public.${tableName}
+FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+`;
+
+    return sql;
+}

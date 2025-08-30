@@ -3,7 +3,7 @@ import { AppleServiceProvider } from './services/apple/AppleServiceProvider.js';
 import { SupabaseService } from './services/supabase/SupabaseService.js';
 import { callGemini } from './services/geminiService.js';
 import { getSettings, saveSettings, getSyncStatus, saveSyncStatus, clearGoogleToken } from './utils/storage.js';
-import { createSettingsModal } from './components/SettingsModal.js';
+import { createDataManagerModal } from './components/DataManagerModal.js';
 import { createProfileModal } from './components/ProfileModal.js';
 import { createHelpModal } from './components/HelpModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
@@ -91,7 +91,11 @@ function renderAuth(profile) {
         if (profile.avatar_url) {
             profileButton.innerHTML = `<img src="${profile.avatar_url}" alt="${profile.full_name}" class="w-8 h-8 rounded-full">`;
         } else {
-            profileButton.innerHTML = `<div class="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400">${UserIcon}</div>`;
+            // Fallback icon for users without an avatar
+            const fallbackIcon = document.createElement('div');
+            fallbackIcon.className = 'w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400';
+            fallbackIcon.innerHTML = UserIcon;
+            profileButton.appendChild(fallbackIcon);
         }
         
         profileButton.addEventListener('click', showProfileModal);
@@ -378,7 +382,7 @@ async function handleGlobalClick(event) {
         event.preventDefault();
         const action = clientActionButton.dataset.clientAction;
         if (action === 'open_settings') {
-            showSettingsModal();
+            showDataManagerModal();
         }
         return;
     }
@@ -409,28 +413,15 @@ async function handleGlobalClick(event) {
 
 // --- MODAL & WIZARD MANAGEMENT ---
 
-function showSettingsModal() {
+function showDataManagerModal() {
     modalContainer.innerHTML = '';
-    const modal = createSettingsModal({
+    const modal = createDataManagerModal({
+        supabaseService: supabaseService,
+        tasks: getEnabledSyncTasks(),
         settings: state.settings,
         onClose: () => { modalContainer.innerHTML = ''; },
-        onSave: async (newSettings) => {
-            state.settings = newSettings;
-            if (supabaseService) {
-                try {
-                    await supabaseService.saveUserSettings(newSettings);
-                    supabaseService.setSettings(newSettings); // Update service instance with new settings
-                } catch (error) {
-                    console.error("Failed to save settings to cloud:", error);
-                    showSystemError(`Не удалось сохранить настройки в облаке: ${error.message}`);
-                }
-            }
-            saveSettings(newSettings);
-            googleProvider.setTimezone(newSettings.timezone);
-            if(newSettings.enableAutoSync) startAutoSync(); else stopAutoSync();
-            if(newSettings.enableEmailPolling) setupEmailPolling(); else stopEmailPolling();
-            modalContainer.innerHTML = '';
-        },
+        onRunSingleSync: runSingleSync,
+        onRunAllSyncs: runAllSyncs,
     });
     modalContainer.appendChild(modal);
 }
@@ -447,11 +438,8 @@ async function showProfileModal() {
         const modal = createProfileModal({
             currentUserProfile: state.userProfile,
             supabaseService: supabaseService,
-            syncTasks: getEnabledSyncTasks(),
             onClose: () => { modalContainer.innerHTML = ''; },
             onLogout: handleLogout,
-            onRunSingleSync: runSingleSync,
-            onRunAllSyncs: runAllSyncs,
         });
         modalContainer.appendChild(modal);
 
@@ -530,13 +518,15 @@ function renderMainApp() {
         <div id="app" class="flex flex-col h-full">
             <header class="flex justify-between items-center p-2 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0 bg-white dark:bg-slate-800 shadow-sm">
                 <a href="#" onclick="window.location.reload()" class="flex items-center gap-3" aria-label="Домашняя страница Секретарь+">
-                    <div id="header-logo-container" class="w-10 h-10"></div>
+                    <div id="header-logo-container" class="w-10 h-10">
+                         <img src="https://cdn3.iconfinder.com/data/icons/user-icon-1/100/06-1User-512.png" alt="Логотип Секретарь+">
+                    </div>
                     <h1 class="text-xl font-bold text-slate-800 dark:text-slate-100">Секретарь+</h1>
                 </a>
                 <div class="flex items-center gap-2">
                     <div id="auth-container" class="relative"></div>
                     <button id="help-button" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Помощь"></button>
-                    <button id="settings-button" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Настройки"></button>
+                    <button id="settings-button" data-client-action="open_settings" class="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Настройки"></button>
                 </div>
             </header>
             <main id="main-content" class="flex-1 overflow-hidden relative"></main>
@@ -548,7 +538,6 @@ function renderMainApp() {
     const helpButton = document.getElementById('help-button');
     settingsButton.innerHTML = SettingsIcon;
     helpButton.innerHTML = QuestionMarkCircleIcon;
-    settingsButton.addEventListener('click', showSettingsModal);
     helpButton.addEventListener('click', showHelpModal);
     
     // Add the global click handler to the body to catch all dynamic actions
@@ -581,6 +570,11 @@ async function startAuthenticatedSession(session) {
         return;
     }
 
+    if (!state.userProfile) {
+        showSystemError("Не удалось загрузить ваш профиль. Данные пользователя не найдены. Попробуйте перезагрузить страницу или войти заново.");
+        return;
+    }
+
     // 4. Fetch cloud settings and merge with local
     const cloudSettings = await supabaseService.getUserSettings();
     if (cloudSettings) {
@@ -606,12 +600,16 @@ async function startAuthenticatedSession(session) {
     // 6. Configure UI based on user role
     const userRole = (state.userProfile.role || '').trim().toLowerCase();
     const isAdminOrOwner = userRole === 'admin' || userRole === 'owner';
+    const settingsBtn = document.getElementById('settings-button');
+    const helpBtn = document.getElementById('help-button');
+    
     if (!isAdminOrOwner) {
-        const settingsBtn = document.getElementById('settings-button');
-        const helpBtn = document.getElementById('help-button');
         if(settingsBtn) settingsBtn.style.display = 'none';
-        if(helpBtn) helpBtn.style.display = 'none';
+    } else {
+         if(settingsBtn) settingsBtn.style.display = 'block';
     }
+     if(helpBtn) helpBtn.style.display = 'block';
+
 
     // 7. Finalize UI and start background services
     renderAuth(state.userProfile);
@@ -643,22 +641,26 @@ function showWelcomeScreen() {
  */
 function waitForExternalLibs() {
     return new Promise((resolve, reject) => {
-        const timeout = 10000; // 10 seconds
+        const timeout = 15000; // 15 seconds
         const interval = 100;
         let elapsed = 0;
 
         const check = () => {
-            // Check for all required global objects from CDNs with more specific checks
-            if (window.google && window.google.accounts && window.google.accounts.oauth2 && window.gapi && window.gapi.client && window.supabase && typeof window.supabase.createClient === 'function' && window.pdfjsLib && typeof window.pdfjsLib.getDocument === 'function' && window.Chart) {
+            const isGoogleReady = window.google && window.google.accounts && window.google.accounts.oauth2 && window.gapi;
+            const isSupabaseReady = window.supabase && typeof window.supabase.createClient === 'function';
+            const isPdfJsReady = window.pdfjsLib && typeof window.pdfjsLib.getDocument === 'function';
+            const isChartJsReady = window.Chart;
+
+            if (isGoogleReady && isSupabaseReady && isPdfJsReady && isChartJsReady) {
                 resolve();
             } else {
                 elapsed += interval;
                 if (elapsed >= timeout) {
                     let missing = [];
-                    if (!window.google || !window.google.accounts || !window.gapi) missing.push("Google API");
-                    if (!window.supabase) missing.push("Supabase Client");
-                    if (!window.pdfjsLib) missing.push("PDF.js");
-                    if (!window.Chart) missing.push("Chart.js");
+                    if (!isGoogleReady) missing.push("Google API");
+                    if (!isSupabaseReady) missing.push("Supabase Client");
+                    if (!isPdfJsReady) missing.push("PDF.js");
+                    if (!isChartJsReady) missing.push("Chart.js");
                     reject(new Error(`Критическая ошибка при запуске: не удалось загрузить внешние библиотеки: ${missing.join(', ')}.\n\nПроверьте подключение к интернету, отключите блокировщики рекламы и попробуйте перезагрузить страницу.`));
                 } else {
                     setTimeout(check, interval);
@@ -691,20 +693,16 @@ async function main() {
     }
     
     supabaseService.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
+        if (session) {
             await startAuthenticatedSession(session);
-        } else if (event === 'SIGNED_OUT') {
+        } else {
+            state.userProfile = null;
+            renderAuth(null);
             showWelcomeScreen();
         }
     });
-
-    const { data: { session } } = await supabaseService.client.auth.getSession();
-    if (session) {
-        await startAuthenticatedSession(session);
-    } else {
-        showWelcomeScreen();
-    }
 }
 
-// Start the application once all resources are fully loaded.
-window.addEventListener('load', main);
+// Use window.onload to ensure all resources including scripts are fully loaded,
+// which can be more reliable on mobile and for preventing race conditions.
+window.onload = main;
