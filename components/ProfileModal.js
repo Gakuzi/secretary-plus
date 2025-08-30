@@ -1,5 +1,6 @@
 import * as Icons from './icons/Icons.js';
 import { createStatsModal } from './StatsModal.js';
+import { createDataManagerModal } from './DataManagerModal.js';
 
 // --- HELPERS ---
 const ROLE_DISPLAY_MAP = {
@@ -86,10 +87,22 @@ function renderHistoryTab(history) {
 
 function renderStatsTab() {
     return `
-        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Статистика показывает, какие инструменты ассистента используются чаще всего. Данные агрегированы по всем пользователям.</p>
-        <button data-action="show-stats" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold transition-colors">
+        <h3 class="text-xl font-bold">Статистика использования</h3>
+        <p class="text-sm text-slate-600 dark:text-slate-400 my-4">Статистика показывает, какие инструменты ассистента используются чаще всего. Данные агрегированы по всем пользователям в вашей базе данных.</p>
+        <button data-action="show-stats" class="w-full max-w-sm mx-auto flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold transition-colors">
             ${Icons.ChartBarIcon}
             <span>Показать статистику</span>
+        </button>
+    `;
+}
+
+function renderDataManagerTab() {
+     return `
+        <h3 class="text-xl font-bold">Управление данными</h3>
+        <p class="text-sm text-slate-600 dark:text-slate-400 my-4">Откройте "Центр управления данными", чтобы просматривать синхронизированную информацию, запускать синхронизацию вручную и отслеживать статусы.</p>
+        <button data-action="open-data-manager" class="w-full max-w-sm mx-auto flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold transition-colors">
+            ${Icons.DatabaseIcon}
+            <span>Открыть Центр управления</span>
         </button>
     `;
 }
@@ -109,21 +122,23 @@ function renderDangerZoneTab() {
 
 // --- MAIN COMPONENT ---
 
-export function createProfileModal({ currentUserProfile, supabaseService, onClose, onLogout }) {
+export function createProfileModal({ currentUserProfile, supabaseService, onClose, onLogout, onLaunchDataManager }) {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fadeIn';
 
     const isAdmin = currentUserProfile.role === 'admin' || currentUserProfile.role === 'owner';
+    const isSupabaseEnabled = !!supabaseService;
 
     const TABS = [
-        { id: 'profile', label: 'Профиль', icon: Icons.UserIcon, adminOnly: false },
-        { id: 'users', label: 'Пользователи', icon: Icons.UsersIcon, adminOnly: true },
-        { id: 'history', label: 'История чата', icon: Icons.FileIcon, adminOnly: true },
-        { id: 'stats', label: 'Статистика', icon: Icons.ChartBarIcon, adminOnly: true },
-        { id: 'danger', label: 'Опасная зона', icon: Icons.AlertTriangleIcon, adminOnly: false },
+        { id: 'profile', label: 'Профиль', icon: Icons.UserIcon, enabled: true },
+        { id: 'sync', label: 'Синхронизация', icon: Icons.DatabaseIcon, enabled: isSupabaseEnabled },
+        { id: 'stats', label: 'Статистика', icon: Icons.ChartBarIcon, enabled: isSupabaseEnabled },
+        { id: 'users', label: 'Пользователи', icon: Icons.UsersIcon, enabled: isAdmin && isSupabaseEnabled },
+        { id: 'history', label: 'История чата', icon: Icons.FileIcon, enabled: isAdmin && isSupabaseEnabled },
+        { id: 'danger', label: 'Опасная зона', icon: Icons.AlertTriangleIcon, enabled: isSupabaseEnabled },
     ];
 
-    const availableTabs = TABS.filter(tab => !tab.adminOnly || isAdmin);
+    const availableTabs = TABS.filter(tab => tab.enabled);
 
     modalOverlay.innerHTML = `
         <div id="profile-modal-content" class="bg-white dark:bg-slate-800 w-full max-w-4xl h-full sm:h-auto sm:max-h-[90vh] rounded-lg shadow-xl flex flex-col sm:flex-row">
@@ -152,6 +167,8 @@ export function createProfileModal({ currentUserProfile, supabaseService, onClos
     `;
 
     const contentContainer = modalOverlay.querySelector('#profile-tab-content');
+    const subModalContainer = document.createElement('div'); // Container for modals launched from this one
+    modalOverlay.appendChild(subModalContainer);
 
     const switchTab = async (tabId) => {
         modalOverlay.querySelectorAll('.profile-tab-button').forEach(btn => btn.classList.remove('active'));
@@ -163,6 +180,9 @@ export function createProfileModal({ currentUserProfile, supabaseService, onClos
             switch (tabId) {
                 case 'profile':
                     contentContainer.innerHTML = renderProfileTab(currentUserProfile);
+                    break;
+                case 'sync':
+                    contentContainer.innerHTML = renderDataManagerTab();
                     break;
                 case 'users':
                     const users = await supabaseService.getAllUserProfiles();
@@ -191,6 +211,10 @@ export function createProfileModal({ currentUserProfile, supabaseService, onClos
             switch (action) {
                 case 'close': onClose(); break;
                 case 'logout': onLogout(); break;
+                case 'open-data-manager':
+                    onLaunchDataManager();
+                    onClose(); // Close the profile modal after launching the data manager
+                    break;
                 case 'delete-settings':
                     if (confirm('Вы уверены, что хотите удалить все ваши настройки из облака? Это действие необратимо.')) {
                         await supabaseService.deleteUserSettings();
@@ -200,7 +224,7 @@ export function createProfileModal({ currentUserProfile, supabaseService, onClos
                 case 'show-stats':
                     const statsData = await supabaseService.getActionStats();
                     const statsModal = createStatsModal(statsData, () => statsModal.remove());
-                    modalOverlay.appendChild(statsModal);
+                    subModalContainer.appendChild(statsModal);
                     break;
                 case 'change-role': {
                     const userId = target.dataset.userId;

@@ -246,6 +246,7 @@ export function createSetupWizard({ onComplete, onExit, googleProvider, supabase
         } else {
             googleProvider.initClient(googleClientId, (tokenResponse) => {
                 if (tokenResponse && !tokenResponse.error) {
+                    // CRITICAL FIX: Save token before reloading to prevent race condition on mobile.
                     saveGoogleToken(tokenResponse.access_token);
                     googleProvider.setAuthToken(tokenResponse.access_token);
                     window.location.reload();

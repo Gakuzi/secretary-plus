@@ -19,6 +19,7 @@ import { SUPABASE_CONFIG, GOOGLE_CLIENT_ID } from './config.js';
 import { createMigrationModal } from './components/MigrationModal.js';
 import { createDbExecutionModal } from './components/DbExecutionModal.js';
 import { FULL_MIGRATION_SQL } from './services/supabase/migrations.js';
+import { createDataManagerModal } from './components/DataManagerModal.js';
 
 
 // --- UTILITY ---
@@ -657,6 +658,7 @@ async function showProfileModal() {
             supabaseService: supabaseService,
             onClose: () => { modalContainer.innerHTML = ''; },
             onLogout: handleLogout,
+            onLaunchDataManager: showDataManagerModal,
         });
         modalContainer.appendChild(modal);
 
@@ -767,6 +769,18 @@ function showProxyManagerModal() {
         onClose: () => { wizardContainer.innerHTML = ''; },
     });
     wizardContainer.appendChild(manager);
+}
+
+function showDataManagerModal() {
+    modalContainer.innerHTML = '';
+    const manager = createDataManagerModal({
+        supabaseService: supabaseService,
+        syncTasks: syncTasks,
+        onClose: () => { modalContainer.innerHTML = ''; },
+        onRunSingleSync: runSingleSync,
+        onRunAllSyncs: runAllSyncs,
+    });
+    modalContainer.appendChild(manager);
 }
 
 
@@ -880,10 +894,13 @@ async function startFullApp() {
 
     // Condition to show the initial setup wizard
     if (!settings.geminiApiKey) {
-        // If this is a true first run, clear any potentially conflicting old data.
+        // If this is a true first run, clear all potentially conflicting old data.
         if (!savedWizardState) {
+            console.log("First run detected, clearing local storage for a clean setup.");
             localStorage.removeItem('secretary-plus-settings-v4');
             localStorage.removeItem('secretary-plus-sync-status-v1');
+            clearGoogleToken();
+            sessionStorage.clear();
         }
         
         wizardContainer.innerHTML = '';
