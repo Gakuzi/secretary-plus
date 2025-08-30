@@ -446,30 +446,29 @@ export class SupabaseService {
     async getCurrentUserProfile() {
         const { data: { user } } = await this.client.auth.getUser();
         if (!user) return null;
-        
-        const { data, error } = await this.client
-            .from('profiles')
-            .select(`*`)
-            .eq('id', user.id)
-            .single();
-            
+
+        // Call the RPC function to get or create the profile
+        const { data, error } = await this.client.rpc('get_or_create_profile').single();
+
         if (error) {
-            console.error('Error fetching current user profile:', error);
-            // Fallback to auth data if profile doesn't exist yet
-            if (error.code === 'PGRST116') {
-                return {
-                    id: user.id,
-                    email: user.email,
-                    last_sign_in_at: user.last_sign_in_at,
-                    full_name: user.user_metadata.full_name,
-                    avatar_url: user.user_metadata.avatar_url,
-                    role: 'user', // Default role
-                }
-            }
+            console.error('Error fetching or creating user profile via RPC:', error);
+            // If the RPC fails, we still try to fallback to auth data as a last resort
+            return {
+                id: user.id,
+                email: user.email,
+                last_sign_in_at: user.last_sign_in_at,
+                full_name: user.user_metadata.full_name,
+                avatar_url: user.user_metadata.avatar_url,
+                role: 'user', // Default role on failure
+            };
+        }
+
+        if (!data) {
+            console.error('Profile RPC returned no data.');
             return null;
         }
         
-        // Combine auth data with profile data
+        // Combine auth data (for email/last_sign_in) with profile data
         return {
             id: user.id,
             email: user.email,
