@@ -1,6 +1,6 @@
 import { getSettings, saveSettings } from '../utils/storage.js';
 import * as Icons from './icons/Icons.js';
-import { SERVICE_SCHEMAS } from '../services/supabase/schema.js';
+import { DB_SCHEMAS } from '../services/supabase/schema.js';
 
 
 export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizard, onLaunchProxyManager, onLaunchDataManager }) {
@@ -8,7 +8,7 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
     modalElement.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4';
     
     const render = () => {
-        const servicesHtml = Object.entries(SERVICE_SCHEMAS).map(([key, schema]) => `
+        const servicesHtml = Object.entries(DB_SCHEMAS).filter(([key, schema]) => 'source_id' in (schema.fields.find(f => f.name === 'source_id') || {})).map(([key, schema]) => `
             <div class="flex items-center justify-between py-2 border-b border-slate-200 dark:border-slate-700 last:border-b-0">
                 <label for="service-toggle-${key}" class="font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
                     <span class="w-5 h-5">${Icons[schema.icon] || ''}</span>
@@ -32,6 +32,7 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
                     <aside class="w-full sm:w-56 border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-slate-700 p-2 sm:p-4 flex-shrink-0 bg-white dark:bg-slate-800">
                          <nav class="flex flex-row sm:flex-col sm:space-y-2 w-full justify-around">
                             <a href="#connections" class="settings-tab-button text-center sm:text-left active" data-tab="connections">Подключения</a>
+                            <a href="#accounts" class="settings-tab-button text-center sm:text-left" data-tab="accounts">Учетные записи</a>
                             <a href="#services" class="settings-tab-button text-center sm:text-left" data-tab="services">Службы</a>
                             <a href="#database" class="settings-tab-button text-center sm:text-left" data-tab="database">База данных</a>
                             <a href="#about" class="settings-tab-button text-center sm:text-left" data-tab="about">О приложении</a>
@@ -64,6 +65,32 @@ export function createSettingsModal({ settings, onClose, onSave, onLaunchDbWizar
                                 <button data-action="manage-proxies" class="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-md font-semibold text-sm transition-colors ${!settings.isSupabaseEnabled ? 'opacity-50 cursor-not-allowed' : ''}" ${!settings.isSupabaseEnabled ? 'disabled' : ''}>
                                     ${Icons.SettingsIcon} <span>Управление прокси</span>
                                 </button>
+                            </div>
+                        </div>
+
+                         <!-- Accounts Tab -->
+                        <div id="tab-accounts" class="settings-tab-content hidden space-y-6">
+                            <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Подключенные аккаунты</h3>
+                                <p class="text-sm text-slate-600 dark:text-slate-400 my-2">Здесь будут отображаться все ваши подключенные учетные записи. Пока поддерживается только один аккаунт Google.</p>
+                                <!-- Placeholder for account list -->
+                            </div>
+                             <div class="p-4 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Добавить новый аккаунт</h3>
+                                 <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <button class="p-4 border rounded-lg flex items-center gap-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700/50 dark:hover:bg-slate-700" disabled>
+                                        ${Icons.GoogleIcon} <span class="font-semibold">Google</span> <span class="text-xs ml-auto text-green-500">(Подключен)</span>
+                                    </button>
+                                     <button class="p-4 border rounded-lg flex items-center gap-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700/50 dark:hover:bg-slate-700 disabled:opacity-50" disabled>
+                                        <span class="w-6 h-6">${Icons.CodeIcon}</span> <span class="font-semibold">Microsoft</span> <span class="text-xs ml-auto">(Скоро)</span>
+                                    </button>
+                                     <button class="p-4 border rounded-lg flex items-center gap-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700/50 dark:hover:bg-slate-700 disabled:opacity-50" disabled>
+                                        <span class="w-6 h-6">${Icons.CodeIcon}</span> <span class="font-semibold">Apple</span> <span class="text-xs ml-auto">(Скоро)</span>
+                                    </button>
+                                     <button class="p-4 border rounded-lg flex items-center gap-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700/50 dark:hover:bg-slate-700 disabled:opacity-50" disabled>
+                                        <span class="w-6 h-6">${Icons.CodeIcon}</span> <span class="font-semibold">Яндекс</span> <span class="text-xs ml-auto">(Скоро)</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
 

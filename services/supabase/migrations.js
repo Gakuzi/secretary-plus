@@ -1,9 +1,9 @@
 // Этот SQL-скрипт включает защиту на уровне строк (RLS) для всех таблиц
 // и создает политики, гарантирующие, что пользователи могут получить доступ только к своим собственным данным.
-import { SERVICE_SCHEMAS, SHARED_SQL, generateCreateTableSql } from './schema.js';
+import { DB_SCHEMAS, SHARED_SQL, generateCreateTableSql } from './schema.js';
 
 // Dynamically generate CREATE TABLE statements for all services using only recommended fields.
-const fullSchemaSql = Object.values(SERVICE_SCHEMAS).map(schema => {
+const fullSchemaSql = Object.values(DB_SCHEMAS).map(schema => {
     // Filter for fields marked as recommended for the initial setup
     const recommendedFields = schema.fields.filter(field => field.recommended);
     // Only generate a script if there are fields to create

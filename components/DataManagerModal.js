@@ -1,6 +1,6 @@
 import * as Icons from './icons/Icons.js';
 import { getSyncStatus } from '../utils/storage.js';
-import { SERVICE_SCHEMAS, generateCreateTableSql } from '../services/supabase/schema.js';
+import { DB_SCHEMAS, generateCreateTableSql } from '../services/supabase/schema.js';
 import { createDbExecutionModal } from './DbExecutionModal.js';
 
 function createDataViewerModal(title, data, error, onClose) {
@@ -142,7 +142,7 @@ function renderSchemaTab(state) {
         return `<div class="p-4 bg-red-100 text-red-800 rounded-md"><strong>Ошибка проверки схемы:</strong> ${state.schemaError}</div>`;
     }
     
-    const servicesHtml = Object.entries(SERVICE_SCHEMAS).map(([key, schema]) => {
+    const servicesHtml = Object.entries(DB_SCHEMAS).map(([key, schema]) => {
         const tableStatus = state.schemaStatus[schema.tableName];
         if (!tableStatus) return ''; // Should not happen if checkSchema ran
 
@@ -264,7 +264,7 @@ export function createDataManagerModal({ supabaseService, syncTasks, settings, o
 
     const generateSqlFromState = () => {
         let sql = '';
-        for (const schema of Object.values(SERVICE_SCHEMAS)) {
+        for (const schema of Object.values(DB_SCHEMAS)) {
             const status = state.schemaStatus[schema.tableName];
             if (!status) continue;
             
@@ -304,7 +304,7 @@ export function createDataManagerModal({ supabaseService, syncTasks, settings, o
         try {
             const existingTables = await supabaseService.getExistingTables(settings.managementWorkerUrl, settings.adminSecretToken);
             
-            for (const schema of Object.values(SERVICE_SCHEMAS)) {
+            for (const schema of Object.values(DB_SCHEMAS)) {
                 if (!existingTables.includes(schema.tableName)) {
                     state.schemaStatus[schema.tableName] = { status: 'missing', columns: {} };
                 } else {
@@ -370,7 +370,7 @@ export function createDataManagerModal({ supabaseService, syncTasks, settings, o
                 }
                 case 'select-recommended': {
                     const tableName = target.dataset.table;
-                    const schema = Object.values(SERVICE_SCHEMAS).find(s => s.tableName === tableName);
+                    const schema = Object.values(DB_SCHEMAS).find(s => s.tableName === tableName);
                     if (schema) {
                         schema.fields.forEach(field => {
                             const checkbox = modalOverlay.querySelector(`#field-${tableName}-${field.name}`);

@@ -79,6 +79,7 @@ CREATE TABLE public.action_stats (
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     function_name TEXT,
     call_count INTEGER DEFAULT 1,
+    last_called_at TIMESTAMPTZ DEFAULT now(),
     PRIMARY KEY (user_id, function_name)
 );
 COMMENT ON TABLE public.action_stats IS 'Статистика вызова функций Gemini.';
@@ -228,8 +229,8 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION public.increment_stat(fn_name TEXT)
 RETURNS void AS $$
 BEGIN
-  INSERT INTO public.action_stats (user_id, function_name, call_count) VALUES (auth.uid(), fn_name, 1)
-  ON CONFLICT (user_id, function_name) DO UPDATE SET call_count = action_stats.call_count + 1;
+  INSERT INTO public.action_stats (user_id, function_name, call_count, last_called_at) VALUES (auth.uid(), fn_name, 1, now())
+  ON CONFLICT (user_id, function_name) DO UPDATE SET call_count = action_stats.call_count + 1, last_called_at = now();
 END;
 $$ LANGUAGE plpgsql;
 
@@ -266,13 +267,96 @@ BEGIN
     ORDER BY p.role, p.full_name;
 END;
 $$;
+
+-- Новая RPC-функция для сбора полной статистики
+CREATE OR REPLACE FUNCTION public.get_full_stats()
+RETURNS JSONB AS $$
+DECLARE
+    result JSONB;
+BEGIN
+    IF NOT is_admin() THEN
+        RAISE EXCEPTION 'У вас нет прав для выполнения этой операции.';
+    END IF;
+
+    SELECT jsonb_build_object(
+        'actions_by_day', (
+            SELECT jsonb_agg(t) FROM (
+                SELECT (last_called_at::date) AS date, SUM(call_count) AS count
+                FROM public.action_stats
+                GROUP BY date
+                ORDER BY date
+            ) t
+        ),
+        'actions_by_function', (
+            SELECT jsonb_agg(t) FROM (
+                SELECT function_name, SUM(call_count) AS count
+                FROM public.action_stats
+                GROUP BY function_name
+                ORDER BY count DESC
+            ) t
+        ),
+        'actions_by_user', (
+            SELECT jsonb_agg(t) FROM (
+                SELECT p.full_name, SUM(a.call_count) AS count
+                FROM public.action_stats a
+                JOIN public.profiles p ON a.user_id = p.id
+                GROUP BY p.full_name
+                ORDER BY count DESC
+            ) t
+        ),
+        'responses_by_type', (
+             SELECT jsonb_agg(t) FROM (
+                SELECT 
+                    CASE WHEN card_data IS NOT NULL THEN 'card' ELSE 'text' END as type,
+                    count(*) as count
+                FROM public.chat_history
+                WHERE sender = 'assistant'
+                GROUP BY type
+            ) t
+        )
+    ) INTO result;
+
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 `;
 
-export const SERVICE_SCHEMAS = {
+// Renamed from SERVICE_SCHEMAS to DB_SCHEMAS to reflect that it now includes all tables.
+export const DB_SCHEMAS = {
+    profiles: {
+        label: 'Профили', icon: 'UserIcon', tableName: 'profiles',
+        fields: [
+            { name: 'id', type: 'UUID PRIMARY KEY', recommended: true },
+            { name: 'full_name', type: 'TEXT', recommended: true },
+            { name: 'avatar_url', type: 'TEXT', recommended: true },
+            { name: 'role', type: 'user_role', recommended: true },
+            { name: 'updated_at', type: 'TIMESTAMPTZ', recommended: true },
+        ]
+    },
+    user_settings: {
+        label: 'Настройки пользователей', icon: 'SettingsIcon', tableName: 'user_settings',
+        fields: [
+            { name: 'user_id', type: 'UUID PRIMARY KEY', recommended: true },
+            { name: 'settings', type: 'JSONB', recommended: true },
+            { name: 'updated_at', type: 'TIMESTAMPTZ', recommended: true },
+        ]
+    },
+     proxies: {
+        label: 'Прокси-серверы', icon: 'GlobeIcon', tableName: 'proxies',
+        fields: [
+            { name: 'id', type: 'UUID PRIMARY KEY', recommended: true },
+            { name: 'user_id', type: 'UUID', recommended: true },
+            { name: 'url', type: 'TEXT', recommended: true },
+            { name: 'is_active', type: 'BOOLEAN', recommended: true },
+            { name: 'priority', type: 'INTEGER', recommended: true },
+            { name: 'geolocation', type: 'TEXT', recommended: true },
+            { name: 'last_checked_at', type: 'TIMESTAMPTZ', recommended: true },
+            { name: 'last_test_status', type: 'TEXT', recommended: true },
+            { name: 'last_test_speed', type: 'INTEGER', recommended: true },
+        ]
+    },
     calendar: {
-        label: 'Календарь',
-        icon: 'CalendarIcon',
-        tableName: 'calendar_events',
+        label: 'Календарь', icon: 'CalendarIcon', tableName: 'calendar_events',
         fields: [
             { name: 'source_id', type: 'TEXT', recommended: true },
             { name: 'title', type: 'TEXT', recommended: true },
@@ -288,9 +372,7 @@ export const SERVICE_SCHEMAS = {
         ]
     },
     contacts: {
-        label: 'Контакты',
-        icon: 'UsersIcon',
-        tableName: 'contacts',
+        label: 'Контакты', icon: 'UsersIcon', tableName: 'contacts',
         fields: [
             { name: 'source_id', type: 'TEXT', recommended: true },
             { name: 'display_name', type: 'TEXT', recommended: true },
@@ -303,9 +385,7 @@ export const SERVICE_SCHEMAS = {
         ]
     },
     files: {
-        label: 'Файлы',
-        icon: 'FileIcon',
-        tableName: 'files',
+        label: 'Файлы', icon: 'FileIcon', tableName: 'files',
         fields: [
             { name: 'source_id', type: 'TEXT', recommended: true },
             { name: 'name', type: 'TEXT', recommended: true },
@@ -322,9 +402,7 @@ export const SERVICE_SCHEMAS = {
         ]
     },
     tasks: {
-        label: 'Задачи',
-        icon: 'CheckSquareIcon',
-        tableName: 'tasks',
+        label: 'Задачи', icon: 'CheckSquareIcon', tableName: 'tasks',
         fields: [
             { name: 'source_id', type: 'TEXT', recommended: true },
             { name: 'title', type: 'TEXT', recommended: true },
@@ -336,9 +414,7 @@ export const SERVICE_SCHEMAS = {
         ]
     },
     emails: {
-        label: 'Почта',
-        icon: 'EmailIcon',
-        tableName: 'emails',
+        label: 'Почта', icon: 'EmailIcon', tableName: 'emails',
         fields: [
             { name: 'source_id', type: 'TEXT', recommended: true },
             { name: 'thread_id', type: 'TEXT', recommended: true },
@@ -355,9 +431,7 @@ export const SERVICE_SCHEMAS = {
         ]
     },
     notes: {
-        label: 'Заметки',
-        icon: 'FileIcon',
-        tableName: 'notes',
+        label: 'Заметки', icon: 'FileIcon', tableName: 'notes',
         fields: [
             { name: 'title', type: 'TEXT', recommended: true },
             { name: 'content', type: 'TEXT', recommended: true },
@@ -371,25 +445,35 @@ export const SERVICE_SCHEMAS = {
 export function generateCreateTableSql(schema, selectedFields) {
     if (!schema || !selectedFields || selectedFields.length === 0) return '';
     
-    const fieldsSql = selectedFields.map(field => `    ${field.name} ${field.type}`).join(',\n');
-    
-    // Base columns that are always present
-    const baseColumns = `
-        id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-        user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    `;
-    const uniqueConstraint = schema.fields.some(f => f.name === 'source_id') 
-        ? ',\n    UNIQUE (user_id, source_id)' 
-        : '';
-    const closingColumns = `
-        created_at TIMESTAMPTZ DEFAULT now(),
-        updated_at TIMESTAMPTZ DEFAULT now()${uniqueConstraint}
-    `;
+    // Check if the schema uses the standard 'id, user_id, created_at, updated_at' pattern.
+    const isStandardServiceTable = !['profiles', 'user_settings', 'proxies'].includes(schema.tableName);
+
+    let fieldsSql, baseColumns, uniqueConstraint, closingColumns;
+
+    if (isStandardServiceTable) {
+        fieldsSql = selectedFields.map(field => `    ${field.name} ${field.type}`).join(',\n');
+        baseColumns = `
+            id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+            user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+        `;
+        uniqueConstraint = schema.fields.some(f => f.name === 'source_id') 
+            ? ',\n    UNIQUE (user_id, source_id)' 
+            : '';
+        closingColumns = `
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now()${uniqueConstraint}
+        `;
+    } else {
+        // For special tables like 'profiles', the fields define the whole structure.
+        fieldsSql = selectedFields.map(field => `    ${field.name} ${field.type}`).join(',\n');
+        baseColumns = '';
+        closingColumns = '';
+    }
 
     const fullSql = `
 CREATE TABLE public.${schema.tableName} (
 ${baseColumns}
-${fieldsSql},
+${fieldsSql}${baseColumns && closingColumns ? ',' : ''}
 ${closingColumns}
 );
 

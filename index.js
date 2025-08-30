@@ -19,7 +19,7 @@ import { SUPABASE_CONFIG, GOOGLE_CLIENT_ID } from './config.js';
 import { createMigrationModal } from './components/MigrationModal.js';
 import { FULL_MIGRATION_SQL } from './services/supabase/migrations.js';
 import { createDataManagerModal } from './components/DataManagerModal.js';
-import { SERVICE_SCHEMAS } from './services/supabase/schema.js';
+import { DB_SCHEMAS } from './services/supabase/schema.js';
 import { createDbExecutionModal } from './components/DbExecutionModal.js';
 
 
@@ -78,7 +78,6 @@ let state = {
 // --- SERVICE INSTANCES ---
 const googleProvider = new GoogleServiceProvider();
 const appleProvider = new AppleServiceProvider();
-let supabaseService = null;
 let emailCheckInterval = null;
 let syncInterval = null;
 let proxyTestInterval = null;
@@ -89,6 +88,21 @@ const serviceProviders = {
     apple: appleProvider,
     supabase: null,
 };
+
+// **Initialize Supabase client ONCE, globally.** This is critical for stable auth.
+let supabaseService = null;
+const settingsForInit = getSettings();
+if (settingsForInit.isSupabaseEnabled) {
+    try {
+        supabaseService = new SupabaseService(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+        serviceProviders.supabase = supabaseService;
+        state.isSupabaseReady = true; // Set state early
+    } catch (e) {
+        console.error("Global Supabase initialization failed", e);
+        state.isSupabaseReady = false;
+    }
+}
+
 
 // --- DOM ELEMENTS ---
 // These will be populated after the app's structure is rendered.
@@ -251,21 +265,6 @@ function stopAutoProxyTesting() {
 
 
 // --- AUTH & INITIALIZATION ---
-async function initializeSupabase() {
-    if (!state.settings.isSupabaseEnabled) {
-        state.isSupabaseReady = false;
-        return;
-    }
-    try {
-        supabaseService = new SupabaseService(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
-        serviceProviders.supabase = supabaseService;
-        state.isSupabaseReady = true;
-    } catch (error) {
-        console.error("Supabase initialization failed:", error);
-        state.isSupabaseReady = false;
-    }
-}
-
 async function startNewChatSession() {
     if (state.isSupabaseReady && supabaseService) {
         try {
@@ -322,9 +321,7 @@ async function handleAuthentication() {
 
 async function initializeAppServices() {
     state.settings = getSettings();
-    if (state.settings.isSupabaseEnabled) {
-        await initializeSupabase();
-    }
+    // Supabase is now initialized globally at startup, so no need to call a function here.
     await googleProvider.initClient(GOOGLE_CLIENT_ID, null);
     googleProvider.setTimezone(state.settings.timezone);
     await handleAuthentication();
@@ -898,8 +895,8 @@ async function startFullApp() {
                 state.settings = newSettings;
                 saveSettings(newSettings);
                 wizardContainer.innerHTML = '';
-                await initializeAppServices();
-                renderMainContent();
+                // Reload the entire app to re-initialize with the global Supabase client correctly.
+                window.location.reload();
             },
             onExit: () => {
                 wizardContainer.innerHTML = '';
@@ -976,45 +973,35 @@ function waitForExternalLibs() {
  */
 async function main() {
     const isAuthCallback = window.location.hash.includes('access_token');
-    const settings = getSettings();
-
-    // If we are returning from a Supabase OAuth flow, handle it before starting the app.
-    if (isAuthCallback && settings.isSupabaseEnabled) {
-        // Display a non-destructive loading overlay instead of replacing the entire body.
+    
+    // If we are returning from a Supabase OAuth flow, handle it using the single global client.
+    if (isAuthCallback && supabaseService) {
         const loadingOverlay = document.createElement('div');
         loadingOverlay.className = 'fixed inset-0 bg-slate-900/80 flex items-center justify-center z-50 text-white';
         loadingOverlay.innerHTML = '<span>Завершение входа...</span>';
         document.body.appendChild(loadingOverlay);
 
         try {
-            // Initialize Supabase early to handle the auth event from the URL hash.
-            const tempSupabaseService = new SupabaseService(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
-            
-            // Wait for the SIGNED_IN event, which confirms Supabase has created the session.
             await new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
                     reject(new Error("Аутентификация заняла слишком много времени. Пожалуйста, попробуйте снова."));
-                }, 15000); // 15-second timeout for safety.
+                }, 15000);
 
-                const { data: { subscription } } = tempSupabaseService.onAuthStateChange((event, session) => {
+                const { data: { subscription } } = supabaseService.onAuthStateChange((event, session) => {
                     if (event === 'SIGNED_IN' && session) {
                         clearTimeout(timeout);
-                        subscription.unsubscribe(); // Stop listening after success.
+                        subscription.unsubscribe();
                         resolve(session);
                     }
                 });
             });
 
-            // Clean the URL hash.
             window.history.replaceState(null, '', window.location.pathname + window.location.search);
-            
-            // Remove the overlay and start the app directly without a full reload.
             loadingOverlay.remove();
             await startFullApp();
 
         } catch (error) {
             console.error("OAuth Callback Error:", error);
-            // Show error to the user if something goes wrong
             loadingOverlay.innerHTML = `
                 <div class="flex flex-col items-center justify-center text-center p-4">
                     <p class="font-bold text-red-400">Ошибка аутентификации</p>
@@ -1022,9 +1009,7 @@ async function main() {
                     <a href="${window.location.pathname}" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded">Попробовать снова</a>
                 </div>`;
         }
-
     } else {
-        // This is a normal app start (not an auth callback).
         await startFullApp();
     }
 }

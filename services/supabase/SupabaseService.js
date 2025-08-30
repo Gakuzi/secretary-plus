@@ -412,6 +412,15 @@ export class SupabaseService {
             return acc;
         }, {});
     }
+     async getFullStats() {
+        const { data, error } = await this.client.rpc('get_full_stats');
+        if (error) {
+            console.error("Error fetching full stats:", error);
+            throw error;
+        }
+        return data;
+    }
+
 
     async incrementActionStat(functionName) {
         const { error } = await this.client.rpc('increment_stat', { fn_name: functionName });

@@ -1,5 +1,4 @@
 import * as Icons from './icons/Icons.js';
-import { createStatsModal } from './StatsModal.js';
 import { getSyncStatus } from '../utils/storage.js';
 
 
@@ -10,6 +9,33 @@ const ROLE_DISPLAY_MAP = {
     manager: { text: 'Менеджер', class: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
     user: { text: 'Пользователь', class: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200' }
 };
+
+const ACTION_NAMES = {
+    'get_calendar_events': 'Просмотр календаря',
+    'create_calendar_event': 'Создание событий',
+    'delete_calendar_event': 'Удаление событий',
+    'get_tasks': 'Просмотр задач',
+    'create_task': 'Создание задач',
+    'update_task': 'Обновление задач',
+    'delete_task': 'Удаление задач',
+    'get_recent_emails': 'Чтение почты',
+    'send_email': 'Отправка Email',
+    'delete_email': 'Удаление писем',
+    'find_documents': 'Поиск документов',
+    'get_recent_files': 'Поиск недавних файлов',
+    'create_google_doc': 'Создание Google Docs',
+    'create_google_sheet': 'Создание Google Sheets',
+    'create_google_doc_with_content': 'Создание Docs с текстом',
+    'propose_document_with_content': 'Предложение документа',
+    'find_contacts': 'Поиск контактов',
+    'perform_contact_action': 'Действия с контактами',
+    'create_note': 'Создание заметок',
+    'find_notes': 'Поиск заметок',
+    'summarize_and_save_memory': 'Сохранение в память',
+    'recall_memory': 'Чтение из памяти',
+};
+
+const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#ef4444', '#f97316', '#eab308', '#6366f1', '#ec4899', '#06b6d4', '#22c55e', '#a855f7', '#f43f5e'];
 
 const ROLES = ['owner', 'admin', 'manager', 'user'];
 
@@ -138,14 +164,29 @@ function renderHistoryTab(history) {
     return `<div class="space-y-3">${historyHtml}</div>`;
 }
 
-function renderStatsTab() {
+function renderStatsTab(statsData) {
+     if (!statsData || Object.keys(statsData).length === 0) {
+        return `<div class="text-center p-8 text-slate-500 dark:text-slate-400">Нет данных для статистики.</div>`;
+    }
     return `
-        <h3 class="text-xl font-bold">Статистика использования</h3>
-        <p class="text-sm text-slate-600 dark:text-slate-400 my-4">Статистика показывает, какие инструменты ассистента используются чаще всего. Данные агрегированы по всем пользователям в вашей базе данных.</p>
-        <button data-action="show-stats" class="w-full max-w-sm mx-auto flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold transition-colors">
-            ${Icons.ChartBarIcon}
-            <span>Показать статистику</span>
-        </button>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow">
+                <h4 class="font-bold text-lg">Динамика активности (по дням)</h4>
+                <div class="h-64 mt-2"><canvas id="activity-chart"></canvas></div>
+            </div>
+             <div class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow">
+                <h4 class="font-bold text-lg">Анализ действий</h4>
+                <div class="h-64 mt-2 flex items-center justify-center"><canvas id="actions-chart"></canvas></div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow">
+                <h4 class="font-bold text-lg">Самые активные пользователи</h4>
+                <div class="h-64 mt-2"><canvas id="users-chart"></canvas></div>
+            </div>
+             <div class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow">
+                <h4 class="font-bold text-lg">Анализ ответов ассистента</h4>
+                <div class="h-64 mt-2 flex items-center justify-center"><canvas id="responses-chart"></canvas></div>
+            </div>
+        </div>
     `;
 }
 
@@ -252,7 +293,7 @@ export function createProfileModal({ currentUserProfile, supabaseService, syncTa
     const TABS = [
         { id: 'profile', label: 'Профиль', icon: Icons.UserIcon, enabled: true },
         { id: 'sync', label: 'Синхронизация', icon: Icons.DatabaseIcon, enabled: isSupabaseEnabled },
-        { id: 'stats', label: 'Статистика', icon: Icons.ChartBarIcon, enabled: isSupabaseEnabled },
+        { id: 'stats', label: 'Статистика', icon: Icons.ChartBarIcon, enabled: isAdmin && isSupabaseEnabled },
         { id: 'users', label: 'Пользователи', icon: Icons.UsersIcon, enabled: isAdmin && isSupabaseEnabled },
         { id: 'history', label: 'История чата', icon: Icons.FileIcon, enabled: isAdmin && isSupabaseEnabled },
         { id: 'danger', label: 'Опасная зона', icon: Icons.AlertTriangleIcon, enabled: isSupabaseEnabled },
@@ -290,6 +331,15 @@ export function createProfileModal({ currentUserProfile, supabaseService, syncTa
     const subModalContainer = document.createElement('div'); // Container for modals launched from this one
     modalOverlay.appendChild(subModalContainer);
 
+    const initializeChart = (canvasId, type, data, options) => {
+        setTimeout(() => {
+            const canvas = document.getElementById(canvasId);
+            if(canvas) {
+                new Chart(canvas.getContext('2d'), { type, data, options });
+            }
+        }, 100);
+    };
+
     const switchTab = async (tabId) => {
         modalOverlay.querySelectorAll('.profile-tab-button').forEach(btn => btn.classList.remove('active'));
         modalOverlay.querySelector(`.profile-tab-button[data-tab="${tabId}"]`).classList.add('active');
@@ -313,13 +363,44 @@ export function createProfileModal({ currentUserProfile, supabaseService, syncTa
                     contentContainer.innerHTML = renderHistoryTab(history);
                     break;
                 case 'stats':
-                    contentContainer.innerHTML = renderStatsTab();
+                    const statsData = await supabaseService.getFullStats();
+                    contentContainer.innerHTML = renderStatsTab(statsData);
+                    
+                    const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                    const textColor = isDarkMode ? '#cbd5e1' : '#334155';
+                    
+                    if (statsData.actions_by_day?.length) {
+                        initializeChart('activity-chart', 'line', {
+                            labels: statsData.actions_by_day.map(d => new Date(d.date).toLocaleDateString('ru-RU')),
+                            datasets: [{ label: 'Действий в день', data: statsData.actions_by_day.map(d => d.count), borderColor: '#3b82f6', tension: 0.1, fill: false }]
+                        }, { scales: { x: { ticks: { color: textColor }, grid: { color: gridColor } }, y: { ticks: { color: textColor }, grid: { color: gridColor } } } });
+                    }
+                    if (statsData.actions_by_function?.length) {
+                         initializeChart('actions-chart', 'pie', {
+                            labels: statsData.actions_by_function.map(d => ACTION_NAMES[d.function_name] || d.function_name),
+                            datasets: [{ data: statsData.actions_by_function.map(d => d.count), backgroundColor: CHART_COLORS }]
+                        }, { plugins: { legend: { labels: { color: textColor } } } });
+                    }
+                     if (statsData.actions_by_user?.length) {
+                        initializeChart('users-chart', 'bar', {
+                            labels: statsData.actions_by_user.map(d => d.full_name),
+                            datasets: [{ label: 'Всего действий', data: statsData.actions_by_user.map(d => d.count), backgroundColor: CHART_COLORS[1] }]
+                        }, { scales: { x: { ticks: { color: textColor }, grid: { color: gridColor } }, y: { ticks: { color: textColor }, grid: { color: gridColor } } }, indexAxis: 'y' });
+                    }
+                    if(statsData.responses_by_type?.length) {
+                         initializeChart('responses-chart', 'doughnut', {
+                            labels: statsData.responses_by_type.map(d => d.type === 'card' ? 'Интерактивные' : 'Текстовые'),
+                            datasets: [{ data: statsData.responses_by_type.map(d => d.count), backgroundColor: [CHART_COLORS[2], CHART_COLORS[3]] }]
+                        }, { plugins: { legend: { labels: { color: textColor } } } });
+                    }
                     break;
                 case 'danger':
                     contentContainer.innerHTML = renderDangerZoneTab();
                     break;
             }
         } catch (error) {
+            console.error(`Error loading tab ${tabId}:`, error);
             contentContainer.innerHTML = `<p class="text-red-500 p-4">Не удалось загрузить данные: ${error.message}</p>`;
         }
     };
@@ -336,11 +417,6 @@ export function createProfileModal({ currentUserProfile, supabaseService, syncTa
                         await supabaseService.deleteUserSettings();
                         window.location.reload();
                     }
-                    break;
-                case 'show-stats':
-                    const statsData = await supabaseService.getActionStats();
-                    const statsModal = createStatsModal(statsData, () => statsModal.remove());
-                    subModalContainer.appendChild(statsModal);
                     break;
                 case 'change-role': {
                     const userId = target.dataset.userId;
