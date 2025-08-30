@@ -212,7 +212,7 @@ BEGIN
         SELECT u.id, u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'avatar_url', new_user_role
         FROM auth.users u WHERE u.id = auth.uid();
     END IF;
-    RETURN QUERY SELECT p.id, p.full_name, p.avatar_url, p.role FROM public.profiles p WHERE p.id = auth.uid();
+    RETURN QUERY SELECT p.id, p.full_name::text, p.avatar_url::text, p.role FROM public.profiles p WHERE p.id = auth.uid();
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
 
