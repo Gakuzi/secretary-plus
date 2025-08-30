@@ -381,9 +381,11 @@ export class SupabaseService {
         if (error) throw error;
     }
 
-    async executeSqlViaFunction(sql) {
+    async executeSqlViaFunction(sql, overrideUrl = null, overrideToken = null) {
         const settings = getSettings();
-        const { managementWorkerUrl, adminSecretToken } = settings;
+        // Use override values if provided (for setup wizard), otherwise use saved settings
+        const managementWorkerUrl = overrideUrl || settings.managementWorkerUrl;
+        const adminSecretToken = overrideToken || settings.adminSecretToken;
 
         if (!managementWorkerUrl || !adminSecretToken) {
             throw new Error("URL или токен управляющего воркера не настроены в 'Центре Управления'.");

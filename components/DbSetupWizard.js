@@ -187,7 +187,7 @@ export function createDbSetupWizard({ supabaseService, onComplete }) {
                     case 'error': testStatusHtml = `<span class="text-red-500 font-bold">✗ Ошибка соединения.</span>`; break;
                     default: testStatusHtml = `<span class="text-slate-500">Ожидание...</span>`;
                 }
-                nextButtonDisabled = state.testStatus !== 'ok';
+                nextButtonDisabled = state.isLoading || state.testStatus !== 'ok';
 
                 contentHtml = `
                     <p class="mb-4">Отлично! Теперь введите данные вашего воркера в поля ниже, чтобы приложение могло его использовать.</p>
@@ -281,10 +281,19 @@ export function createDbSetupWizard({ supabaseService, onComplete }) {
                 }
                 break;
             case 'test-connection':
-                collectInputs();
+                const urlInput = wizardElement.querySelector('#worker-url-input');
+                const tokenInput = wizardElement.querySelector('#worker-token-input');
+                const url = urlInput?.value.trim();
+                const token = tokenInput?.value.trim();
+                
+                if (!url || !token) {
+                    alert("Пожалуйста, введите URL и токен для проверки.");
+                    return;
+                }
+
                 state.isLoading = true; state.testStatus = 'testing'; render();
                 try {
-                    await supabaseService.executeSqlViaFunction('SELECT 1;');
+                    await supabaseService.executeSqlViaFunction('SELECT 1;', url, token);
                     state.testStatus = 'ok';
                 } catch (error) {
                     console.error("Worker test failed:", error);
