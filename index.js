@@ -105,15 +105,92 @@ function renderAuth(profile) {
     }
 }
 
+// --- NEW INFORMATIVE LOADING OVERLAY ---
+function createLoadingOverlay() {
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 transition-opacity duration-300 opacity-0 pointer-events-none';
+    overlay.innerHTML = `
+        <div class="bg-white/10 dark:bg-black/20 ring-1 ring-white/10 rounded-xl shadow-2xl w-full max-w-2xl text-white p-6">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 text-blue-400 animate-pulse">${Icons.DatabaseIcon}</div>
+                <div>
+                    <h3 id="loading-title" class="text-2xl font-bold">Синхронизация данных...</h3>
+                    <p id="loading-subtitle" class="text-sm text-slate-300">Пожалуйста, подождите, это может занять несколько минут.</p>
+                </div>
+            </div>
+            <div class="mt-6">
+                <div class="flex justify-between items-center text-sm font-mono mb-1">
+                    <span id="loading-progress-text">Обработано: 0 / 0</span>
+                    <span id="loading-timer">00:00</span>
+                </div>
+                <div class="w-full bg-white/10 rounded-full h-2.5">
+                    <div id="loading-progress-bar" class="bg-blue-500 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id="loading-log-container" class="mt-4 p-3 bg-black/30 rounded-md font-mono text-xs text-slate-300 h-48 overflow-y-auto relative">
+                <div id="loading-log-content"></div>
+                <div class="absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-black/40 to-transparent pointer-events-none"></div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    let timerInterval = null;
+    let startTime = 0;
+    const logContent = overlay.querySelector('#loading-log-content');
+
+    const startTimer = () => {
+        startTime = Date.now();
+        timerInterval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            overlay.querySelector('#loading-timer').textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }, 1000);
+    };
+
+    const stopTimer = () => {
+        clearInterval(timerInterval);
+    };
+
+    return {
+        show: (title) => {
+            overlay.querySelector('#loading-title').textContent = title;
+            logContent.innerHTML = '';
+            overlay.classList.remove('opacity-0', 'pointer-events-none');
+            startTimer();
+        },
+        hide: () => {
+            overlay.classList.add('opacity-0', 'pointer-events-none');
+            stopTimer();
+        },
+        updateProgress: (current, total, itemText) => {
+            const percentage = total > 0 ? (current / total) * 100 : 0;
+            overlay.querySelector('#loading-progress-bar').style.width = `${percentage}%`;
+            overlay.querySelector('#loading-progress-text').textContent = `Обработано: ${current} / ${total}`;
+
+            if (itemText) {
+                const logLine = document.createElement('div');
+                logLine.className = 'log-line';
+                logLine.textContent = `> ${itemText}`;
+                logContent.appendChild(logLine);
+                // Auto-scroll to bottom
+                logContent.parentElement.scrollTop = logContent.parentElement.scrollHeight;
+            }
+        },
+    };
+}
+const loadingOverlay = createLoadingOverlay();
+
 
 // --- SYNC LOGIC ---
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
 const ALL_SYNC_TASKS = [
-    { name: 'Calendar', serviceKey: 'calendar', label: 'Календарь', icon: 'CalendarIcon', tableName: 'calendar_events', providerFn: () => googleProvider.getCalendarEvents({ showDeleted: true, max_results: 2500 }), supabaseFn: (items) => supabaseService.syncCalendarEvents(items) },
-    { name: 'Tasks', serviceKey: 'tasks', label: 'Задачи', icon: 'CheckSquareIcon', tableName: 'tasks', providerFn: () => googleProvider.getTasks({ showCompleted: true, showHidden: true, max_results: 2000 }), supabaseFn: (items) => supabaseService.syncTasks(items) },
-    { name: 'Contacts', serviceKey: 'contacts', label: 'Контакты', icon: 'UsersIcon', tableName: 'contacts', providerFn: () => googleProvider.getAllContacts(), supabaseFn: (items) => supabaseService.syncContacts(items) },
-    { name: 'Files', serviceKey: 'files', label: 'Файлы', icon: 'FileIcon', tableName: 'files', providerFn: () => googleProvider.getAllFiles(), supabaseFn: (items) => supabaseService.syncFiles(items) },
-    { name: 'Emails', serviceKey: 'emails', label: 'Почта', icon: 'EmailIcon', tableName: 'emails', providerFn: () => googleProvider.getRecentEmails({ max_results: 1000 }), supabaseFn: (items) => supabaseService.syncEmails(items) },
+    { name: 'Calendar', serviceKey: 'calendar', label: 'Календарь', icon: 'CalendarIcon', tableName: 'calendar_events', providerFn: () => googleProvider.getCalendarEvents({ showDeleted: true, max_results: 2500 }), supabaseFn: (items, onProgress) => supabaseService.syncCalendarEvents(items, onProgress) },
+    { name: 'Tasks', serviceKey: 'tasks', label: 'Задачи', icon: 'CheckSquareIcon', tableName: 'tasks', providerFn: () => googleProvider.getTasks({ showCompleted: true, showHidden: true, max_results: 2000 }), supabaseFn: (items, onProgress) => supabaseService.syncTasks(items, onProgress) },
+    { name: 'Contacts', serviceKey: 'contacts', label: 'Контакты', icon: 'UsersIcon', tableName: 'contacts', providerFn: () => googleProvider.getAllContacts(), supabaseFn: (items, onProgress) => supabaseService.syncContacts(items, onProgress) },
+    { name: 'Files', serviceKey: 'files', label: 'Файлы', icon: 'FileIcon', tableName: 'files', providerFn: () => googleProvider.getAllFiles(), supabaseFn: (items, onProgress) => supabaseService.syncFiles(items, onProgress) },
+    { name: 'Emails', serviceKey: 'emails', label: 'Почта', icon: 'EmailIcon', tableName: 'emails', providerFn: () => googleProvider.getRecentEmails({ max_results: 1000 }), supabaseFn: (items, onProgress) => supabaseService.syncEmails(items, onProgress) },
     { name: 'Notes', serviceKey: 'notes', label: 'Заметки', icon: 'FileIcon', tableName: 'notes', providerFn: null, supabaseFn: null }, // Placeholder for UI
 ];
 
@@ -121,7 +198,7 @@ function getEnabledSyncTasks() {
     return ALL_SYNC_TASKS.filter(task => state.settings.enabledServices[task.serviceKey]);
 }
 
-async function runSingleSync(taskName) {
+async function runSingleSync(taskName, overlay) {
     if (!googleProvider.token || !supabaseService) {
         throw new Error("Сервисы не готовы для синхронизации.");
     }
@@ -130,7 +207,16 @@ async function runSingleSync(taskName) {
 
     try {
         const items = await task.providerFn();
-        await task.supabaseFn(items);
+        
+        const onProgress = (item, index, total) => {
+            // Extract a display name for the log feed
+            const displayName = item.summary || item.title || item.name || item.names?.[0]?.displayName || item.subject || `Запись #${index + 1}`;
+            if (overlay) {
+                overlay.updateProgress(index + 1, total, displayName);
+            }
+        };
+
+        await task.supabaseFn(items, onProgress);
         state.syncStatus[task.name] = { lastSync: new Date().toISOString(), error: null };
     } catch (error) {
         console.error(`Failed to sync ${task.name}:`, error);
@@ -144,14 +230,21 @@ async function runSingleSync(taskName) {
 async function runAllSyncs() {
     if (state.isSyncing || !googleProvider.token || !supabaseService) return;
     state.isSyncing = true;
-    for (const task of getEnabledSyncTasks()) {
-        if (!task.providerFn) continue; // Skip tasks without a provider function (like Notes)
+    
+    const tasksToRun = getEnabledSyncTasks().filter(task => task.providerFn);
+
+    for (const task of tasksToRun) {
         try {
-            await runSingleSync(task.name);
+            loadingOverlay.show(`Синхронизация: ${task.label}`);
+            await runSingleSync(task.name, loadingOverlay);
         } catch (error) {
-            // Error is already logged and saved by runSingleSync, just continue to the next task.
+            // Error is already logged and saved by runSingleSync.
+            // Show an error message in the overlay before moving to the next task.
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Pause to show error
         }
     }
+    
+    loadingOverlay.hide();
     state.isSyncing = false;
 }
 
@@ -406,7 +499,16 @@ function showSettingsModal() {
         supabaseService: supabaseService,
         allSyncTasks: getEnabledSyncTasks(),
         onClose: () => { modalContainer.innerHTML = ''; },
-        onRunSingleSync: runSingleSync,
+        onRunSingleSync: async (taskName) => {
+            loadingOverlay.show(`Синхронизация: ${taskName}`);
+            try {
+                await runSingleSync(taskName, loadingOverlay);
+            } catch (e) {
+                // Error is handled inside runSingleSync
+            } finally {
+                loadingOverlay.hide();
+            }
+        },
         onRunAllSyncs: runAllSyncs,
     });
     modalContainer.appendChild(modal);

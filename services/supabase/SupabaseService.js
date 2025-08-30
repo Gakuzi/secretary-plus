@@ -61,8 +61,9 @@ export class SupabaseService {
      * Performs a full sync. Fetches all items from Google, compares with Supabase,
      * deletes what's missing, and upserts the rest. Ideal for datasets that can be
      * fully fetched each time (e.g., contacts).
+     * @param {function} [onProgress] - Optional callback for progress reporting.
      */
-    async #fullSync(tableName, googleItems, formatterFn, idExtractorFn = item => item.id) {
+    async #fullSync(tableName, googleItems, formatterFn, idExtractorFn = item => item.id, onProgress) {
         const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
 
@@ -100,7 +101,10 @@ export class SupabaseService {
 
         // 5. Upsert all items from Google. This will insert new and update existing items.
         if (googleItems.length > 0) {
-            const formattedItems = googleItems.map(item => formatterFn(item, user.id));
+            const formattedItems = googleItems.map((item, index) => {
+                if (onProgress) onProgress(item, index, googleItems.length);
+                return formatterFn(item, user.id);
+            });
             const { error: upsertError } = await this.client
                 .from(tableName)
                 .upsert(formattedItems, { onConflict: 'user_id,source_id' });
@@ -116,13 +120,17 @@ export class SupabaseService {
      * Performs an incremental sync. Fetches recent items from Google and upserts them.
      * Does NOT delete old records, allowing the local cache to grow over time.
      * Ideal for large datasets like emails or calendar events.
+     * @param {function} [onProgress] - Optional callback for progress reporting.
      */
-    async #incrementalSync(tableName, googleItems, formatterFn) {
+    async #incrementalSync(tableName, googleItems, formatterFn, onProgress) {
         const { data: { user } } = await this.client.auth.getUser();
         if (!user) throw new Error("User not authenticated.");
         if (googleItems.length === 0) return; // Nothing to do
 
-        const formattedItems = googleItems.map(item => formatterFn(item, user.id));
+        const formattedItems = googleItems.map((item, index) => {
+            if (onProgress) onProgress(item, index, googleItems.length);
+            return formatterFn(item, user.id);
+        });
         const { error: upsertError } = await this.client
             .from(tableName)
             .upsert(formattedItems, { onConflict: 'user_id,source_id' });
@@ -133,7 +141,7 @@ export class SupabaseService {
         }
     }
 
-    async syncCalendarEvents(googleItems) {
+    async syncCalendarEvents(googleItems, onProgress) {
         const config = this.settings.serviceFieldConfig?.calendar || {};
         const formatter = (event, userId) => {
             const item = { user_id: userId, source_id: event.id };
@@ -149,10 +157,10 @@ export class SupabaseService {
             if (config.is_all_day) item.is_all_day = !event.start?.dateTime;
             return item;
         };
-        await this.#incrementalSync('calendar_events', googleItems, formatter);
+        await this.#incrementalSync('calendar_events', googleItems, formatter, onProgress);
     }
 
-    async syncContacts(googleItems) {
+    async syncContacts(googleItems, onProgress) {
         const config = this.settings.serviceFieldConfig?.contacts || {};
         const formatter = (contact, userId) => {
             const c = contact; // Alias for brevity
@@ -167,10 +175,10 @@ export class SupabaseService {
             return item;
         };
         const idExtractor = item => item.resourceName;
-        await this.#fullSync('contacts', googleItems, formatter, idExtractor);
+        await this.#fullSync('contacts', googleItems, formatter, idExtractor, onProgress);
     }
 
-    async syncFiles(googleItems) {
+    async syncFiles(googleItems, onProgress) {
         const config = this.settings.serviceFieldConfig?.files || {};
         const formatter = (file, userId) => {
             const item = { user_id: userId, source_id: file.id };
@@ -186,10 +194,10 @@ export class SupabaseService {
             if (config.last_modifying_user) item.last_modifying_user = file.lastModifyingUser?.displayName;
             return item;
         };
-        await this.#fullSync('files', googleItems, formatter);
+        await this.#fullSync('files', googleItems, formatter, undefined, onProgress);
     }
     
-    async syncTasks(googleItems) {
+    async syncTasks(googleItems, onProgress) {
         const config = this.settings.serviceFieldConfig?.tasks || {};
         const formatter = (task, userId) => {
             const item = { user_id: userId, source_id: task.id };
@@ -201,10 +209,10 @@ export class SupabaseService {
             if (config.parent_task_id) item.parent_task_id = task.parent;
             return item;
         };
-        await this.#fullSync('tasks', googleItems, formatter);
+        await this.#fullSync('tasks', googleItems, formatter, undefined, onProgress);
     }
 
-    async syncEmails(googleItems) {
+    async syncEmails(googleItems, onProgress) {
          const config = this.settings.serviceFieldConfig?.emails || {};
          const formatter = (email, userId) => {
             const item = { user_id: userId, source_id: email.id };
@@ -221,7 +229,7 @@ export class SupabaseService {
             if (config.gmail_link) item.gmail_link = email.gmailLink;
             return item;
         };
-        await this.#incrementalSync('emails', googleItems, formatter);
+        await this.#incrementalSync('emails', googleItems, formatter, onProgress);
     }
 
     // --- Search ---

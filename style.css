@@ -212,3 +212,19 @@ body.recording-active {
 .dark #about-modal-content .prose a {
     color: #818cf8; /* dark:indigo-400 */
 }
+
+/* --- LOADING OVERLAY LOG --- */
+@keyframes log-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+#loading-log-content .log-line {
+  animation: log-line-in 0.3s ease-out;
+  padding-bottom: 2px;
+}
