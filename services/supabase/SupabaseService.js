@@ -1,4 +1,5 @@
 import { GOOGLE_SCOPES } from '../../constants.js';
+import { DB_SCHEMAS } from './schema.js';
 
 export class SupabaseService {
     constructor(supabaseUrl, supabaseAnonKey) {
@@ -282,6 +283,55 @@ export class SupabaseService {
         if (error) throw error;
     }
 
+    async deleteUserSettings() {
+        const { data: { user } } = await this.client.auth.getUser();
+        if (!user) throw new Error("User not authenticated.");
+        const { error } = await this.client.from('user_settings').delete().eq('user_id', user.id);
+        if (error) throw error;
+    }
+
+    // --- Data Management & Testing (for Profile Modal) ---
+    async testConnection() {
+        // A simple query to a known table to verify the connection and RLS policies.
+        const { error } = await this.client.from('profiles').select('id').limit(1);
+        if (error) {
+            console.error("Supabase connection test failed:", error);
+            throw new Error(`Connection failed: ${error.message}`);
+        }
+        return { success: true };
+    }
+
+    async getSampleData(tableName) {
+        const { data: { user } } = await this.client.auth.getUser();
+        if (!user) throw new Error("User not authenticated.");
+
+        // Simple validation to allow only table names from the schema
+        const allowedTables = Object.values(DB_SCHEMAS).map(s => s.tableName);
+        if (!allowedTables.includes(tableName)) {
+            throw new Error(`Access to table "${tableName}" is not permitted.`);
+        }
+
+        const query = this.client
+            .from(tableName)
+            .select('*')
+            .limit(10);
+
+        // Only add user_id filter if the table is not a shared one
+        const sharedTables = ['shared_proxies', 'shared_gemini_keys'];
+        if (!sharedTables.includes(tableName)) {
+            query.eq('user_id', user.id);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            console.error(`Error fetching sample data from ${tableName}:`, error);
+            throw error;
+        }
+        return data;
+    }
+
+
     // --- Chat Logging & Sessions ---
     async createNewSession() {
         const { data: { user } } = await this.client.auth.getUser();
@@ -357,16 +407,5 @@ export class SupabaseService {
         const { data, error } = await this.client.from('shared_proxies').select('url').eq('is_active', true).order('priority');
         if (error) throw error;
         return data;
-    }
-    
-    // --- DB Management ---
-    async testConnection() {
-        const { error } = await this.client.from('profiles').select('id').limit(1);
-        if (error) throw error;
-        return true;
-    }
-
-    async getSampleData(tableName) {
-        return this.client.from(tableName).select('*').limit(10).order('created_at', { ascending: false });
     }
 }

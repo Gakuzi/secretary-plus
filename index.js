@@ -697,14 +697,16 @@ async function main() {
     }
 }
 
-// Wait for external libraries to load, then run the main application logic.
-waitForExternalLibs()
-    .then(main)
-    .catch(error => {
-        console.error("An unhandled error occurred during app startup:", error);
-        document.body.innerHTML = `<div class="p-4 bg-red-100 text-red-800 rounded-md m-4">
-            <h3 class="font-bold">Критическая ошибка при запуске</h3>
-            <p>${error.message}</p>
-            <p class="mt-2 text-sm">Проверьте подключение к интернету, отключите блокировщики рекламы и попробуйте <a href="${window.location.pathname}" class="underline">перезагрузить страницу</a>.</p>
-        </div>`;
-    });
+// Wait for the DOM to be fully loaded, then for external libraries, then run the main application logic.
+document.addEventListener('DOMContentLoaded', () => {
+    waitForExternalLibs()
+        .then(main)
+        .catch(error => {
+            console.error("An unhandled error occurred during app startup:", error);
+            document.body.innerHTML = `<div class="p-4 bg-red-100 text-red-800 rounded-md m-4">
+                <h3 class="font-bold">Критическая ошибка при запуске</h3>
+                <p>${error.message}</p>
+                <p class="mt-2 text-sm">Проверьте подключение к интернету, отключите блокировщики рекламы и попробуйте <a href="${window.location.pathname}" class="underline">перезагрузить страницу</a>.</p>
+            </div>`;
+        });
+});
