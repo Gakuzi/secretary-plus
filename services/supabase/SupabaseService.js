@@ -299,7 +299,13 @@ export class SupabaseService {
             console.warn("Cannot log chat message, session ID is missing.");
             return;
         }
+        const { data: { user } } = await this.client.auth.getUser();
+        if (!user) {
+            console.error("Failed to log chat message: User not authenticated.");
+            return;
+        }
         const { error } = await this.client.from('chat_history').insert({
+            user_id: user.id, // CRITICAL FIX: Add user_id to the payload
             session_id: sessionId,
             sender: message.sender,
             text_content: message.text,

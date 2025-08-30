@@ -11,7 +11,7 @@ import { createProxyManagerModal } from './components/ProxyManagerModal.js';
 import { createWelcomeScreen } from './components/Welcome.js';
 import { createChatInterface, addMessageToChat, showLoadingIndicator, hideLoadingIndicator, renderContextualActions } from './components/Chat.js';
 import { createCameraView } from './components/CameraView.js';
-import { SettingsIcon, QuestionMarkCircleIcon, HomeIcon } from './components/icons/Icons.js';
+import { SettingsIcon, QuestionMarkCircleIcon } from './components/icons/Icons.js';
 import { MessageSender } from './types.js';
 import { SUPABASE_CONFIG, GOOGLE_CLIENT_ID } from './config.js';
 import { createMigrationModal } from './components/MigrationModal.js';

@@ -55,14 +55,6 @@ export function createSetupWizard({ onComplete, googleProvider, supabaseService,
             backBtn.textContent = 'Назад';
             backBtn.dataset.action = 'back';
             footerEl.appendChild(backBtn);
-        } else {
-            // Special home button to exit wizard forcefully
-            const homeBtn = document.createElement('button');
-            homeBtn.className = 'p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600';
-            homeBtn.innerHTML = Icons.HomeIcon;
-            homeBtn.title = 'Выйти из мастера настройки';
-            homeBtn.dataset.action = 'exit_force';
-            wizardElement.querySelector('#wizard-header-left').prepend(homeBtn);
         }
         
         const addNextButton = (text = 'Далее', isSkip = false, disabled = false) => {
